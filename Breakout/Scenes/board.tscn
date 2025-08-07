@@ -1,0 +1,30 @@
+[gd_scene load_steps=4 format=3 uid="uid://bwa30gqnlpym6"]
+
+[ext_resource type="PackedScene" uid="uid://d2rvvnvkwxruv" path="res://Scenes/paddle.tscn" id="1_nukyb"]
+[ext_resource type="PackedScene" uid="uid://c100hu50jscqt" path="res://Scenes/brick.tscn" id="2_7galm"]
+[ext_resource type="PackedScene" uid="uid://cap0sk7qyc4t" path="res://Scenes/ball.tscn" id="3_qd6tu"]
+
+[node name="Board" type="Node2D"]
+
+[node name="Paddle" parent="." instance=ExtResource("1_nukyb")]
+position = Vector2(0, 562)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(0.5, 0.5)
+
+[node name="Brick" parent="." instance=ExtResource("2_7galm")]
+position = Vector2(-1, -576)
+
+[node name="Brick2" parent="." instance=ExtResource("2_7galm")]
+position = Vector2(-331, -576)
+
+[node name="Brick3" parent="." instance=ExtResource("2_7galm")]
+position = Vector2(322, -576)
+
+[node name="Brick4" parent="." instance=ExtResource("2_7galm")]
+position = Vector2(-167, -576)
+
+[node name="Brick5" parent="." instance=ExtResource("2_7galm")]
+position = Vector2(156, -576)
+
+[node name="Ball" parent="." instance=ExtResource("3_qd6tu")]
