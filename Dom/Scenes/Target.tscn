@@ -1,0 +1,16 @@
+[gd_scene load_steps=4 format=3 uid="uid://bnbon3umewtur"]
+
+[ext_resource type="Script" path="res://Scripts/Looker.gd" id="1_awcwj"]
+[ext_resource type="Texture2D" uid="uid://5axc8wlddx1j" path="res://icon.svg" id="2_5u2yc"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jqsri"]
+size = Vector3(1.25, 1.25, 0.1)
+
+[node name="Target" type="StaticBody3D" groups=["Target"]]
+script = ExtResource("1_awcwj")
+
+[node name="Sprite3D" type="Sprite3D" parent="."]
+texture = ExtResource("2_5u2yc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_jqsri")

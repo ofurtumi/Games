@@ -1,0 +1,131 @@
+[gd_scene load_steps=20 format=3 uid="uid://cwxahuhdmujgd"]
+
+[ext_resource type="Script" path="res://Scripts/World.gd" id="1_n8l17"]
+[ext_resource type="PackedScene" uid="uid://bpyl2vjs15u52" path="res://Scenes/Player.tscn" id="2_5mwad"]
+[ext_resource type="PackedScene" uid="uid://bnbon3umewtur" path="res://Scenes/Target.tscn" id="2_dts1u"]
+[ext_resource type="Shader" path="res://Shaders/Test.gdshader" id="5_b2o5j"]
+
+[sub_resource type="Environment" id="Environment_sdnkd"]
+ambient_light_source = 3
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.82
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_vqrbh"]
+size = Vector3(16, 2.08165e-12, 16)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_v4pis"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_jedco"]
+noise = SubResource("FastNoiseLite_v4pis")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_fe1ev"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_nl4il"]
+as_normal_map = true
+noise = SubResource("FastNoiseLite_fe1ev")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ayppu"]
+render_priority = 0
+shader = ExtResource("5_b2o5j")
+shader_parameter/height_scale = 0.5
+shader_parameter/noise = SubResource("NoiseTexture2D_jedco")
+shader_parameter/normalmap = SubResource("NoiseTexture2D_nl4il")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_gqk4f"]
+material = SubResource("ShaderMaterial_ayppu")
+size = Vector2(16, 16)
+subdivide_width = 32
+subdivide_depth = 32
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_040gw"]
+size = Vector3(16, 2.08165e-12, 16)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_xdbdr"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_2ljuj"]
+noise = SubResource("FastNoiseLite_xdbdr")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_o6wx3"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_65avm"]
+as_normal_map = true
+noise = SubResource("FastNoiseLite_o6wx3")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_p8evp"]
+render_priority = 0
+shader = ExtResource("5_b2o5j")
+shader_parameter/height_scale = 1.0
+shader_parameter/noise = SubResource("NoiseTexture2D_2ljuj")
+shader_parameter/normalmap = SubResource("NoiseTexture2D_65avm")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ey18l"]
+material = SubResource("ShaderMaterial_p8evp")
+size = Vector2(16, 16)
+subdivide_width = 32
+subdivide_depth = 32
+
+[node name="World" type="Node3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.85159, -1.98025, 0.853532)
+script = ExtResource("1_n8l17")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_sdnkd")
+
+[node name="Target" parent="." node_paths=PackedStringArray("target") instance=ExtResource("2_dts1u")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 4.13745, 1.60625, 0)
+target = NodePath("../Player")
+
+[node name="Target2" parent="." node_paths=PackedStringArray("target") instance=ExtResource("2_dts1u")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.01585, 1.60625, 0)
+target = NodePath("../Player")
+
+[node name="Target3" parent="." node_paths=PackedStringArray("target") instance=ExtResource("2_dts1u")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.01585, 1.60625, -4.87633)
+target = NodePath("../Player")
+
+[node name="Target4" parent="." node_paths=PackedStringArray("target") instance=ExtResource("2_dts1u")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 2.04783, 1.60625, 2.92301)
+target = NodePath("../Player")
+
+[node name="Player" parent="." instance=ExtResource("2_5mwad")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.14876, 1.2399, -1)
+mouse_sensitivity = 0.15
+jump_velocity = 80.0
+gravity = 90.0
+
+[node name="Ground" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0413942, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, 2.08165e-12, 2.08165e-12)
+shape = SubResource("BoxShape3D_vqrbh")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("PlaneMesh_gqk4f")
+
+[node name="Ground2" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.146452, -1.49938, -11.5398)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.08165e-12, 2.08165e-12, 2.08165e-12)
+shape = SubResource("BoxShape3D_040gw")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground2"]
+mesh = SubResource("PlaneMesh_ey18l")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+transform = Transform3D(-0.763965, 0, -0.645258, 0, 1, 0, 0.645258, 0, -0.763965, 0.353417, 2.64552, -5.09654)
+light_color = Color(0.928182, 0.997886, 0.790345, 1)
+light_energy = 1.81
+light_indirect_energy = 1.56
+light_volumetric_fog_energy = 2.61
+shadow_enabled = true
+omni_range = 10.965
+omni_attenuation = 1.07177
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="."]
+transform = Transform3D(-0.763965, 0, -0.645258, 0, 1, 0, 0.645258, 0, -0.763965, 0.304757, 10.9469, -5.05318)
+light_color = Color(0.939249, 0.932452, 0, 1)
+shadow_enabled = true
+omni_range = 20.38
+omni_attenuation = 0.329877
