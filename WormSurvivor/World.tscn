@@ -1,0 +1,23 @@
+[gd_scene load_steps=6 format=3 uid="uid://bsjw4q02o4si6"]
+
+[ext_resource type="PackedScene" uid="uid://bh8ut30i53yh5" path="res://Worm.tscn" id="1_cqh4h"]
+[ext_resource type="Script" path="res://Debug.gd" id="1_xvsln"]
+[ext_resource type="Script" path="res://Target.gd" id="2_jc6cb"]
+[ext_resource type="Texture2D" uid="uid://qgi0usc7mc0s" path="res://icon.svg" id="2_qbvik"]
+[ext_resource type="PackedScene" uid="uid://5y44uj8de1b1" path="res://Player.tscn" id="3_78u5g"]
+
+[node name="World" type="Node2D"]
+script = ExtResource("1_xvsln")
+
+[node name="Worm" parent="." node_paths=PackedStringArray("Target") instance=ExtResource("1_cqh4h")]
+Target = NodePath("../Player")
+
+[node name="Player" parent="." instance=ExtResource("3_78u5g")]
+position = Vector2(186, 59)
+
+[node name="Target" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(114, 99)
+scale = Vector2(0.242188, 0.242188)
+texture = ExtResource("2_qbvik")
+script = ExtResource("2_jc6cb")
