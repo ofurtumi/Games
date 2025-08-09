@@ -8,7 +8,13 @@ var worm_scene: PackedScene = preload("res://Worm.tscn")
 var last_target: Vector2
 var line: Line2D
 
+func _init():
+	if Segments <= 1:
+		queue_free()
+		return
+
 func _ready():
+	add_to_group("worms")
 	# Initialize the Target to the current position
 	if (!Target):
 		print("No Target")
@@ -17,7 +23,6 @@ func _ready():
 	# Set the number of Segments for the worm
 	if Positions.size() == 0:
 		Positions.resize(Segments)
-		print(Positions.size())
 		Positions.fill(Vector2.ZERO)
 
 	for i in range(Segments):
@@ -44,33 +49,48 @@ func update_segments(delta, head):
 			var new_position = prev_point.lerp(current_point, 0.9)  # Smoothly follow the previous point
 			line.set_point_position(i, new_position)
 
-func _input(event):
-	if event is InputEventKey and event.pressed:
-		if event.keycode == KEY_SPACE:
-			# Split the worm when space is pressed
-			split(25)  # Example: split at segment index 25
-
 func split(segment_index: int = 5):
-	var should_split = segment_index != 0 and segment_index < Segments
+	var should_split = segment_index != 0 and segment_index < Segments - 1
+	print("Segment index: %s, Should split: %s, Segments: %s" % [segment_index, should_split, Segments])
 	if should_split:
 		for i in range(Segments):
 			Positions[i] = line.get_point_position(i)
 
 		var back_worm = worm_scene.instantiate()
 		back_worm.set_script(load("res://Worm.gd"))
-		back_worm.Positions = Positions.slice(Segments - segment_index, Segments)
+		back_worm.Positions = Positions.slice(segment_index + 1, Segments)
 		back_worm.Positions.reverse()
-		back_worm.Segments = segment_index
+		back_worm.Segments = back_worm.Positions.size()
 		back_worm.Target = Target
-		back_worm.Speed = 0.75 * Speed
+		back_worm.Speed = 1.15 * Speed
 		
 		# Remove points between the split point and the end
-		for i in range(segment_index):
+		for i in range(Segments - segment_index):
 			line.remove_point(Segments - 1 - i)
 
-		Segments = Segments - segment_index
-		Speed *= 1.125
+		Segments = segment_index
+		Speed *= 1.15
 
 
-		print(back_worm.Positions.size(), ' ', back_worm.Segments)
 		get_parent().add_child(back_worm)
+	elif segment_index == 0:
+		Segments -= 1
+		line.remove_point(0)
+	else:
+		print('removing last segment')
+		Segments -= 1
+		line.remove_point(Segments)
+
+	if Segments <= 1:
+		queue_free()  # Remove the worm if no segments left
+
+func find_nearest_segment(pos: Vector2) -> int:
+	var nearest_index = -1
+	var nearest_distance = float(INF)
+	for i in range(Segments):
+		var segment_position = line.get_point_position(i)
+		var distance = segment_position.distance_to(pos)
+		if distance <= 10.0 and distance < nearest_distance:
+			nearest_distance = distance
+			nearest_index = i
+	return nearest_index
