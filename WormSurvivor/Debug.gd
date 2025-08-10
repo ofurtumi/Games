@@ -16,10 +16,11 @@ func _input(event):
 			_:
 				pass  # Handle other keys if necessary
 	
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		var mouse_position = event.position
-		for worm in get_tree().get_nodes_in_group("worms"):
-			var idx = worm.find_nearest_segment(mouse_position)
-			print(idx)
-			if idx != -1:
-				worm.split(idx)
+	# Debug input handling, check for click directly on worms
+	# if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	# 	var mouse_position = event.position
+	# 	for worm in get_tree().get_nodes_in_group("worms"):
+	# 		var idx = worm.find_nearest_segment(mouse_position)
+	# 		print(idx)
+	# 		if idx != -1:
+	# 			worm.split(idx)

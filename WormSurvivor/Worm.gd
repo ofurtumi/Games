@@ -94,3 +94,22 @@ func find_nearest_segment(pos: Vector2) -> int:
 			nearest_distance = distance
 			nearest_index = i
 	return nearest_index
+
+
+func find_segment_on_line(line_start: Vector2, line_end: Vector2, threshold: float = 10.0) -> int:
+	var nearest_index = -1
+	var nearest_distance = float(INF)
+	for i in range(Segments):
+		var seg_pos = line.get_point_position(i)
+		var dist = distance_to_segment(seg_pos, line_start, line_end)
+		if dist <= threshold and dist < nearest_distance:
+			nearest_distance = dist
+			nearest_index = i
+	return nearest_index
+
+func distance_to_segment(point: Vector2, seg_a: Vector2, seg_b: Vector2) -> float:
+	var ab = seg_b - seg_a
+	var t = ((point - seg_a).dot(ab)) / ab.length_squared()
+	t = clamp(t, 0, 1)
+	var closest = seg_a + ab * t
+	return point.distance_to(closest)
