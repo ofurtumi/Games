@@ -2,6 +2,8 @@ extends CharacterBody2D
 
 
 const SPEED = 30.0
+const IMPACT_RADIUS = 10.0  # Radius around the player to check for nearby worms
+var knockback_vector = Vector2.ZERO
 
 func _physics_process(delta):
 	var direction = Vector2.ZERO
@@ -21,8 +23,19 @@ func _physics_process(delta):
 		# If no input, slowly decelerate to stop
 		velocity = velocity.move_toward(Vector2.ZERO, SPEED * delta * 1000)
 
+	for worm in get_tree().get_nodes_in_group("worms"):
+		var head_pos = worm.line.get_point_position(0)
+		if global_position.distance_to(head_pos) <= IMPACT_RADIUS:
+			print("Player is near a worm segment, applying knockback")
+			knockback(head_pos)
+
+	if knockback_vector.length() > 0:
+		velocity += knockback_vector
+		knockback_vector = knockback_vector.move_toward(Vector2.ZERO, SPEED * delta * 1000)  # Gradually reduce knockback effect
 	move_and_slide()
 
+func knockback(from):
+	knockback_vector += (global_position - from).normalized() * SPEED * 30
 
 func _input(event):
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:

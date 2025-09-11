@@ -1,0 +1,81 @@
+[gd_scene load_steps=9 format=3 uid="uid://7xf1xuoqo2xh"]
+
+[ext_resource type="Script" path="res://Rotator.gd" id="1_a3n84"]
+
+[sub_resource type="Environment" id="Environment_rm6xp"]
+ambient_light_color = Color(0.988597, 0.99394, 0.818941, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_kmg2h"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rb61g"]
+albedo_color = Color(0.559872, 0.380176, 0.363998, 1)
+metallic = 0.34
+metallic_specular = 0.89
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_utt1o"]
+albedo_color = Color(0.659918, 0.290885, 0.494122, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jb7lm"]
+albedo_color = Color(0.392157, 1, 1, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_2net7"]
+size = Vector2(10, 10)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i7kd2"]
+
+[node name="World" type="Node3D"]
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="."]
+texture_filter = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+stretch_shrink = 4
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer"]
+handle_input_locally = false
+size = Vector2i(288, 162)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewportContainer/SubViewport"]
+environment = SubResource("Environment_rm6xp")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport"]
+transform = Transform3D(0.329483, 0.354688, -0.875007, -0.094118, 0.934478, 0.343355, 0.939459, -0.0307754, 0.341277, -5.86114, 4.46692, 1.95564)
+light_energy = 0.25
+shadow_enabled = true
+
+[node name="Meshes" type="Node3D" parent="SubViewportContainer/SubViewport"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Meshes"]
+transform = Transform3D(0.707107, -0.5, 0.5, 0.707107, 0.5, -0.5, 0, 0.707107, 0.707107, -0.943696, 1.38164, 0.000455618)
+mesh = SubResource("BoxMesh_kmg2h")
+surface_material_override/0 = SubResource("StandardMaterial3D_rb61g")
+script = ExtResource("1_a3n84")
+
+[node name="MeshInstance3D3" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Meshes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.89562, 1.94546, -2.24954)
+mesh = SubResource("BoxMesh_kmg2h")
+surface_material_override/0 = SubResource("StandardMaterial3D_utt1o")
+
+[node name="MeshInstance3D4" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Meshes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.71867, 0.911452, 2.51929)
+mesh = SubResource("BoxMesh_kmg2h")
+surface_material_override/0 = SubResource("StandardMaterial3D_jb7lm")
+
+[node name="MeshInstance3D5" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Meshes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.32021, 0.911452, 0.000455618)
+mesh = SubResource("BoxMesh_kmg2h")
+surface_material_override/0 = SubResource("StandardMaterial3D_utt1o")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/Meshes"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.328278, 0)
+mesh = SubResource("PlaneMesh_2net7")
+skeleton = NodePath("../MeshInstance3D")
+surface_material_override/0 = SubResource("StandardMaterial3D_i7kd2")
+
+[node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport"]
+transform = Transform3D(0.707107, 0.353553, -0.612372, 3.02058e-16, 0.866025, 0.5, 0.707107, -0.353553, 0.612372, -3, 3, 3)
