@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://berlwjjusc4s5"]
+
+[ext_resource type="Shader" path="res://checkerboard.gdshader" id="1_bqkmh"]
+
+[resource]
+shader = ExtResource("1_bqkmh")
+shader_parameter/size = 60.0
+shader_parameter/color1 = Color(1, 1, 1, 1)
+shader_parameter/color2 = Color(0.7, 0.7, 0.7, 1)

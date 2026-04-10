@@ -1,0 +1,43 @@
+[gd_scene load_steps=4 format=3 uid="uid://dpau6tedwsyk6"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_0m6cb"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_g47l2"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ncm8o"]
+
+[node name="Player" type="CharacterBody3D"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_0m6cb")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CollisionShape3D"]
+mesh = SubResource("CapsuleMesh_g47l2")
+
+[node name="CameraPivot" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.744876, 0)
+
+[node name="CenterContainer" type="CenterContainer" parent="CameraPivot"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ColorRect" type="ColorRect" parent="CameraPivot/CenterContainer"]
+visible = false
+material = SubResource("ShaderMaterial_ncm8o")
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot"]
+
+[node name="FirePoint" type="Marker3D" parent="CameraPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.926539)

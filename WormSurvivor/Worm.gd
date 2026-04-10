@@ -1,6 +1,6 @@
 extends Node2D
 
-var worm_scene: PackedScene = preload("res://Worm.tscn")
+var worm_scene: PackedScene = load("res://Worm.tscn")
 @export var Speed: float = 100.0
 @export var Segments: int = 64
 @export var Target: CharacterBody2D
