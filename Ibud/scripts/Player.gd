@@ -37,21 +37,20 @@ func _process(delta):
 		velocity.z = dir.y * cos(angle_rad) - dir.x * sin(angle_rad)
 
 	# Gravity and jumping
-	if not is_on_floor():
-		print("falling velocity: ", velocity.y)
-		if velocity.y <= -gravity:
-			velocity.y = - fall_velocity * delta * game_speed
-		else:
-			velocity.y -= fall_velocity * delta * game_speed
-		if double_jump_available and Input.is_action_just_pressed("jump"):
-			velocity.y = roundf(jump_velocity * delta * game_speed)
-			double_jump_available = false
-	else:
+	if is_on_floor():
 		double_jump_available = true
 		velocity.y = 0
 		if Input.is_action_just_pressed("jump"):
 			print("Jumped")
 			velocity.y = min(9, roundf(jump_velocity * delta * game_speed))
+	else:
+		print("falling velocity: ", velocity.y)
+		if velocity.y > -gravity:
+			velocity.y -= fall_velocity * delta * game_speed
+		if double_jump_available and Input.is_action_just_pressed("jump"):
+			velocity.y = min(9, roundf(jump_velocity * delta * game_speed))
+
+			double_jump_available = false
 
 
 	move_and_slide()
