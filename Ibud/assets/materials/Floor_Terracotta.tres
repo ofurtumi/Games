@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://terracotta_floor_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_flat.gdshader" id="1_terra"]
+
+[resource]
+shader = ExtResource("1_terra")
+shader_parameter/albedo = Color(0.67, 0.46, 0.35, 1)
+shader_parameter/roughness = 0.85

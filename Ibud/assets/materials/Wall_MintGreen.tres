@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://mint_wall_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_flat.gdshader" id="1_mint"]
+
+[resource]
+shader = ExtResource("1_mint")
+shader_parameter/albedo = Color(0.56, 0.76, 0.72, 1)
+shader_parameter/roughness = 0.92

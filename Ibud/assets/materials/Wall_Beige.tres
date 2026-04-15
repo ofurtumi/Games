@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://beige_wall_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_flat.gdshader" id="1_beige"]
+
+[resource]
+shader = ExtResource("1_beige")
+shader_parameter/albedo = Color(0.82, 0.78, 0.70, 1)
+shader_parameter/roughness = 0.92

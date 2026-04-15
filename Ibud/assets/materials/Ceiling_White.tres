@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://ceiling_white_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_flat.gdshader" id="1_ceil"]
+
+[resource]
+shader = ExtResource("1_ceil")
+shader_parameter/albedo = Color(0.94, 0.94, 0.92, 1)
+shader_parameter/roughness = 0.95

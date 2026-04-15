@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://trim_white_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_flat.gdshader" id="1_trim"]
+
+[resource]
+shader = ExtResource("1_trim")
+shader_parameter/albedo = Color(0.95, 0.95, 0.93, 1)
+shader_parameter/roughness = 0.7

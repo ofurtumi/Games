@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://wall_material_ibud"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_triplanar.gdshader" id="1_wall"]
+[ext_resource type="Texture2D" path="res://assets/textures/hvitar-svartar.jpg" id="2_wall"]
+
+[resource]
+shader = ExtResource("1_wall")
+shader_parameter/albedo_texture = ExtResource("2_wall")
+shader_parameter/texture_scale = 0.5
+shader_parameter/albedo_tint = Color(1, 1, 1, 1)
+shader_parameter/roughness = 0.85

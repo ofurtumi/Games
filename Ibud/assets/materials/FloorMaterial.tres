@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://floor_material_ibud"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_triplanar.gdshader" id="1_floor"]
+[ext_resource type="Texture2D" path="res://assets/textures/raudar.jpg" id="2_floor"]
+
+[resource]
+shader = ExtResource("1_floor")
+shader_parameter/albedo_texture = ExtResource("2_floor")
+shader_parameter/texture_scale = 0.4
+shader_parameter/albedo_tint = Color(1, 1, 1, 1)
+shader_parameter/roughness = 0.7

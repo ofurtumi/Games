@@ -3,7 +3,7 @@ extends CharacterBody3D
 @export var walk_speed = 5.0
 @export var mouse_sensitivity = 0.1
 @export var jump_velocity = 2.0
-@export var fall_velocity = 3.0
+@export var fall_velocity = 1.5
 @export var gravity = 9.0
 @export var game_speed = 15.0
 
@@ -38,21 +38,20 @@ func _process(delta):
 
 	# Gravity and jumping
 	if not is_on_floor():
-		print("Not on Floor, cant jump")
+		print("falling velocity: ", velocity.y)
 		if velocity.y <= -gravity:
-			velocity.y = - gravity
+			velocity.y = - fall_velocity * delta * game_speed
 		else:
 			velocity.y -= fall_velocity * delta * game_speed
 		if double_jump_available and Input.is_action_just_pressed("jump"):
 			velocity.y = roundf(jump_velocity * delta * game_speed)
 			double_jump_available = false
 	else:
-		print("On Floor, can jump")
 		double_jump_available = true
 		velocity.y = 0
 		if Input.is_action_just_pressed("jump"):
 			print("Jumped")
-			velocity.y = roundf(jump_velocity * delta * game_speed)
+			velocity.y = min(9, roundf(jump_velocity * delta * game_speed))
 
 
 	move_and_slide()

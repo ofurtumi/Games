@@ -1,0 +1,8 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://cream_wall_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_flat.gdshader" id="1_cream"]
+
+[resource]
+shader = ExtResource("1_cream")
+shader_parameter/albedo = Color(0.93, 0.91, 0.86, 1)
+shader_parameter/roughness = 0.92

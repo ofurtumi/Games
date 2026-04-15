@@ -4,6 +4,6 @@
 
 [resource]
 shader = ExtResource("1_bqkmh")
-shader_parameter/size = 60.0
+shader_parameter/size = 1.0
 shader_parameter/color1 = Color(1, 1, 1, 1)
 shader_parameter/color2 = Color(0.7, 0.7, 0.7, 1)

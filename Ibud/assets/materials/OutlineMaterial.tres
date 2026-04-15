@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://outline_mat_ibud01"]
+
+[ext_resource type="Shader" path="res://assets/shaders/screen_outline.gdshader" id="1_outline"]
+
+[resource]
+shader = ExtResource("1_outline")
+shader_parameter/outline_color = Color(0.05, 0.05, 0.05, 1)
+shader_parameter/depth_threshold = 0.0001
+shader_parameter/normal_threshold = 0.25
+shader_parameter/outline_width = 1.2
