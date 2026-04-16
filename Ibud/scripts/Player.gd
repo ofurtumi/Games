@@ -66,9 +66,8 @@ func _physics_process(delta):
 
 
 	var dir = Vector2(x, z)
-	if dir.length() > 0:
-		var speed = walk_speed * (grapple_move_fraction if is_grappling else 1.0)
-		dir = dir.normalized() * speed
+	if dir.length() > 0 and not is_grappling:
+		dir = dir.normalized() * walk_speed
 		var angle_rad = deg_to_rad(rotation_y)
 		velocity.x = dir.y * sin(angle_rad) + dir.x * cos(angle_rad)
 		velocity.z = dir.y * cos(angle_rad) - dir.x * sin(angle_rad)
@@ -98,8 +97,9 @@ func _physics_process(delta):
 			velocity += (to_point / distance) * force * delta
 
 	move_and_slide()
-	velocity.x = lerp(velocity.x, 0.0, 1.0 - pow(0.8, delta * 60)) # maybe break 60 out into a variable for tuning
-	velocity.z = lerp(velocity.z, 0.0, 1.0 - pow(0.8, delta * 60)) # maybe break 60 out into a variable for tuning
+	if not is_grappling:
+		velocity.x = lerp(velocity.x, 0.0, 1.0 - pow(0.8, delta * 60))
+		velocity.z = lerp(velocity.z, 0.0, 1.0 - pow(0.8, delta * 60))
 
 func _input(event):
 	if event is InputEventMouseMotion:
