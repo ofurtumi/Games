@@ -108,7 +108,6 @@ shadow_enabled = true
 [node name="Player" parent="." instance=ExtResource("2_1an4s")]
 transform = Transform3D(0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05, 0, 3.96741, -3.39238)
 script = ExtResource("5_nx8ue")
-jump_velocity = 50.0
 
 [node name="OmniLight3D" type="OmniLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.23374, -8.18027)
