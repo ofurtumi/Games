@@ -6,9 +6,12 @@ extends CharacterBody3D
 @export var fall_velocity = 1.5
 @export var gravity = 9.0
 @export var game_speed = 15.0
-@export var grapple_force = 500.0
+@export var grapple_force = 300.0
 @export var grapple_max_distance = 50.0
 @export var grapple_move_fraction = 0.2
+@export var acceleration = 20.0
+@export var deceleration = 15.0
+@export var max_speed = 30.0
 
 var camera_pivot: Marker3D
 var camera: Camera3D
@@ -24,6 +27,7 @@ func _ready():
 	camera_pivot = $CameraPivot
 	camera = $CameraPivot/Camera3D
 	camera_pivot.rotation_degrees.x = clamp(rotation_x, -79.0, 79.0)
+	safe_margin = 0.05
 	_create_crosshair()
 
 func _create_crosshair():
@@ -66,11 +70,13 @@ func _physics_process(delta):
 
 
 	var dir = Vector2(x, z)
+	var target_x = 0.0
+	var target_z = 0.0
 	if dir.length() > 0 and not is_grappling:
 		dir = dir.normalized() * walk_speed
 		var angle_rad = deg_to_rad(rotation_y)
-		velocity.x = dir.y * sin(angle_rad) + dir.x * cos(angle_rad)
-		velocity.z = dir.y * cos(angle_rad) - dir.x * sin(angle_rad)
+		target_x = dir.y * sin(angle_rad) + dir.x * cos(angle_rad)
+		target_z = dir.y * cos(angle_rad) - dir.x * sin(angle_rad)
 
 	# Gravity and jumping
 	if is_on_floor():
@@ -96,10 +102,12 @@ func _physics_process(delta):
 			var force = grapple_force * (distance / grapple_max_distance)
 			velocity += (to_point / distance) * force * delta
 
+	velocity = velocity.limit_length(max_speed)
 	move_and_slide()
 	if not is_grappling:
-		velocity.x = lerp(velocity.x, 0.0, 1.0 - pow(0.8, delta * 60))
-		velocity.z = lerp(velocity.z, 0.0, 1.0 - pow(0.8, delta * 60))
+		var rate = acceleration if Vector2(target_x, target_z).length() > 0 else deceleration
+		velocity.x = move_toward(velocity.x, target_x, rate * delta)
+		velocity.z = move_toward(velocity.z, target_z, rate * delta)
 
 func _input(event):
 	if event is InputEventMouseMotion:
