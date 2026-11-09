@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://pattern_painted_wall_ibud01"]
+
+; Example: textured toon wall using the stylized hvitar-svartar pattern.
+; Tweak texture_scale to control how big the pattern reads in-world.
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_triplanar.gdshader" id="1_patshd"]
+[ext_resource type="Texture2D" path="res://assets/textures/stylized/hvitar-svartar.png" id="2_pattex"]
+
+[resource]
+shader = ExtResource("1_patshd")
+shader_parameter/albedo_texture = ExtResource("2_pattex")
+shader_parameter/texture_scale = 0.4
+shader_parameter/albedo_tint = Color(1, 1, 1, 1)
+shader_parameter/roughness = 0.92

@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://red_painted_floor_ibud01"]
+
+; Example: textured toon material using a stylized PNG via world-space
+; triplanar projection. No UV unwrap needed on the mesh.
+
+[ext_resource type="Shader" path="res://assets/shaders/toon_triplanar.gdshader" id="1_redshd"]
+[ext_resource type="Texture2D" path="res://assets/textures/stylized/raudar.png" id="2_redtex"]
+
+[resource]
+shader = ExtResource("1_redshd")
+shader_parameter/albedo_texture = ExtResource("2_redtex")
+shader_parameter/texture_scale = 0.5
+shader_parameter/albedo_tint = Color(1, 1, 1, 1)
+shader_parameter/roughness = 0.85
