@@ -10,12 +10,12 @@ const BossScript = preload("res://scripts/Boss.gd")
 const SfxScript = preload("res://scripts/Sfx.gd")
 
 const SAVE_PATH = "user://ibud_save.json"
-const PLAYER_RADIUS = 0.07
+const PLAYER_RADIUS = Data.PLAYER_RADIUS
 
 var player = null
 var hud = null
 
-# "menu", "playing", "choice", "shop", "paused", "dead", "victory"
+# "menu", "playing", "web", "choice", "shop", "paused", "dead", "victory"
 var state = "menu"
 
 # Run state
@@ -33,6 +33,15 @@ var run_time = 0.0
 var boss = null
 var boss_spawned = false
 var near_nest = false
+var zone_id = ""
+
+# The web (skill tree): every node id -> data, which ones are taken, and the
+# points left to spend. Points come from level-ups, sugar caches and the nest.
+var web = {}
+var web_owned = {}
+var web_points = 0
+var caches_found = 0
+var caches_total = 0
 
 var enemies = []
 var shots = []
@@ -56,7 +65,6 @@ var need_caches = false
 var pending_choices = []
 var choice_kind = ""
 var choice_options = []
-var shop_offers = []
 var shop_purchases = 0
 
 # Permanent progression
@@ -79,13 +87,14 @@ func setup(p, h):
 	sfx = SfxScript.new()
 	add_child(sfx)
 	# A web shot is a glowing bolt, long enough to read as a streak in flight.
-	shot_mesh = MeshKit.box(Vector3(0.022, 0.022, 0.2))
+	shot_mesh = MeshKit.box(Vector3(0.016, 0.016, 0.14))
 	shot_mat = MeshKit.ghost_mat(Color(0.9, 0.97, 1.0, 1.0))
 	mat_flash = MeshKit.ghost_mat(Color(1, 1, 1, 1))
 	mat_warn = MeshKit.ghost_mat(Color(1.0, 0.15, 0.1, 1.0))
 	nest = MeshKit.build_nest()
 	add_child(nest)
 	nest.global_position = Data.NEST_POS
+	web = Data.build_web()
 	_load_save()
 	set_state("menu")
 
@@ -125,14 +134,15 @@ func start_run():
 	pending_choices = []
 	shop_purchases = 0
 	need_caches = true
-	for i in meta_level("start"):
-		var free = _roll_upgrades(1, "")
-		if not free.is_empty():
-			apply_upgrade(free[0])
-	_roll_shop()
+	web_owned = {"core": true}
+	web_points = meta_level("start")
+	zone_id = ""
 	player.reset_to_spawn()
 	set_state("playing")
-	hud.announce(Data.ACTS[0]["intro"], 4.0)
+	hud.announce("%s\n%s" % [Data.ACTS[0]["intro"], _cache_hint()], 6.0)
+
+func _cache_hint() -> String:
+	return "%d glowing sugar caches are hidden around the apartment. Each one is a web point." % Data.CACHES_PER_ACT
 
 func _clear_world():
 	for e in enemies:
@@ -176,8 +186,48 @@ func to_menu():
 func toggle_pause():
 	if state == "playing":
 		set_state("paused")
-	elif state == "paused":
+	elif state == "paused" or state == "web":
 		set_state("playing")
+
+func toggle_web():
+	if state == "playing":
+		set_state("web")
+	elif state == "web":
+		set_state("playing")
+
+# --- the web (skill tree) --------------------------------------------------------
+
+func web_reachable(id: String) -> bool:
+	for l in web[id]["links"]:
+		if web_owned.has(l):
+			return true
+	return false
+
+func web_can_take(id: String) -> bool:
+	return web.has(id) and not web_owned.has(id) and web_points > 0 and web_reachable(id)
+
+func web_take(id: String):
+	if state != "web" or not web_can_take(id):
+		return
+	web_points -= 1
+	web_owned[id] = true
+	for fx in web[id]["fx"]:
+		_apply_fx(fx[0], fx[1], fx[2])
+	sfx.play("pickup", 1.3)
+	hud.on_state_changed(state)
+
+func _apply_fx(stat: String, op: String, value):
+	if op == "mul":
+		st[stat] *= value
+	else:
+		st[stat] += value
+		if stat == "max_hp":
+			hp = minf(st["max_hp"], hp + value)
+
+func add_web_point(reason: String):
+	web_points += 1
+	hud.announce("%s  +1 web point - press [Tab] to spend it" % reason, 3.0)
+
 
 # --- main loop -----------------------------------------------------------------
 
@@ -193,6 +243,10 @@ func _physics_process(delta):
 	if st["regen"] > 0.0:
 		hp = minf(st["max_hp"], hp + st["regen"] * delta)
 	near_nest = player.global_position.distance_to(nest.global_position) < 0.9
+	var zone = zone_at(player.global_position)
+	if zone["id"] != zone_id:
+		zone_id = zone["id"]
+		hud.zone_banner(zone)
 	nest.rotate_y(delta * 0.8)
 
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and fire_cd <= 0.0:
@@ -264,11 +318,32 @@ func _find_floor_point(zone: Dictionary, min_dist: float, max_dist: float, want_
 
 # --- combat: player ------------------------------------------------------------
 
+# What the crosshair is on: the nearest bug along the camera ray, else the
+# first wall it hits. Shots leave the spider and fly at that point.
+func aim_point() -> Vector3:
+	var aim = player.aim_ray()
+	var from: Vector3 = aim[0]
+	var to: Vector3 = from + aim[1] * 30.0
+	var wall = ray(from, to)
+	if not wall.is_empty():
+		to = wall["position"]
+	var best = to
+	var best_d = from.distance_to(to)
+	for e in enemies:
+		if not is_instance_valid(e) or e.dead:
+			continue
+		var axis = e.closest_axis_point(closest_on_segment(from, to, e.center()))
+		var c = closest_on_segment(from, to, axis)
+		var d = from.distance_to(c)
+		if c.distance_to(axis) <= e.radius and d < best_d:
+			best_d = d
+			best = c
+	return best
+
 func _fire():
-	var cam_basis = player.camera.global_transform.basis
-	var fwd = -cam_basis.z.normalized()
-	var up = cam_basis.y.normalized()
-	var origin = player.camera.global_position + fwd * 0.06
+	var origin = player.global_position + Vector3.UP * 0.02
+	var fwd = (aim_point() - origin).normalized()
+	var up = player.camera.global_transform.basis.y.normalized()
 	var n = int(st["shots"])
 	for i in n:
 		var ang = deg_to_rad((i - (n - 1) / 2.0) * 5.0)
@@ -302,7 +377,7 @@ func _update_shots(delta):
 				continue
 			var axis = e.closest_axis_point(closest_on_segment(from, to, e.center()))
 			var c = closest_on_segment(from, to, axis)
-			if c.distance_to(axis) <= e.radius + 0.03:
+			if c.distance_to(axis) <= e.radius + 0.02:
 				s["hit"].append(e)
 				_hit_enemy(e, st["damage"], true, s["vel"].normalized())
 				if state != "playing":
@@ -364,11 +439,15 @@ func _update_pounce():
 	for e in enemies.duplicate():
 		if not is_instance_valid(e) or e.dead or pounce_hit.has(e):
 			continue
-		if e.closest_axis_point(ppos).distance_to(ppos) < e.radius + 0.3:
+		if e.closest_axis_point(ppos).distance_to(ppos) < e.radius + 0.2:
 			pounce_hit.append(e)
 			var away = (e.center() - ppos).normalized()
-			e.push(away * 3.0)
+			e.push(away * 2.0)
 			_hit_enemy(e, st["pounce_dmg"] * st["damage"] / 10.0, false, away)
+			if st["pounce_heal"] > 0.0:
+				hp = minf(st["max_hp"], hp + st["pounce_heal"])
+			if st["pounce_stun"] > 0.0 and not e.dead and not e.is_boss:
+				e.stun = maxf(e.stun, st["pounce_stun"])
 			if e.dead:
 				# A killing pounce is ready again almost at once: keep hunting.
 				player.pounce_cd = minf(player.pounce_cd, 0.25)
@@ -380,9 +459,17 @@ func try_burst():
 	if state != "playing" or burst_cd > 0.0:
 		return
 	burst_cd = st["burst_cd"]
+	_burst(player.global_position)
+	if st["burst_echo"] > 0:
+		get_tree().create_timer(0.6, false).timeout.connect(_echo_burst)
+
+func _echo_burst():
+	if state == "playing":
+		_burst(player.global_position)
+
+func _burst(ppos: Vector3):
 	sfx.play("burst")
 	player.add_shake(1.0)
-	var ppos = player.global_position
 	var r = st["burst_radius"]
 	var fx = MeshInstance3D.new()
 	fx.mesh = MeshKit.sphere(1.0)
@@ -398,9 +485,9 @@ func try_burst():
 		if not is_instance_valid(e) or e.dead:
 			continue
 		if e.closest_axis_point(ppos).distance_to(ppos) < r + e.radius:
-			e.apply_slow(0.4, 3.0)
+			e.apply_slow(maxf(0.1, 0.4 - st["burst_slow"]), 3.0 + st["burst_slow"] * 8.0)
 			var away = (e.center() - ppos).normalized()
-			e.push(away * 4.0)
+			e.push(away * 3.0)
 			_hit_enemy(e, st["burst_dmg"] * st["damage"] / 10.0, false, away)
 			if state != "playing":
 				return
@@ -422,7 +509,7 @@ func damage_player(amount: float, source = null, dot: bool = false):
 		if source != null:
 			var away = player.global_position - source
 			if away.length() > 0.001:
-				player.velocity += away.normalized() * 3.0 + Vector3.UP * 1.5
+				player.velocity += away.normalized() * 2.0 + Vector3.UP * 1.0
 	hp -= amount * (1.0 - st["armor"])
 	if hp <= 0.0:
 		if st["revives"] > 0:
@@ -498,7 +585,7 @@ func show_damage_number(pos: Vector3, amount: float, crit: bool):
 	var l = Label3D.new()
 	l.text = str(int(ceil(amount)))
 	l.font_size = 80 if crit else 52
-	l.pixel_size = 0.0014
+	l.pixel_size = 0.0011
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.no_depth_test = true
 	l.modulate = Color(1.0, 0.85, 0.2) if crit else Color(1, 1, 1)
@@ -599,6 +686,8 @@ func on_enemy_killed(e):
 		_on_boss_killed(e)
 		return
 	act_kills += 1
+	if st["venom_spread"] > 0.0 and e.venom_timer > 0.0:
+		_spread_venom(e)
 	var zone = zone_at(e.global_position)
 	var xp_gain = float(e.xp)
 	var crumb_gain = float(e.crumbs) * st["crumb_mult"]
@@ -616,6 +705,13 @@ func on_enemy_killed(e):
 	_spawn_pickup("crumb", e.center(), maxi(1, int(round(crumb_gain))))
 	if e.elite or randf() < heart_chance:
 		_spawn_pickup("heart", e.center() + Vector3(0.08, 0.0, 0.0), 15)
+
+# Toxic Bloom: a poisoned bug bursts and poisons everything close by.
+func _spread_venom(source):
+	fx_burst(source.center(), Color(0.6, 1.0, 0.2), 10, 0.015, 0.8)
+	for o in enemies:
+		if o != source and is_instance_valid(o) and not o.dead and o.center().distance_to(source.center()) < 0.6:
+			o.apply_venom(st["venom"], 3.0)
 
 func _update_spawning(delta):
 	# Telegraphed spawns: a dark blob swells for a second, then the bug pops out.
@@ -654,11 +750,12 @@ func _update_spawning(delta):
 		if anchor == null:
 			continue
 		var flying = cfg["ai"] != "crawler"
+		var r = cfg["radius"] * Data.BUG_SCALE
 		for i in cfg["pack"]:
-			var pos = anchor + Vector3(randf_range(-0.25, 0.25), cfg["radius"] + 0.02, randf_range(-0.25, 0.25))
+			var pos = anchor + Vector3(randf_range(-0.2, 0.2), r + 0.02, randf_range(-0.2, 0.2))
 			if flying:
-				pos.y += randf_range(0.4, 1.0)
-			var node = MeshKit.part(self, MeshKit.sphere(cfg["radius"] * 1.6), MeshKit.ghost_mat(Color(0.05, 0.02, 0.08, 0.8)), pos)
+				pos.y += randf_range(0.3, 0.8)
+			var node = MeshKit.part(self, MeshKit.sphere(r * 1.6), MeshKit.ghost_mat(Color(0.05, 0.02, 0.08, 0.8)), pos)
 			pending_spawns.append({"node": node, "pos": pos, "kind": kind, "elite": i == 0 and randf() < elite_chance, "t": 1.0 + 0.12 * i})
 			spawned = true
 	if spawned:
@@ -705,8 +802,7 @@ func _on_boss_killed(e):
 	need_caches = true
 	wave_index = 0
 	wave_cd = 5.0
-	_roll_shop()
-	hud.announce("%s\n%s" % [e.cfg.get("defeat_text", "%s defeated!" % e.cfg["name"]), act_info()["intro"]], 5.0)
+	hud.announce("%s\n%s\nNew sugar caches have been hidden." % [e.cfg.get("defeat_text", "%s defeated!" % e.cfg["name"]), act_info()["intro"]], 6.0)
 
 # --- loot ----------------------------------------------------------------------
 
@@ -719,34 +815,34 @@ func add_xp(amount: float):
 		xp -= xp_needed()
 		level += 1
 		sfx.jingle()
-		pending_choices.append("levelup")
+		add_web_point("Level %d!" % level)
 
 func xp_needed() -> float:
 	return 12.0 + level * 10.0
 
 func _spawn_pickup(kind: String, pos: Vector3, value: int):
-	var node = MeshInstance3D.new()
+	var node: Node3D
 	var life = 40.0
-	match kind:
-		"heart":
-			node.mesh = MeshKit.sphere(0.035)
-			node.material_override = MeshKit.mat(Color(1.0, 0.2, 0.3), 1.5)
-		"cache":
-			node.mesh = MeshKit.box(Vector3(0.12, 0.12, 0.12))
-			node.material_override = MeshKit.mat(Color(1.0, 0.95, 0.8), 1.2)
-			MeshKit.part(node, MeshKit.cylinder(0.008, 0.008, 1.5), MeshKit.ghost_mat(Color(1.0, 0.9, 0.4, 0.5)), Vector3(0, 0.8, 0))
-			life = 99999.0
-		_:
-			node.mesh = MeshKit.box(Vector3(0.035, 0.035, 0.035))
-			node.material_override = MeshKit.mat(Color(0.95, 0.75, 0.3), 1.0)
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if kind == "cache":
+		node = MeshKit.build_cache()
+		life = 99999.0
+	else:
+		var mi = MeshInstance3D.new()
+		if kind == "heart":
+			mi.mesh = MeshKit.sphere(0.025)
+			mi.material_override = MeshKit.mat(Color(1.0, 0.2, 0.3), 1.5)
+		else:
+			mi.mesh = MeshKit.box(Vector3(0.025, 0.025, 0.025))
+			mi.material_override = MeshKit.mat(Color(0.95, 0.75, 0.3), 1.0)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node = mi
 	add_child(node)
 	node.global_position = pos
 	# Loot settles on whatever surface is below it.
 	var rest_y = pos.y
 	var floor_hit = ray(pos, pos + Vector3.DOWN * 6.0)
 	if not floor_hit.is_empty():
-		rest_y = floor_hit["position"].y + 0.07
+		rest_y = floor_hit["position"].y + (0.06 if kind == "cache" else 0.04)
 	pickups.append({"node": node, "kind": kind, "value": value, "pos": pos, "rest_y": rest_y, "life": life})
 
 # Sugar-cube caches hidden around the apartment at the start of each act.
@@ -755,11 +851,26 @@ func _spawn_caches():
 		if p["kind"] == "cache":
 			p["node"].queue_free()
 			pickups.erase(p)
-	for i in 5:
+	caches_found = 0
+	caches_total = 0
+	for i in Data.CACHES_PER_ACT:
 		var zone = Data.ZONES.pick_random()
 		var pos = _find_floor_point(zone, 2.0, 99.0, false)
 		if pos != null:
-			_spawn_pickup("cache", pos + Vector3.UP * 0.07, 15 + 5 * act)
+			_spawn_pickup("cache", pos + Vector3.UP * 0.06, 15 + 5 * act)
+			caches_total += 1
+
+# The closest cache still lying around, or null.
+func nearest_cache():
+	var best = null
+	var best_d = INF
+	for p in pickups:
+		if p["kind"] == "cache":
+			var d = p["pos"].distance_to(player.global_position)
+			if d < best_d:
+				best_d = d
+				best = p
+	return best
 
 func _update_pickups(delta):
 	var ppos = player.global_position
@@ -777,7 +888,7 @@ func _update_pickups(delta):
 		p["life"] -= delta
 		p["node"].global_position = pos
 		p["node"].rotate_y(delta * 2.0)
-		if d < 0.14:
+		if d < (0.12 if p["kind"] == "cache" else 0.1):
 			_collect(p)
 			p["node"].queue_free()
 			pickups.erase(p)
@@ -791,34 +902,26 @@ func _collect(p: Dictionary):
 		"heart":
 			hp = minf(st["max_hp"], hp + p["value"])
 		"cache":
+			caches_found += 1
 			add_crumbs(int(p["value"] * st["crumb_mult"]))
-			if randf() < 0.4:
-				pending_choices.append("cache")
-				hud.announce("Cache! A free upgrade inside.", 2.0)
-			else:
-				hud.announce("Cache! +%d crumbs" % int(p["value"] * st["crumb_mult"]), 2.0)
+			sfx.jingle()
+			add_web_point("Sugar cache %d/%d!" % [caches_found, caches_total])
 		_:
 			add_crumbs(p["value"])
 
-# --- upgrades ------------------------------------------------------------------
+# --- relics ------------------------------------------------------------------
 
-# relic_boss == "" rolls normal upgrades, otherwise that boss's relics.
-func _roll_upgrades(n: int, relic_boss: String) -> Array:
+func _roll_relics(n: int, boss_kind: String) -> Array:
 	var pool = []
 	for id in Data.UPGRADES:
 		var u = Data.UPGRADES[id]
-		if u.get("relic", "") != relic_boss:
-			continue
-		if owned.get(id, 0) < u["max"]:
+		if u.get("relic", "") == boss_kind and owned.get(id, 0) < u["max"]:
 			pool.append(id)
 	pool.shuffle()
 	return pool.slice(0, n)
 
 func _open_choice(kind: String):
-	var relic_boss = ""
-	if kind.begins_with("relic:"):
-		relic_boss = kind.substr(6)
-	choice_options = _roll_upgrades(3, relic_boss)
+	choice_options = _roll_relics(3, kind.substr(6))
 	if choice_options.is_empty():
 		add_crumbs(25)
 		return
@@ -834,50 +937,6 @@ func pick_choice(index: int):
 func apply_upgrade(id: String):
 	owned[id] = owned.get(id, 0) + 1
 	match id:
-		"fangs":
-			st["damage"] *= 1.25
-		"spinnerets":
-			st["fire_rate"] *= 1.2
-		"split":
-			st["shots"] += 1
-		"pierce":
-			st["pierce"] += 1
-		"venom":
-			st["venom"] += 4.0
-		"sticky":
-			st["slow_shots"] += 0.2
-		"chitin":
-			st["max_hp"] += 25.0
-			hp = minf(st["max_hp"], hp + 25.0)
-		"carapace":
-			st["armor"] += 0.1
-		"sprint":
-			st["speed"] += 0.12
-		"longsilk":
-			st["grapple_range"] += 0.25
-			st["grapple_force"] += 0.15
-		"lifedrinker":
-			st["lifesteal"] += 1.0
-		"regen":
-			st["regen"] += 0.6
-		"magnet":
-			st["magnet"] *= 1.6
-		"lucky":
-			st["crit"] += 0.08
-		"brutal":
-			st["crit_mult"] += 0.5
-		"pounce":
-			st["pounce_cd"] *= 0.8
-			st["pounce_dmg"] *= 1.4
-		"burst":
-			st["burst_radius"] *= 1.25
-			st["burst_dmg"] *= 1.5
-		"jump":
-			st["extra_jumps"] += 1
-		"scavenger":
-			st["crumb_mult"] += 0.25
-		"learner":
-			st["xp_mult"] += 0.2
 		"relic_tail":
 			st["chain"] += 1
 		"relic_cheese":
@@ -896,22 +955,19 @@ func apply_upgrade(id: String):
 
 # --- shop (the nest) -----------------------------------------------------------
 
-func _roll_shop():
-	shop_offers = _roll_upgrades(3, "")
-
 func shop_price() -> int:
-	return int(25.0 * pow(1.3, shop_purchases))
+	return int(30.0 * pow(1.35, shop_purchases))
 
-func shop_buy(index: int):
-	if state != "shop" or index < 0 or index >= shop_offers.size():
+func shop_buy_point():
+	if state != "shop":
 		return
 	var price = shop_price()
 	if crumbs < price:
 		return
 	crumbs -= price
 	shop_purchases += 1
-	apply_upgrade(shop_offers[index])
-	shop_offers.remove_at(index)
+	web_points += 1
+	sfx.play("pickup", 1.3)
 	hud.on_state_changed(state)
 
 func shop_heal():
@@ -919,13 +975,6 @@ func shop_heal():
 		return
 	crumbs -= 15
 	hp = minf(st["max_hp"], hp + 40.0)
-	hud.on_state_changed(state)
-
-func shop_reroll():
-	if state != "shop" or crumbs < 10:
-		return
-	crumbs -= 10
-	_roll_shop()
 	hud.on_state_changed(state)
 
 func close_shop():

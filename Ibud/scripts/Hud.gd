@@ -4,6 +4,7 @@ extends CanvasLayer
 # upgrade choices, the shop, pause and the end-of-run screens.
 
 const Data = preload("res://scripts/Data.gd")
+const SkillWeb = preload("res://scripts/SkillWeb.gd")
 
 var game = null
 
@@ -22,12 +23,19 @@ var prompt_label: Label
 var announce_label: Label
 var boss_marker: Label
 var nest_marker: Label
+var cache_marker: Label
+var cache_label: Label
+var points_label: Label
+var zone_title: Label
+var zone_sub: Label
+var skill_web: Control
 var flash_rect: ColorRect
 var dim: ColorRect
 var panel: PanelContainer
 var panel_box: VBoxContainer
 
 var announce_t = 0.0
+var zone_t = 0.0
 var hit_marks = []
 var hit_t = 0.0
 
@@ -117,6 +125,10 @@ func _build():
 	left.add_child(xp_bar)
 	crumbs_label = _make_label("Crumbs: 0", 18, Color(1.0, 0.85, 0.4))
 	left.add_child(crumbs_label)
+	cache_label = _make_label("", 16, Color(1.0, 0.92, 0.6))
+	left.add_child(cache_label)
+	points_label = _make_label("", 20, Color(0.75, 0.95, 1.0))
+	left.add_child(points_label)
 
 	var top = VBoxContainer.new()
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -132,7 +144,7 @@ func _build():
 	boss_bar = _make_bar(460.0, 18.0, Color(0.9, 0.3, 0.1))
 	top.add_child(boss_bar)
 
-	zone_label = _make_label("", 18)
+	zone_label = _make_label("", 17)
 	zone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_place(zone_label, 1.0, 0.0, -16.0, 16.0)
 	hud_root.add_child(zone_label)
@@ -148,8 +160,10 @@ func _build():
 	ability_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bottom.add_child(ability_label)
 
-	announce_label = _make_label("", 30, Color(1.0, 0.95, 0.7))
+	announce_label = _make_label("", 28, Color(1.0, 0.95, 0.7))
 	announce_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	announce_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	announce_label.custom_minimum_size = Vector2(820, 0)
 	_place(announce_label, 0.5, 0.25, 0.0, 0.0)
 	hud_root.add_child(announce_label)
 
@@ -159,6 +173,21 @@ func _build():
 	nest_marker = _make_label("NEST", 14, Color(0.7, 1.0, 0.8))
 	nest_marker.visible = false
 	hud_root.add_child(nest_marker)
+	cache_marker = _make_label("", 15, Color(1.0, 0.9, 0.45))
+	cache_marker.visible = false
+	hud_root.add_child(cache_marker)
+
+	# Big room-name banner shown whenever you walk into another room.
+	var zone_box = VBoxContainer.new()
+	zone_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(zone_box, 0.5, 0.62, 0.0, 0.0)
+	hud_root.add_child(zone_box)
+	zone_title = _make_label("", 34)
+	zone_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_box.add_child(zone_title)
+	zone_sub = _make_label("", 18)
+	zone_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_box.add_child(zone_sub)
 
 	# Hit marker: an X around the crosshair that flashes on every hit.
 	for i in 4:
@@ -196,6 +225,10 @@ func _build():
 	panel_box.add_theme_constant_override("separation", 8)
 	margin.add_child(panel_box)
 
+	skill_web = SkillWeb.new()
+	skill_web.visible = false
+	add_child(skill_web)
+
 # --- per-frame HUD -------------------------------------------------------------
 
 func _process(delta):
@@ -206,8 +239,8 @@ func _process(delta):
 	for m in hit_marks:
 		m.visible = hit_t > 0.0
 	var s = game.state
-	var in_run = s == "playing" or s == "choice" or s == "shop" or s == "paused"
-	hud_root.visible = in_run
+	var in_run = s == "playing" or s == "web" or s == "choice" or s == "shop" or s == "paused"
+	hud_root.visible = in_run and s != "web"
 	if not in_run:
 		return
 
@@ -217,6 +250,12 @@ func _process(delta):
 	xp_bar.value = clampf(game.xp / game.xp_needed(), 0.0, 1.0)
 	level_label.text = "Level %d" % game.level
 	crumbs_label.text = "Crumbs: %d" % game.crumbs
+	cache_label.text = "Sugar caches: %d / %d found" % [game.caches_found, game.caches_total]
+	if game.web_points > 0:
+		points_label.text = "Web points: %d   [Tab] spend" % game.web_points
+		points_label.modulate.a = 0.65 + 0.35 * sin(Time.get_ticks_msec() * 0.006)
+	else:
+		points_label.text = ""
 
 	var info = game.act_info()
 	var boss = game.boss
@@ -236,9 +275,10 @@ func _process(delta):
 	boss_bar.visible = boss_alive
 
 	var zone = game.zone_at(game.player.global_position)
-	zone_label.text = "%s\n%s" % [zone["name"], zone["bonus_text"]]
+	zone_label.text = "%s\nBugs: %s\n%s" % [zone["name"], _zone_bugs(zone), zone["bonus_text"]]
+	zone_label.add_theme_color_override("font_color", zone["color"])
 
-	ability_label.text = "Web shot [RMB]    Grapple [LMB]    Pounce [Shift] %s    Web burst [Q] %s" % [
+	ability_label.text = "Grapple [LMB]    Web shot [RMB]    Pounce [Shift] %s    Web burst [Q] %s    Web [Tab]" % [
 		_cd_text(game.player.pounce_cd), _cd_text(game.burst_cd)]
 	if game.near_nest:
 		prompt_label.text = "[E] Enter the nest (shop)"
@@ -248,6 +288,11 @@ func _process(delta):
 	if s == "playing" and announce_t > 0.0:
 		announce_t -= delta
 	announce_label.visible = announce_t > 0.0
+	if s == "playing" and zone_t > 0.0:
+		zone_t -= delta
+	var zone_alpha = clampf(zone_t, 0.0, 1.0)
+	zone_title.modulate.a = zone_alpha
+	zone_sub.modulate.a = zone_alpha
 
 	var cam = get_viewport().get_camera_3d()
 	boss_marker.visible = false
@@ -256,8 +301,13 @@ func _process(delta):
 		if boss_alive:
 			boss_marker.text = "v %s" % boss.cfg["name"]
 			_put_marker(cam, boss_marker, boss.center() + Vector3.UP * (boss.hit_height * 0.5 + boss.radius + 0.2))
-		if not game.near_nest and game.crumbs >= game.shop_price() and not game.shop_offers.is_empty():
+		if not game.near_nest and game.crumbs >= game.shop_price():
 			_put_marker(cam, nest_marker, game.nest.global_position + Vector3.UP * 0.25)
+		var cache = game.nearest_cache()
+		cache_marker.visible = false
+		if cache != null:
+			cache_marker.text = "v SUGAR %.1fm" % cache["pos"].distance_to(game.player.global_position)
+			_put_marker(cam, cache_marker, cache["pos"] + Vector3.UP * 0.15)
 
 func _cd_text(cd: float) -> String:
 	if cd <= 0.0:
@@ -288,6 +338,19 @@ func hitmarker(killed: bool, crit: bool):
 	for m in hit_marks:
 		m.color = c
 
+func _zone_bugs(zone: Dictionary) -> String:
+	var names = []
+	for k in zone["enemies"]:
+		names.append(Data.ENEMIES[k]["name"])
+	return ", ".join(names)
+
+func zone_banner(zone: Dictionary):
+	zone_title.text = zone["name"].to_upper()
+	zone_title.add_theme_color_override("font_color", zone["color"])
+	zone_sub.text = "%s here   -   %s" % [_zone_bugs(zone), zone["bonus_text"]]
+	zone_sub.add_theme_color_override("font_color", zone["color"].lerp(Color.WHITE, 0.5))
+	zone_t = 3.0
+
 func announce(text: String, time: float):
 	announce_label.text = text
 	announce_t = time
@@ -300,7 +363,10 @@ func on_state_changed(s: String):
 		c.queue_free()
 	var modal = s != "playing"
 	dim.visible = modal
-	panel.visible = modal
+	panel.visible = modal and s != "web"
+	skill_web.visible = s == "web"
+	if s == "web":
+		skill_web.open(game)
 	match s:
 		"menu":
 			_build_menu()
@@ -349,17 +415,11 @@ func _build_menu():
 		else:
 			var cost = game.meta_cost(id)
 			_button("%s  %d/%d  -  %s   [%d silk]" % [m["name"], lvl, m["max"], m["desc"], cost], game.buy_meta.bind(id), int(game.meta["silk"]) >= cost)
-	_text("WASD move   Space jump   LMB grapple   RMB web shot\nShift pounce   Q web burst   E nest   Esc pause   F fullscreen", 14, Color(0.8, 0.8, 0.8))
+	_text("WASD move   Space jump   LMB (hold) grapple, swing and reel in   RMB web shot\nShift pounce   Q web burst   Tab the web (skill tree)   E nest   Esc pause   F fullscreen", 14, Color(0.8, 0.8, 0.8))
 	_button("Quit", get_tree().quit)
 
 func _build_choice():
-	var kind = game.choice_kind
-	if kind.begins_with("relic:"):
-		_text("Boss relic - choose one", 28, Color(1.0, 0.6, 0.3))
-	elif kind == "cache":
-		_text("Cache - choose an upgrade", 28, Color(1.0, 0.9, 0.5))
-	else:
-		_text("Level %d - choose an upgrade" % game.level, 28, Color(0.5, 0.85, 1.0))
+	_text("Boss relic - choose one", 28, Color(1.0, 0.6, 0.3))
 	var i = 0
 	for id in game.choice_options:
 		_button("[%d]  %s" % [i + 1, _upgrade_text(id)], game.pick_choice.bind(i))
@@ -367,24 +427,21 @@ func _build_choice():
 
 func _build_shop():
 	_text("The Nest", 28, Color(0.7, 1.0, 0.8))
-	_text("Crumbs: %d       HP %d / %d" % [game.crumbs, int(ceil(game.hp)), int(game.st["max_hp"])], 18, Color(1.0, 0.85, 0.4))
+	_text("Crumbs: %d       HP %d / %d       Web points: %d" % [game.crumbs, int(ceil(game.hp)), int(game.st["max_hp"]), game.web_points], 18, Color(1.0, 0.85, 0.4))
 	var price = game.shop_price()
-	var i = 0
-	for id in game.shop_offers:
-		_button("%s\n    [%d crumbs]" % [_upgrade_text(id), price], game.shop_buy.bind(i), game.crumbs >= price)
-		i += 1
-	if game.shop_offers.is_empty():
-		_text("Sold out - new stock after the next boss, or reroll.", 15, Color(0.8, 0.8, 0.8))
+	_button("Spin a web point   [%d crumbs]" % price, game.shop_buy_point, game.crumbs >= price)
 	_button("Heal 40 HP   [15 crumbs]", game.shop_heal, game.crumbs >= 15 and game.hp < game.st["max_hp"])
-	_button("Reroll stock   [10 crumbs]", game.shop_reroll, game.crumbs >= 10)
 	_button("Leave   [Esc]", game.close_shop)
 
 func _build_pause():
 	_text("Paused", 28)
 	_text("Act %d   Level %d   Kills %d" % [game.act, game.level, game.kills], 16)
 	var lines = []
+	for id in game.web_owned:
+		if id != "core":
+			lines.append(game.web[id]["name"])
 	for id in game.owned:
-		lines.append("%s x%d" % [Data.UPGRADES[id]["name"], game.owned[id]])
+		lines.append(Data.UPGRADES[id]["name"])
 	if not lines.is_empty():
 		_text(", ".join(lines), 14, Color(0.8, 0.8, 0.8)).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_button("Resume   [Esc]", game.toggle_pause)
@@ -415,6 +472,9 @@ func _input(event):
 				game.close_shop()
 			else:
 				game.toggle_pause()
+			get_viewport().set_input_as_handled()
+		KEY_TAB:
+			game.toggle_web()
 			get_viewport().set_input_as_handled()
 		KEY_F:
 			if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN:

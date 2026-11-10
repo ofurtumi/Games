@@ -194,3 +194,48 @@ static func build_net(r: float) -> Node3D:
 		band.ring_segments = 4
 		part(root, band, cord, Vector3(0, y, 0))
 	return root
+
+# The player's spider, about `s` long, facing +Z. Returns the root; the eight
+# leg pivots are in root.get_meta("legs") so Player.gd can animate them.
+static func build_spider(s: float) -> Node3D:
+	var root = Node3D.new()
+	var body = mat(Color(0.16, 0.11, 0.09))
+	var stripe = mat(Color(0.55, 0.35, 0.2))
+	var leg_mat = mat(Color(0.12, 0.08, 0.07))
+	var eye = mat(Color(0.9, 0.2, 0.15), 1.5)
+	# Abdomen behind, cephalothorax in front.
+	part(root, sphere(s * 0.32), body, Vector3(0, s * 0.12, -s * 0.28), Vector3.ZERO, Vector3(0.9, 0.8, 1.15))
+	part(root, sphere(s * 0.12), stripe, Vector3(0, s * 0.36, -s * 0.3), Vector3.ZERO, Vector3(0.6, 0.3, 1.8))
+	part(root, sphere(s * 0.2), body, Vector3(0, s * 0.06, s * 0.14))
+	for side in [-1.0, 1.0]:
+		part(root, sphere(s * 0.045), eye, Vector3(s * 0.06 * side, s * 0.14, s * 0.3))
+		part(root, sphere(s * 0.03), eye, Vector3(s * 0.12 * side, s * 0.12, s * 0.27))
+	var legs = []
+	for side in [-1.0, 1.0]:
+		for i in 4:
+			var pivot = Node3D.new()
+			pivot.position = Vector3(s * 0.12 * side, s * 0.06, s * (0.24 - i * 0.09))
+			# Fan the legs out: front pair points forward, back pair backward.
+			pivot.rotation_degrees = Vector3(0, side * (i * 40.0 - 60.0) + (0.0 if side > 0 else 180.0), 0)
+			root.add_child(pivot)
+			var upper_len = s * 0.42
+			# Upper leg rises 30 degrees to the knee, the lower leg drops 55 to the foot.
+			part(pivot, box(Vector3(upper_len, s * 0.05, s * 0.05)), leg_mat, Vector3(upper_len * 0.433, upper_len * 0.25, 0), Vector3(0, 0, 30))
+			part(pivot, box(Vector3(s * 0.5, s * 0.04, s * 0.04)), leg_mat, Vector3(upper_len * 0.866 + s * 0.143, upper_len * 0.5 - s * 0.205, 0), Vector3(0, 0, -55))
+			pivot.set_meta("base_y", pivot.rotation.y)
+			legs.append(pivot)
+	root.set_meta("legs", legs)
+	return root
+
+# Sugar cache: a glowing cube with a tall beacon and a little light of its own.
+static func build_cache() -> Node3D:
+	var root = Node3D.new()
+	part(root, box(Vector3.ONE * 0.09), mat(Color(1.0, 0.97, 0.85), 2.5), Vector3.ZERO, Vector3(0, 0, 0))
+	part(root, cylinder(0.012, 0.03, 3.0), ghost_mat(Color(1.0, 0.85, 0.3, 0.45)), Vector3(0, 1.5, 0))
+	var light = OmniLight3D.new()
+	light.light_color = Color(1.0, 0.85, 0.45)
+	light.light_energy = 1.5
+	light.omni_range = 0.7
+	light.position = Vector3(0, 0.08, 0)
+	root.add_child(light)
+	return root

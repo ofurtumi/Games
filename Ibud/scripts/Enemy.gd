@@ -11,15 +11,15 @@ extends Node3D
 const MeshKit = preload("res://scripts/MeshKit.gd")
 const Data = preload("res://scripts/Data.gd")
 
-const PLAYER_RADIUS = 0.07
+const PLAYER_RADIUS = Data.PLAYER_RADIUS
 const GRAVITY = 9.0
 
-const ATTACK_RANGE = 0.3
-const RING_RANGE = 0.45
-const WINDUP_TIME = 0.55
+const ATTACK_RANGE = 0.21
+const RING_RANGE = 0.32
+const WINDUP_TIME = 0.7
 const LUNGE_TIME = 0.3
-const LUNGE_SPEED = 2.6
-const RECOVER_TIME = 0.9
+const LUNGE_SPEED = 1.8
+const RECOVER_TIME = 1.0
 const STAGGER_TIME = 0.18
 
 var game = null
@@ -83,6 +83,11 @@ func setup(g, k: String, hp_mult: float, dmg_mult: float, make_elite: bool):
 		cfg = Data.ENEMIES[k]
 	radius = cfg["radius"]
 	speed = cfg["speed"]
+	if is_boss:
+		speed *= Data.BOSS_PACE
+	else:
+		radius *= Data.BUG_SCALE
+		speed *= Data.BUG_PACE
 	max_hp = cfg["hp"] * hp_mult
 	damage = cfg["damage"] * dmg_mult
 	xp = cfg["xp"]
@@ -266,7 +271,7 @@ func _move_crawler(delta, to_target: Vector3, spd: float):
 
 func _move_flier(delta, to_target: Vector3, spd: float):
 	wobble += delta * 6.0
-	var target = to_target + Vector3(sin(wobble * 0.7), cos(wobble) * 0.5, cos(wobble * 0.9)) * 0.15
+	var target = to_target + Vector3(sin(wobble * 0.7), cos(wobble) * 0.5, cos(wobble * 0.9)) * 0.1
 	var desired = Vector3.ZERO
 	if target.length() > 0.001 and spd > 0.0:
 		desired = target.normalized() * spd
@@ -292,9 +297,9 @@ func _melee(delta, to_player: Vector3, spd: float):
 				vel = Vector3.ZERO
 			elif gap < RING_RANGE and not game.attack_slot_free(self):
 				# No slot: circle the spider and keep a little distance.
-				var orbit = dir.cross(Vector3.UP) * strafe_sign * 0.6
+				var orbit = dir.cross(Vector3.UP) * strafe_sign * 0.45
 				if gap < ATTACK_RANGE:
-					orbit -= dir * 0.6
+					orbit -= dir * 0.45
 				orbit.y = to_player.y
 				_go(delta, orbit, spd * 0.7)
 			else:
@@ -311,14 +316,14 @@ func _melee(delta, to_player: Vector3, spd: float):
 				mt = LUNGE_TIME
 		"lunge":
 			_try_move(lunge_dir * LUNGE_SPEED * delta)
-			if gap < 0.03:
+			if gap < 0.02:
 				game.damage_player(damage, center())
 				mt = 0.0
 			if mt <= 0.0:
 				_end_attack(RECOVER_TIME)
 		_:
 			# Back off after the strike instead of sitting on the spider.
-			if gap < 0.2:
+			if gap < 0.15:
 				var retreat = -dir
 				retreat.y = 0.0
 				_go(delta, retreat, spd * 0.6)
@@ -341,22 +346,22 @@ func _move_shooter(delta, ppos: Vector3, to_player: Vector3, spd: float):
 	var desired = Vector3.ZERO
 	if dist > 0.001:
 		var dir = to_player / dist
-		if dist > 2.3:
+		if dist > 1.8:
 			desired = dir * spd
-		elif dist < 1.3:
+		elif dist < 1.0:
 			desired = -dir * spd
 		else:
 			desired = dir.cross(Vector3.UP) * spd * 0.6 * signf(sin(wobble * 0.5))
-		desired.y += (0.4 - (global_position.y - ppos.y)) * 1.5
+		desired.y += (0.3 - (global_position.y - ppos.y)) * 1.2
 	vel = vel.lerp(desired, clampf(3.0 * delta, 0.0, 1.0))
 	_try_move(vel * delta)
 	shoot_cd -= delta
 	# Blink before firing so the stinger can be dodged.
-	telegraph = shoot_cd < 0.5 and dist < 5.0
-	if shoot_cd <= 0.0 and dist < 5.0 and dist > 0.1:
+	telegraph = shoot_cd < 0.6 and dist < 4.0
+	if shoot_cd <= 0.0 and dist < 4.0 and dist > 0.1:
 		if game.ray(center(), ppos).is_empty():
 			shoot_cd = 2.8
-			game.spawn_enemy_shot(center(), to_player / dist * 3.5, damage, 0.035, false)
+			game.spawn_enemy_shot(center(), to_player / dist * 2.4, damage, 0.025, false)
 		else:
 			shoot_cd = 0.6
 
@@ -385,12 +390,12 @@ func take_damage(amount: float, crit: bool, hit_dir: Vector3 = Vector3.ZERO):
 	if dead:
 		return
 	hp -= amount
-	game.show_damage_number(center() + Vector3.UP * (radius + 0.05), amount, crit)
+	game.show_damage_number(center() + Vector3.UP * (radius + 0.035), amount, crit)
 	if hit_dir != Vector3.ZERO:
 		flash_t = 0.09
 		if not is_boss:
 			visual.scale = base_scale * 1.35
-			knock += hit_dir * 1.3
+			knock += hit_dir * 0.9
 			stun = STAGGER_TIME
 			shoot_cd = maxf(shoot_cd, 0.8)
 			if mstate == "windup" or mstate == "lunge":

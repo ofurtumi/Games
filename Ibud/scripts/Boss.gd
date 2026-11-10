@@ -141,7 +141,7 @@ func _ai_mouse(delta, to_player: Vector3, spd: float):
 				visual.position = Vector3.ZERO
 				_set_state("charge", 0.8)
 		"charge":
-			_move_crawler(delta, lock_dir * 5.0, 9.0 * (spd / speed))
+			_move_crawler(delta, lock_dir * 5.0, 6.5 * (spd / speed))
 			if bt <= 0.0:
 				atk_cd = 2.5 / rage
 				_set_state("rest", 0.9 / rage)
@@ -263,7 +263,7 @@ func _ai_owner(delta, ppos: Vector3, spd: float):
 				puff_t = 0.18
 				var spread = Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 0.15
 				var dir = (ppos - hand).normalized() + spread
-				game.spawn_cloud(hand, dir * 4.5, 12.0)
+				game.spawn_cloud(hand, dir * 3.5, 12.0)
 			if bt <= 0.0:
 				atk_cd = 2.2 / rage
 				_set_state("rest", 0.4)
@@ -271,7 +271,7 @@ func _ai_owner(delta, ppos: Vector3, spd: float):
 			_face(flat, delta)
 			if bt <= 0.0:
 				var lead = ppos + game.player.velocity * 0.3
-				game.spawn_enemy_shot(hand, (lead - hand).normalized() * 11.0, damage * 0.8, 0.22, true)
+				game.spawn_enemy_shot(hand, (lead - hand).normalized() * 8.0, damage * 0.8, 0.22, true)
 				atk_cd = 1.6 / rage
 				_set_state("rest", 0.4)
 		"vacuum":
@@ -279,7 +279,7 @@ func _ai_owner(delta, ppos: Vector3, spd: float):
 			var to_hand = hand - ppos
 			var dist = to_hand.length()
 			if dist > 0.05 and dist < 10.0 and game.ray(hand, ppos).is_empty():
-				game.player.velocity += to_hand / dist * 26.0 * delta
+				game.player.velocity += to_hand / dist * 14.0 * delta
 				if dist < 0.6:
 					game.damage_player(15.0, hand)
 			if bt <= 0.0:
