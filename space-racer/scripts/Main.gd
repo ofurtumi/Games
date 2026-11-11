@@ -24,6 +24,7 @@ const Controls = preload("res://scripts/Controls.gd")
 const OverlayScript = preload("res://scripts/Overlay.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
 const TitleCardScript = preload("res://scripts/TitleCard.gd")
+const Contracts = preload("res://scripts/Contracts.gd")
 const PILOTS = ["VEGA", "KORR", "MIRA", "TOLV", "ASH", "BRYN", "OKO", "RHEA", "SOLE", "IDRA"]
 
 # Lap times that earn materials, as average speed over the lap (m/s). Each
@@ -364,6 +365,61 @@ func can_afford(price: Dictionary, extra: Dictionary = {}) -> bool:
 		if inventory.get(k, 0) + extra.get(k, 0) < price[k]:
 			return false
 	return true
+
+# ---------------------------------------------------------------- contracts
+
+func contracts() -> Array:
+	if not save_data.has("contracts"):
+		save_data.contracts = []
+	return save_data.contracts
+
+# Each outpost keeps three offers; taking one puts up a fresh one.
+func contract_offers(here: int) -> Array:
+	if not save_data.has("offers"):
+		save_data.offers = {}
+	var key = str(here)
+	var list = save_data.offers.get(key, [])
+	var serial = save_data.get("offer_serial", 0)
+	while list.size() < 3:
+		var r = RandomNumberGenerator.new()
+		r.seed = hash([here, serial, list.size(), track_seed])
+		serial += 1
+		list.append(Contracts.make(r, here, unlocks()))
+	save_data.offer_serial = serial
+	save_data.offers[key] = list
+	return list
+
+func accept_contract(here: int, k: int) -> bool:
+	if contracts().size() >= Contracts.MAX_ACTIVE:
+		notify("THREE CONTRACTS AT ONCE", Color(1.0, 0.4, 0.3))
+		return false
+	var offers = contract_offers(here)
+	contracts().append(offers[k])
+	offers.remove_at(k)
+	Sfx.play("ui_select")
+	save_game()
+	return true
+
+func abandon_contract(k: int) -> void:
+	contracts().remove_at(k)
+	save_game()
+
+# Feed an event to every active contract; pay out the ones it finishes.
+func contract_event(event: String, data: Dictionary) -> void:
+	var done = []
+	for c in contracts():
+		if Contracts.on_event(c, event, data):
+			done.append(c)
+	for c in done:
+		contracts().erase(c)
+		for k in c.reward:
+			inventory[k] = inventory.get(k, 0) + c.reward[k]
+		if c.has("blueprint"):
+			unlock(c.blueprint)
+		notify("CONTRACT DONE  " + Contracts.reward_text(c).to_upper(), Color(0.95, 0.85, 0.3))
+		Sfx.play("coins")
+	if not done.is_empty():
+		save_game()
 
 # Blueprints and salvaged frames, by display name.
 func unlocks() -> Array:
@@ -742,6 +798,7 @@ func _race_rivals(delta: float) -> void:
 func _finish_race() -> void:
 	ship.finish_time = race_time
 	var place = place_of(ship)
+	contract_event("race", {"planet": planet_index % 4, "place": place})
 	var reward = RACE_REWARDS[mini(place - 1, RACE_REWARDS.size() - 1)]
 	var bits = []
 	for k in reward:

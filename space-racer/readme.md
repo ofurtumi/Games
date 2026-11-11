@@ -41,6 +41,20 @@ mechanic's market, or **race here** (three laps on the planet's own track
 against its locals; Magma's racers are armoured and slow). Your finishing
 place pays materials. Fuel-only depots sit between the planets.
 
+### Contracts
+
+Every outpost's **Contracts** board offers three jobs; you can carry three
+at once (they show on the expedition HUD with their progress):
+- **Haul** materials in your hold to another planet's outpost (delivered on
+  docking, before the rest of the hold is unloaded)
+- **Race**: win, or finish top 2, in a planet's race
+- **Salvage** wrecks, anywhere
+- **Survey**: reach a planet's mantle or deep layer
+- **Mine** a quota of an ore
+Rewards are materials; salvage jobs sometimes also pay a blueprint you
+haven't found. Taking a job puts up a fresh offer. Pick an active job on
+the board to abandon it.
+
 ### Dying
 
 Racing: a hit with no shield blows the ship apart; you're back at the last
@@ -168,7 +182,7 @@ makes engine and weapon noise; rivals' explosions are still heard.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

@@ -26,6 +26,7 @@ const TerrainScript = preload("res://scripts/Terrain.gd")
 const MinerScript = preload("res://scripts/Miner.gd")
 const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
+const Contracts = preload("res://scripts/Contracts.gd")
 
 # Each planet has an outpost above its north pole run by one mechanic, who
 # sells program cards and parts for materials.
@@ -334,6 +335,10 @@ func _process(delta):
 	if not docked:
 		_service_depots()
 		_update_sites(delta)
+		var pl = nearest_planet(miner.pos)
+		var frac = pl.depth_frac(miner.pos)
+		if frac > 0.25:
+			main.contract_event("depth", {"planet": planets.find(pl), "frac": frac})
 	var speed = miner.vel.length()
 	# Keep moving and the view opens up; stop and it settles back in.
 	if speed > 4.0:
@@ -351,6 +356,7 @@ func _dock(i: int = -1) -> void:
 		at_outpost = i
 	station_pad = outposts[at_outpost].pad
 	docked = true
+	main.contract_event("dock", {"planet": outposts[at_outpost].planet, "cargo": cargo})
 	var gained = []
 	for k in cargo:
 		if cargo[k] > 0:
@@ -409,6 +415,7 @@ func open_menu() -> void:
 		var mech = Parts.MECHANICS[def.mech].name
 		main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
 			{"label": "Launch", "action": launch},
+			{"label": "Contracts", "value": func(): return "%d / %d active" % [main.contracts().size(), Contracts.MAX_ACTIVE], "action": open_contracts},
 			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
 			{"label": "Blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
@@ -484,6 +491,7 @@ func _update_pickups(delta: float) -> void:
 		pk.node.rotation = Vector3(pk.age * 2.0, pk.age * 3.0, 0)
 		if room and d < miner.stats.radius + 0.5:
 			cargo[pk.mat] = cargo.get(pk.mat, 0) + 1
+			main.contract_event("mined", {"mat": pk.mat, "n": 1})
 			Sfx.play("pickup", -4.0)
 			pk.node.queue_free()
 			continue
@@ -551,6 +559,17 @@ func _draw_hud() -> void:
 		cx -= w + 34
 		draw_rect_on(Rect2(cx, 30, 12, 12), MAT_COLORS[m])
 		Ui.text(hud, Vector2(cx + 18, 43), s, 20, Color.WHITE, true)
+	# Active contracts, top right under the hold.
+	var cy = 96.0
+	for c in main.contracts():
+		var line = Contracts.title(c)
+		var prog = Contracts.progress(c)
+		Ui.segment(hud, Rect2(vp.x - 380, cy, 360, 28), Color(0.03, 0.035, 0.045, 0.78), 6.0)
+		Ui.segment(hud, Rect2(vp.x - 380, cy, 4, 28), Color(0.95, 0.85, 0.3), 0.0)
+		Ui.text(hud, Vector2(vp.x - 366, cy + 20), line.to_upper(), 14, Color.WHITE, true)
+		if prog != "":
+			Ui.text(hud, Vector2(vp.x - 366, cy + 20), prog, 14, Color(0.95, 0.85, 0.3), true, HORIZONTAL_ALIGNMENT_RIGHT, 336)
+		cy += 32
 	# Salvage progress around the ship, and what's on the cable.
 	if salvage_site != null:
 		var sp2 = cam.unproject_position(Vector3(miner.pos.x, miner.pos.y, 0.0))
@@ -728,6 +747,7 @@ func _work_site(s: Dictionary) -> void:
 			miner.fuel = minf(miner.stats.fuel, miner.fuel + miner.stats.fuel * 0.3)
 			miner.weapons.refill()
 			main.notify("SALVAGED  " + "  ".join(bits), SITE_COLORS.wreck)
+			main.contract_event("salvage", {})
 			Sfx.play("coins")
 			if s.data.has("blueprint"):
 				main.unlock(s.data.blueprint)
@@ -891,3 +911,32 @@ func _buy_part(id: String, mech: String, title: String) -> void:
 	Sfx.play("coins")
 	main.save_game()
 	open_shop(mech, title)
+
+# ---------------------------------------------------------------- contracts
+
+func open_contracts() -> void:
+	var here = outposts[at_outpost].planet
+	var rows = []
+	var active = main.contracts()
+	for i in active.size():
+		var c = active[i]
+		var k = i
+		rows.append({"label": Contracts.title(c), "value": func(): return "ACTIVE  " + Contracts.progress(c),
+			"action": func(): _confirm_abandon(k)})
+	var offers = main.contract_offers(here)
+	for i in offers.size():
+		var c = offers[i]
+		var k = i
+		rows.append({"label": Contracts.title(c), "value": Contracts.reward_text(c),
+			"action": func():
+				if main.accept_contract(here, k):
+					open_contracts()})
+	rows.append({"label": "Back", "action": open_menu})
+	main.menu.show_menu(PLANETS[here].name.to_upper() + " CONTRACTS", rows, open_menu, main.menu.title.ends_with("CONTRACTS"))
+
+func _confirm_abandon(k: int) -> void:
+	main.menu.show_menu("ABANDON?", [
+		{"label": Contracts.title(main.contracts()[k]), "value": "no refund"},
+		{"label": "Abandon", "action": func(): main.abandon_contract(k); open_contracts()},
+		{"label": "Keep it", "action": open_contracts},
+	], open_contracts)
