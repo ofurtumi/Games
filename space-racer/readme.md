@@ -4,6 +4,15 @@ Mine planets, build a ship from mechanic parts, race on a track you carve
 yourself. This is a sandbox for the look and feel: one planet, one generated
 track, swappable builds. Godot 4.7, everything built in code.
 
+## Starting up
+
+The game opens on a title screen with your ship lapping the track behind it:
+Race (practice laps and medals), Expedition, Garage, Track Builder,
+Controls, Quit. Races start on a 3 · 2 · 1 · GO countdown with everyone held
+on the line. Planet races end on a results screen with every pilot's place
+and time, your prize, and Race again / Expedition / Main menu. The pause
+menu has Main menu too.
+
 ## Modes
 
 **Race**: one track on a planet's surface. Gates in order, shield rebuilt at

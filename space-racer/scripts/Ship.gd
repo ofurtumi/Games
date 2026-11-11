@@ -49,6 +49,8 @@ var autopilot = false
 var rival = false          # AI racer: no input, no notifications
 var distance = 0.0         # centreline samples travelled this race (for standings)
 var down_left = 0.0        # rivals: seconds until back on track after a wreck
+var pilot = "YOU"
+var finish_time = -1.0
 var sfx_on: bool:
 	get:
 		return not rival

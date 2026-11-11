@@ -14,6 +14,7 @@ const TrackScript = preload("res://scripts/Track.gd")
 const FxScript = preload("res://scripts/Fx.gd")
 const ShipScript = preload("res://scripts/Ship.gd")
 const HudScript = preload("res://scripts/Hud.gd")
+const Hud = preload("res://scripts/Hud.gd")
 const TrackEditorScript = preload("res://scripts/TrackEditor.gd")
 const GridGarageScript = preload("res://scripts/GridGarage.gd")
 const GtMenuScript = preload("res://scripts/GtMenu.gd")
@@ -22,6 +23,8 @@ const MiningScript = preload("res://scripts/Mining.gd")
 const Controls = preload("res://scripts/Controls.gd")
 const OverlayScript = preload("res://scripts/Overlay.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
+const TitleCardScript = preload("res://scripts/TitleCard.gd")
+const PILOTS = ["VEGA", "KORR", "MIRA", "TOLV", "ASH", "BRYN", "OKO", "RHEA", "SOLE", "IDRA"]
 
 # Lap times that earn materials, as average speed over the lap (m/s). Each
 # medal pays out once per track.
@@ -90,6 +93,12 @@ var _respawn_left = 0.0
 var rivals = []
 var race_laps = 0          # 0 = open practice (medals); >0 = a race against rivals
 var race_over = 0.0
+var race_time = 0.0
+var race_origin = "practice"   # where Race again / back goes: practice or expedition
+var countdown = 0.0
+var _count_shown = -1
+var title_on = false
+var title_card
 const RACE_REWARDS = [{"crystal": 6, "metal": 10, "core": 1}, {"metal": 8, "crystal": 3}, {"metal": 5, "rock": 10}, {"rock": 8}]
 # Who you race on each planet (by palette).
 const RIVALS = {
@@ -146,6 +155,8 @@ func _ready():
 	var menu_layer = CanvasLayer.new()
 	menu_layer.layer = 4
 	add_child(menu_layer)
+	title_card = TitleCardScript.new()
+	menu_layer.add_child(title_card)
 	menu = GtMenuScript.new()
 	menu_layer.add_child(menu)
 	var top = CanvasLayer.new()
@@ -167,6 +178,9 @@ func _ready():
 		open_menu()
 	if has_meta("mining"):
 		enter_mining()
+	# Plain launch: the title screen, with the ship lapping behind it.
+	if shot_path == "" and not has_meta("nosave") and not garage and not has_meta("editor") and not has_meta("menu") and not has_meta("mining"):
+		show_title()
 
 func _parse_args() -> void:
 	for a in OS.get_cmdline_user_args():
@@ -412,6 +426,8 @@ func _unhandled_input(event):
 		if event.physical_keycode in [KEY_B, KEY_ESCAPE]:
 			editor.close()
 		return
+	if title_on or countdown > 0.0:
+		return
 	if menu_open():
 		return
 	if mode == "mining":
@@ -454,6 +470,7 @@ func open_menu() -> void:
 		{"label": "Render", "value": func(): return "Low-res" if get_viewport().scaling_3d_scale < 1.0 else "Full",
 			"action": _toggle_res, "left": _toggle_res, "right": _toggle_res},
 		{"label": "Controls", "action": func(): open_controls(open_menu)},
+		{"label": "Main menu", "action": func(): close_menu(); show_title()},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], close_menu)
 
@@ -485,6 +502,70 @@ func _rebind(id: String, back: Callable) -> void:
 			Controls.apply(keys)
 			save_game()
 		open_controls(back)
+
+# ---------------------------------------------------------------- title
+
+func show_title() -> void:
+	title_on = true
+	if mode == "mining":
+		leave_mining()
+	race_laps = 0
+	for rv in rivals:
+		rv.queue_free()
+	rivals.clear()
+	ship.autopilot = true
+	ship.set_process(true)
+	hud.visible = false
+	title_card.visible = true
+	title_card.t = 0.0
+	menu.dim_backdrop = false
+	menu.show_menu("", [
+		{"label": "Race", "action": func(): _leave_title(); start_practice()},
+		{"label": "Expedition", "action": func(): _leave_title(); enter_mining()},
+		{"label": "Garage", "action": func(): _leave_title(); open_garage()},
+		{"label": "Track Builder", "action": func(): _leave_title(); open_editor()},
+		{"label": "Controls", "action": func(): open_controls(show_title)},
+		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
+	], Callable())
+
+func _leave_title() -> void:
+	title_on = false
+	title_card.visible = false
+	menu.dim_backdrop = true
+	menu.hide_menu()
+	hud.visible = mode == "race"
+	ship.autopilot = has_meta("auto")
+
+func start_practice() -> void:
+	race_laps = 0
+	race_origin = "practice"
+	_reset_race()
+	start_countdown()
+
+# ---------------------------------------------------------------- countdown
+
+# 3 . 2 . 1 . GO: everyone is held on the line until GO.
+func start_countdown() -> void:
+	countdown = 3.6
+	_count_shown = -1
+	lap_time = 0.0
+	race_time = 0.0
+	ship.set_process(false)
+	for rv in rivals:
+		rv.set_process(false)
+
+func _tick_countdown(delta: float) -> void:
+	countdown -= delta
+	var n = maxi(ceili(countdown - 0.6), 0)
+	if n != _count_shown:
+		_count_shown = n
+		overlay.show_count(n)
+		Sfx.play("ui_select" if n == 0 else "tick", 2.0, 1.6 if n == 0 else 1.0)
+	if n == 0:
+		countdown = 0.0
+		ship.set_process(not garage)
+		for rv in rivals:
+			rv.set_process(true)
 
 func close_menu() -> void:
 	menu.hide_menu()
@@ -546,7 +627,9 @@ func race_on(palette: int) -> void:
 	track_seed = 500 + palette * 37
 	_new_planet()
 	race_laps = 3
+	race_origin = "expedition"
 	_spawn_rivals(palette)
+	start_countdown()
 
 func _rival_loadout(spec: Array) -> Dictionary:
 	if spec[0] == "Basalt":
@@ -573,6 +656,7 @@ func _spawn_rivals(palette: int) -> void:
 	for spec in RIVALS.get(palette, RIVALS[0]):
 		var rv = ShipScript.new()
 		rv.rival = true
+		rv.pilot = PILOTS[(palette * 3 + k) % PILOTS.size()]
 		add_child(rv)
 		rv.setup(terrain, track, fx, self)
 		rv.equip(_rival_loadout(spec))
@@ -583,6 +667,7 @@ func _spawn_rivals(palette: int) -> void:
 		rv.progress_idx = cp.idx
 		rivals.append(rv)
 	ship.distance = 0.0
+	ship.finish_time = -1.0
 	race_over = 0.0
 
 func rival_destroyed(rv) -> void:
@@ -629,6 +714,8 @@ func _race_rivals(delta: float) -> void:
 		var before = rv.progress_idx
 		rv.progress_idx = track.nearest(rv.position, rv.progress_idx)
 		_track_distance(rv, before)
+		if race_laps > 0 and rv.finish_time < 0.0 and rv.distance >= race_laps * track.pts.size() - 2:
+			rv.finish_time = race_time
 		# Bumping: push apart by mass, trade some speed, hurt on hard hits.
 		for other in [ship] + rivals:
 			if other == rv or (other == ship and _respawn_left > 0.0) or (other != ship and other.down_left > 0.0):
@@ -653,6 +740,7 @@ func _race_rivals(delta: float) -> void:
 						fx.burst((rv.position + other.position) * 0.5 + Vector3(0, 0.7, 0), Color(1.0, 0.75, 0.4), 12, 7.0, 1.2, 0.08, 0.35)
 
 func _finish_race() -> void:
+	ship.finish_time = race_time
 	var place = place_of(ship)
 	var reward = RACE_REWARDS[mini(place - 1, RACE_REWARDS.size() - 1)]
 	var bits = []
@@ -660,9 +748,51 @@ func _finish_race() -> void:
 		inventory[k] = inventory.get(k, 0) + reward[k]
 		bits.append("+%d %s" % [reward[k], k])
 	var names = ["1ST", "2ND", "3RD", "4TH"]
-	overlay.show_banner(names[mini(place - 1, 3)], "  ".join(bits), Color(1.0, 0.82, 0.25) if place == 1 else Color(0.4, 0.6, 1.0))
-	race_over = 4.0
+	Sfx.play("lap")
+	Sfx.play("coins")
+	race_over = 1.0
+	ship.autopilot = true
 	save_game()
+	show_results(names[mini(place - 1, 3)], "  ".join(bits))
+
+# GT4-style results: everyone's place and time, the prize, what next.
+func show_results(place_name: String, prize: String) -> void:
+	var field = [ship] + rivals
+	field.sort_custom(func(a, b):
+		var fa = a.finish_time >= 0.0
+		var fb = b.finish_time >= 0.0
+		if fa and fb:
+			return a.finish_time < b.finish_time
+		if fa != fb:
+			return fa
+		return a.distance > b.distance)
+	var rows = []
+	var lead = field[0]
+	for i in field.size():
+		var e = field[i]
+		var value = Hud.laptime(e.finish_time) if e.finish_time >= 0.0 else "+%d m" % int(lead.distance - e.distance)
+		rows.append({"label": "%d    %s" % [i + 1, e.pilot], "value": value})
+	rows.append({"label": "Prize", "value": prize})
+	rows.append({"label": "Race again", "action": _restart_race})
+	if race_origin == "expedition":
+		rows.append({"label": "Expedition", "action": func(): _close_results(); enter_mining()})
+	rows.append({"label": "Main menu", "action": func(): _close_results(); show_title()})
+	menu.show_menu("RESULTS  ·  " + place_name, rows, Callable())
+	menu.selected = field.size() + 1
+
+func _close_results() -> void:
+	menu.hide_menu()
+	ship.autopilot = has_meta("auto")
+
+func _restart_race() -> void:
+	_close_results()
+	lap = 1
+	lap_time = 0.0
+	next_cp = 1
+	last_cp = 0
+	_respawn()
+	_spawn_rivals(planet_index)
+	start_countdown()
 
 func leave_mining() -> void:
 	if mode != "mining":
@@ -799,6 +929,8 @@ func _process(delta):
 			f.scale = Vector3(1, 1, 0.3 + randf() * 0.1)
 		for sp in ship.rig.spinners:
 			sp[0].rotate_object_local(sp[1], sp[2] * delta)
+	elif countdown > 0.0:
+		_tick_countdown(delta)
 	else:
 		lap_time += delta
 		_race(delta)
@@ -823,15 +955,8 @@ func _race(delta: float) -> void:
 	ship.progress_idx = track.nearest(ship.position, ship.progress_idx)
 	_track_distance(ship, before)
 	_race_rivals(delta)
-	if race_over > 0.0:
-		race_over -= delta
-		if race_over <= 0.0:
-			lap = 1
-			lap_time = 0.0
-			next_cp = 1
-			last_cp = 0
-			_respawn()
-			_spawn_rivals(planet_index)
+	if race_laps > 0 and race_over <= 0.0:
+		race_time += delta
 	# Checkpoints: in order, but you may get there however you like.
 	var cp = track.checkpoints[next_cp]
 	if ship.position.distance_to(cp.pos) < track.hw[cp.idx] + 1.5:

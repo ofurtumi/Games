@@ -78,10 +78,11 @@ func _row_rect(i: int) -> Rect2:
 
 func _draw():
 	var ta = Ui.ease_out(t / SLIDE)
-	var tr = Rect2(-40 + (ta - 1.0) * 700.0, origin.y - 92, ROW_W + 160, 58)
-	Ui.segment(self, tr, Ui.INK)
-	Ui.segment(self, Rect2(tr.position.x, tr.end.y - 4, tr.size.x, 4), Ui.HILITE, 0)
-	Ui.text(self, Vector2(origin.x, tr.position.y + 42), title, 34, Color.WHITE, true)
+	if title != "":
+		var tr = Rect2(-40 + (ta - 1.0) * 700.0, origin.y - 92, ROW_W + 160, 58)
+		Ui.segment(self, tr, Ui.INK)
+		Ui.segment(self, Rect2(tr.position.x, tr.end.y - 4, tr.size.x, 4), Ui.HILITE, 0)
+		Ui.text(self, Vector2(origin.x, tr.position.y + 42), title, 34, Color.WHITE, true)
 	for i in rows.size():
 		var r = rows[i]
 		var rr = _row_rect(i)

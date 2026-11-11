@@ -9,6 +9,8 @@ var title = ""
 var sub = ""
 var t_banner = 0.0
 var accent = Color(0.85, 0.12, 0.08)
+var count = -1          # 3, 2, 1, 0 = GO
+var count_t = 0.0
 
 func _ready():
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -21,6 +23,10 @@ func show_death(big: String, small: String) -> void:
 	accent = Color(0.85, 0.12, 0.08)
 	t_banner = 3.2
 
+func show_count(n: int) -> void:
+	count = n
+	count_t = 0.0
+
 func show_banner(big: String, small: String, color: Color) -> void:
 	title = big
 	sub = small
@@ -31,12 +37,27 @@ func show_banner(big: String, small: String, color: Color) -> void:
 func tick(real_dt: float) -> void:
 	flash = maxf(0.0, flash - real_dt * 1.4)
 	t_banner = maxf(0.0, t_banner - real_dt)
+	if count >= 0:
+		count_t += real_dt
+		if count == 0 and count_t > 0.9:
+			count = -1
 	queue_redraw()
 
 func _draw():
 	var vp = size
 	if flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(0.9, 0.1, 0.05, flash * 0.55))
+	if count >= 0:
+		# Each number punches in big and settles.
+		var k = Ui.ease_out(count_t / 0.25)
+		var sz = int(lerpf(260.0, 170.0, k))
+		var go = count == 0
+		var txt = "GO" if go else str(count)
+		var col = Color(0.45, 1.0, 0.5) if go else Color.WHITE
+		var a = clampf(1.0 - (count_t - 0.6) / 0.3, 0.0, 1.0) if go else 1.0
+		var band = Rect2(-40, vp.y * 0.5 - 110, vp.x + 80, 200)
+		Ui.segment(self, band, Color(0.02, 0.02, 0.03, 0.55 * a), 40.0)
+		Ui.text(self, Vector2(0, vp.y * 0.5 + sz * 0.33), txt, sz, Color(col, a), true, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
 	if t_banner <= 0.0:
 		return
 	var age = 3.2 - t_banner
