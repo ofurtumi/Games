@@ -55,6 +55,10 @@ var sfx_on: bool:
 	get:
 		return not rival
 var progress_idx = 0
+var zap_cd = 0.0           # weapons can only hurt a racer this often
+var aggro = 1.0            # rivals: how keen they are to use their tools
+var _ai_cd = {}            # rivals: per-tool cooldowns
+var _ai_hold = {}          # rivals: tool keys held this frame
 
 var _t = 0.0
 var _steer_vis = 0.0
@@ -96,7 +100,7 @@ func equip(lo: Dictionary) -> void:
 	if weapons == null:
 		weapons = WeaponsScript.new()
 		add_child(weapons)
-	weapons.setup(self, Worlds.RaceWorld.new(main), stats)
+	weapons.setup(self, Worlds.RaceWorld.new(main, self), stats)
 	for nz in rig.nozzles:
 		var tr = TrailScript.new()
 		tr.setup(rig.accent, 0.2 * stats.engine_scale)
@@ -146,14 +150,79 @@ func _autopilot() -> Dictionary:
 	# Hop barriers if there's no drill to chew through them.
 	var ahead = terrain.get_kind(terrain.world_to_cell(position + forward() * (2.0 + vel.length() * 0.12)))
 	var jump = ahead == terrain.BARRIER and stats.drill_tier == 0
-	return {"throttle": 1.0, "brake": absf(diff) > 0.5 and vel.length() > 12.0, "steer": clampf(diff * 2.5, -1.0, 1.0),
+	var out = {"throttle": 1.0, "brake": absf(diff) > 0.5 and vel.length() > 12.0, "steer": clampf(diff * 2.5, -1.0, 1.0),
 		"boost": absf(diff) < 0.15 and boost > boost_max * 0.4, "jump": jump}
+	if rival:
+		_ai_tools(out, absf(diff), ahead)
+	return out
+
+# Rivals use whatever tools they've got: cut at whoever is in front, lob
+# missiles down the straight, drop bombs on whoever is tailing them, dash
+# when the road ahead is clear. Cooldowns and a little hesitation keep it fair.
+func _ai_tools(out: Dictionary, turn: float, ahead: int) -> void:
+	# Nobody opens fire while the field is still bunched up off the line.
+	if main.race_time < 3.0:
+		return
+	var delta = get_process_delta_time()
+	for k in _ai_cd:
+		_ai_cd[k] -= delta
+	# Weapons fire on a fresh press, so let go for a frame after each shot.
+	for k in ["rocket", "drop", "warp"]:
+		if _ai_hold.get(k, false):
+			_ai_hold[k] = false
+			out[k] = false
+	var fwd = forward()
+	var side = Vector3(fwd.z, 0.0, -fwd.x)
+	var front = null
+	var front_d = 1e9
+	var behind = null
+	for s in [main.ship] + main.rivals:
+		if s == self or (s.rival and s.down_left > 0.0) or (not s.rival and main._respawn_left > 0.0):
+			continue
+		var to = s.position - position
+		var f = to.dot(fwd)
+		var l = absf(to.dot(side))
+		if f > 1.0 and l < 2.5 + f * 0.25 and f < front_d:
+			front = s
+			front_d = f
+		elif f < -2.0 and f > -14.0 and l < 3.0:
+			behind = s
+	var lat = 0.0
+	if front != null:
+		lat = absf((front.position - position).dot(side))
+	if not stats.lasers.is_empty():
+		var reach = 0.0
+		for l in stats.lasers:
+			reach = maxf(reach, l.range)
+		var on_target = front != null and front_d < reach * 1.1 and lat < 1.6
+		out.laser = (on_target and _ai_cd.get("laser", 0.0) <= 0.0) or (ahead == terrain.BARRIER and stats.drill_tier == 0)
+		if on_target and randf() < 0.4 * delta / aggro:
+			_ai_cd["laser"] = 1.5    # breathe now and then
+	if not stats.launchers.is_empty() and weapons.ammo > 0 and _ai_cd.get("rocket", 0.0) <= 0.0 and front != null:
+		var homing = stats.launchers[0].prog.get("homing", false)
+		if front_d < 38.0 and (homing or lat < 1.5 + front_d * 0.04):
+			out.rocket = true
+			_ai_hold["rocket"] = true
+			_ai_cd["rocket"] = (2.5 + randf() * 2.5) / aggro
+	if not stats.droppers.is_empty() and weapons.bombs > 0 and _ai_cd.get("drop", 0.0) <= 0.0 and behind != null:
+		out.drop = true
+		_ai_hold["drop"] = true
+		_ai_cd["drop"] = (3.0 + randf() * 2.0) / aggro
+	if not stats.warp.is_empty() and _ai_cd.get("warp", 0.0) <= 0.0 and turn < 0.08 and ahead != terrain.BARRIER and vel.length() > 10.0:
+		out.warp = true
+		_ai_hold["warp"] = true
+		_ai_cd["warp"] = 4.0 + randf() * 3.0
+
+# Your own weapons always make noise; a rival's only when it's close by.
+func loud_weapons() -> bool:
+	return not rival or (main.ship != null and position.distance_to(main.ship.position) < 30.0)
 
 func _process(delta):
 	if model == null:
 		return
 	delta = minf(delta, 1.0 / 30.0)
 	_t += delta
+	zap_cd -= delta
 	var inp = _input_state()
 	if stall > 0.0:
 		stall -= delta

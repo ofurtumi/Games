@@ -41,6 +41,21 @@ mechanic's market, or **race here** (three laps on the planet's own track
 against its locals; Magma's racers are armoured and slow). Your finishing
 place pays materials. Fuel-only depots sit between the planets.
 
+### Rivals
+
+The locals race with tools, and each planet's crew has its own kit:
+- **Cinder**: a cutting laser, a bomb bay, a missile pod.
+- **Rime**: a fast laser, a dash jet with bombs, a laser.
+- **Moss**: homing missiles, a laser with a dash jet, timed bombs.
+- **Magma**: armoured Basalts with missiles and bombs, and a Lance.
+
+They hold fire for the first three seconds after GO. After that they cut
+at whoever is right in front, fire missiles down the straights, drop bombs
+on anyone tailing them, and dash when the road is clear. They reload every
+half lap. Their shots hit you and each other but never themselves, and a
+beam only bites every third of a second. Your homing missiles go for them
+too.
+
 ### Contracts
 
 Every outpost's **Contracts** board offers three jobs; you can carry three
@@ -189,7 +204,8 @@ All synthesised at start-up in `Sfx.gd` (no audio files): engine hum that
 rises with speed, boost, drift skid, drill and laser loops, explosions sized
 to the blast, missile launch, warp, hop, hits, shield down, gate chime, lap
 arpeggio, pickups, bomb ticks, menu ticks and garage clunks. Only your ship
-makes engine and weapon noise; rivals' explosions are still heard.
+makes engine noise; rivals' weapons are heard when they're within 30 m, and
+their explosions always.
 
 ## Code map (`scripts/`)
 

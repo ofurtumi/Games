@@ -103,10 +103,15 @@ var title_card
 const RACE_REWARDS = [{"crystal": 6, "metal": 10, "core": 1}, {"metal": 8, "crystal": 3}, {"metal": 5, "rock": 10}, {"rock": 8}]
 # Who you race on each planet (by palette).
 const RIVALS = {
-	0: [["Stock", "basic", ["drill_1"], Color(0.85, 0.2, 0.2)], ["Sapper", "basic", [], Color(0.3, 0.6, 0.95)], ["Grinder", "advanced", [], Color(0.95, 0.75, 0.2)]],
-	1: [["Corvette", "dart", [], Color(0.2, 0.9, 1.0)], ["Corvette", "dart", [], Color(0.95, 0.95, 0.95)], ["Stock", "basic", [], Color(0.6, 0.3, 0.9)]],
-	2: [["Scavenger", "advanced", [], Color(0.3, 0.75, 0.45)], ["Scavenger", "advanced", [], Color(0.85, 0.6, 0.2)], ["Stock", "basic", [], Color(0.9, 0.4, 0.6)]],
-	3: [["Basalt", "advanced", [], Color(0.25, 0.22, 0.2)], ["Basalt", "advanced", [], Color(0.5, 0.18, 0.1)], ["Grinder", "advanced", [], Color(0.75, 0.35, 0.1)]],
+	# [preset, frame, tool kit ([part, wired nodes]), colour, aggression]
+	0: [["Stock", "basic", [["laser", []]], Color(0.85, 0.2, 0.2), 0.7], ["Sapper", "basic", [["dropper", []]], Color(0.3, 0.6, 0.95), 0.8],
+		["Grinder", "advanced", [["rocket", ["bomb"]]], Color(0.95, 0.75, 0.2), 0.7]],
+	1: [["Corvette", "dart", [["laser", ["fast"]]], Color(0.2, 0.9, 1.0), 1.0], ["Corvette", "dart", [["dash", []], ["dropper", ["bomb"]]], Color(0.95, 0.95, 0.95), 1.0],
+		["Stock", "basic", [["laser", []]], Color(0.6, 0.3, 0.9), 0.9]],
+	2: [["Scavenger", "advanced", [["rocket", ["homing", "bomb"]]], Color(0.3, 0.75, 0.45), 1.1], ["Scavenger", "advanced", [["laser", []], ["dash", []]], Color(0.85, 0.6, 0.2), 1.1],
+		["Stock", "basic", [["dropper", ["timer", "bomb"]]], Color(0.9, 0.4, 0.6), 1.0]],
+	3: [["Basalt", "advanced", [["rocket", ["bomb"]]], Color(0.25, 0.22, 0.2), 1.2], ["Basalt", "advanced", [["dropper", ["bomb"]]], Color(0.5, 0.18, 0.1), 1.2],
+		["Grinder", "advanced", [["laser_2", []]], Color(0.75, 0.35, 0.1), 1.3]],
 }   # other racers (Node3D); none yet, but the minimap draws them
 var shot_path = ""
 var shot_frames = 120
@@ -688,6 +693,59 @@ func race_on(palette: int) -> void:
 	start_countdown()
 
 func _rival_loadout(spec: Array) -> Dictionary:
+	var lo = _rival_base(spec)
+	for tool in spec[2]:
+		fit(lo, {"id": tool[0], "cell": Vector2i.ZERO, "rot": 0, "cards": tool[1]})
+	return lo
+
+# Put a part on a ship wherever it goes (nose parts as far forward as they
+# can, the rest from the back, any way round). Ships are usually full, so
+# spare bits come off to make room, the drill last (a nose tool takes its
+# place; rivals without one hop barriers or laser through them).
+const SPARE = ["plate", "magnet", "magnet_2", "emitter", "tank", "fin", "hopjet", "brake", "brake_2", "charges", "drill_1", "drill_2", "drill_3"]
+
+static func fit(lo: Dictionary, part: Dictionary) -> bool:
+	if _fit_spot(lo.frame, lo.parts, part):
+		return true
+	# Taking off just one spare bit is enough more often than not.
+	for id in SPARE:
+		for i in lo.parts.size():
+			if lo.parts[i].id == id:
+				var less = lo.parts.duplicate(true)
+				less.remove_at(i)
+				if _fit_spot(lo.frame, less, part):
+					lo.parts = less
+					return true
+	# Otherwise strip spares in order until it goes.
+	var less = lo.parts.duplicate(true)
+	for id in SPARE:
+		var i = 0
+		while i < less.size():
+			if less[i].id == id:
+				less.remove_at(i)
+				if _fit_spot(lo.frame, less, part):
+					lo.parts = less
+					return true
+			else:
+				i += 1
+	return false    # no room even stripped down: the build is left alone
+
+static func _fit_spot(frame: String, parts: Array, part: Dictionary) -> bool:
+	var size = Parts.frame_size(frame)
+	var nose = Parts.PARTS[part.id].get("nose", false)
+	var ys = range(size.y) if nose else range(size.y - 1, -1, -1)
+	for y in ys:
+		for x in size.x:
+			for rot in ([0] if nose else [0, 1, 2, 3]):
+				var p = part.duplicate(true)
+				p.cell = Vector2i(x, y)
+				p.rot = rot
+				if Parts.can_place(frame, parts, p):
+					parts.append(p)
+					return true
+	return false
+
+func _rival_base(spec: Array) -> Dictionary:
 	if spec[0] == "Basalt":
 		# Lava planet locals: armour everywhere, not much go.
 		return {"name": "Basalt", "frame": "advanced", "paint": {"primary": spec[3], "secondary": Color(1.0, 0.45, 0.1), "pattern": "twin"},
@@ -716,6 +774,7 @@ func _spawn_rivals(palette: int) -> void:
 		add_child(rv)
 		rv.setup(terrain, track, fx, self)
 		rv.equip(_rival_loadout(spec))
+		rv.aggro = spec[4]
 		rv.autopilot = true
 		k += 1
 		var lane = -1.0 if k % 2 == 1 else 1.0
@@ -770,6 +829,10 @@ func _race_rivals(delta: float) -> void:
 		var before = rv.progress_idx
 		rv.progress_idx = track.nearest(rv.position, rv.progress_idx)
 		_track_distance(rv, before)
+		# Rivals reload their tools every half lap (you do at the gates).
+		if rv.distance - rv.get_meta("reloaded", 0.0) > track.pts.size() * 0.5:
+			rv.set_meta("reloaded", rv.distance)
+			rv.weapons.refill()
 		if race_laps > 0 and rv.finish_time < 0.0 and rv.distance >= race_laps * track.pts.size() - 2:
 			rv.finish_time = race_time
 		# Bumping: push apart by mass, trade some speed, hurt on hard hits.

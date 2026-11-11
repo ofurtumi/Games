@@ -16,6 +16,8 @@ const Sfx = preload("res://scripts/Sfx.gd")
 
 # Only the player's ship makes noise (not rivals, not the garage test range).
 func _loud() -> bool:
+	if host != null and host.has_method("loud_weapons"):
+		return host.loud_weapons()
 	return host != null and "sfx_on" in host and host.sfx_on
 
 var host

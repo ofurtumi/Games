@@ -5,8 +5,10 @@ extends RefCounted
 
 class RaceWorld:
 	var main
-	func _init(m):
+	var owner    # the ship firing (its own shots never hit it; bombs use _self_hit)
+	func _init(m, o = null):
 		main = m
+		owner = o
 	func _cell(p: Vector2) -> Vector2i:
 		return main.terrain.world_to_cell(Vector3(p.x, 0.0, p.y))
 	func up() -> Vector3:
@@ -18,17 +20,34 @@ class RaceWorld:
 		return main.terrain.is_solid(c) and main.terrain.top_of(c) > 0.5
 	func hit(p: Vector2, amount: float, tier: int) -> int:
 		return main.terrain.damage(_cell(p), amount, tier)
+	# Everyone on track who can be shot: you and the rivals, minus the shooter
+	# and anyone wrecked or respawning.
+	func racers() -> Array:
+		var out = []
+		if main.ship != owner and main._respawn_left <= 0.0 and main.ship.is_processing():
+			out.append(main.ship)
+		for rv in main.rivals:
+			if rv != owner and rv.down_left <= 0.0:
+				out.append(rv)
+		return out
 	func blast(p: Vector2, r: float, tier: int) -> void:
 		main._explode(Vector3(p.x, 0.6, p.y), r, tier)
-	# Things a shot sets off just by touching them: mines.
+		for s in racers():
+			if s.pos2().distance_to(p) < r + s.stats.radius:
+				s.take_hit(16.0)
+				s.add_vel2((s.pos2() - p).normalized() * 8.0)
+	# Things a shot sets off just by touching them: mines and other racers. A
+	# beam keeps touching, so each racer only takes a hit every so often.
 	func touch(p: Vector2, r: float) -> bool:
 		for m in main.track.mines:
 			if m.timer <= 0.0 and Vector2(m.pos.x - p.x, m.pos.z - p.y).length() < r:
 				main.detonate_mine(m)
 				return true
-		for rv in main.rivals:
-			if rv.down_left <= 0.0 and Vector2(rv.position.x - p.x, rv.position.z - p.y).length() < r + rv.stats.radius:
-				rv.take_hit(25.0)
+		for s in racers():
+			if s.pos2().distance_to(p) < r + s.stats.radius:
+				if s.zap_cd <= 0.0:
+					s.zap_cd = 0.35
+					s.take_hit(14.0)
 				return true
 		return false
 	func target(p: Vector2, r: float):
@@ -40,8 +59,8 @@ class RaceWorld:
 				if q.distance_to(p) < bd:
 					bd = q.distance_to(p)
 					best = q
-		for rv in main.rivals:
-			var q = Vector2(rv.position.x, rv.position.z)
+		for s in racers():
+			var q = s.pos2()
 			if q.distance_to(p) < bd:
 				bd = q.distance_to(p)
 				best = q
@@ -52,6 +71,9 @@ class RaceWorld:
 			if q.distance_to(p) < r:
 				var d = (p - q).normalized() * k
 				pk.vel += Vector3(d.x, 0.0, d.y)
+		for sh in racers():
+			if sh.pos2().distance_to(p) < r:
+				sh.add_vel2((p - sh.pos2()).normalized() * k * 0.5)
 	func quench(_p: Vector2, _r: float) -> void:
 		pass
 	func burst(p: Vector2, c: Color, n: int, speed: float, h: float) -> void:
