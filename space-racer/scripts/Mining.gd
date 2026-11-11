@@ -84,6 +84,9 @@ var salvage_site = null
 var _market_cool = false
 var _dead_left = 0.0
 var drones
+var marker_rects = []   # where the marker labels went last frame (tests)
+var hud_panels = []
+var marker_arrows = []
 var traders
 var trader_cool = 0.0
 var _trade_t = 0.0
@@ -615,6 +618,16 @@ func _draw_hud() -> void:
 	for p2 in planets:
 		if miner.pos.distance_to(p2.centre) > p2.def.radius * 1.6:
 			marks.append([p2.centre, p2.def.name.to_upper(), p2.terrain.planet.rock.lightened(0.3)])
+	# Keep them off the panels and off each other: closest first; a label that
+	# would overlap slides along the edge, and if there's no room the arrow
+	# goes alone.
+	var panels = [Rect2(0, 0, 370, 140), Rect2(vp.x - 400, 0, 400, cy + 10), Rect2(vp.x - 380, vp.y - 185, 380, 185)]
+	marks.sort_custom(func(x, y): return miner.pos.distance_squared_to(x[0]) < miner.pos.distance_squared_to(y[0]))
+	var placed = []
+	marker_rects = []
+	hud_panels = panels
+	# Arrows first, then labels round them.
+	var arrows = []
 	for mk in marks:
 		var sp = cam.unproject_position(Vector3(mk[0].x, mk[0].y, 0.0))
 		var inside = Rect2(Vector2.ZERO, vp).grow(-40).has_point(sp)
@@ -623,12 +636,41 @@ func _draw_hud() -> void:
 		var c = vp * 0.5
 		var d = (sp - c)
 		var k = minf((vp.x * 0.5 - 50) / maxf(absf(d.x), 1.0), (vp.y * 0.5 - 50) / maxf(absf(d.y), 1.0))
-		var at = c + d * minf(k, 1.0)
-		var dir = d.normalized()
+		var at = marker_spot(c + d * minf(k, 1.0), vp, panels)
+		var dir = (sp - at).normalized()
 		var n = Vector2(-dir.y, dir.x)
 		hud.draw_colored_polygon(PackedVector2Array([at + dir * 12, at - dir * 6 + n * 9, at - dir * 6 - n * 9]), mk[2])
+		arrows.append([mk, at])
+		placed.append(Rect2(at - Vector2(12, 12), Vector2(24, 24)))
+	var blocked = placed.duplicate()
+	for ar in arrows:
+		var mk = ar[0]
+		var at = ar[1]
+		# On the top/bottom edges the label goes under/over the arrow and slides
+		# sideways; on the side edges it goes inward and slides up and down.
+		var top_bottom = at.y < 140.0 or at.y > vp.y - 140.0
+		var base: Vector2
+		var along: Vector2
+		if top_bottom:
+			base = at + Vector2(-60, 16 if at.y < vp.y * 0.5 else -34)
+			along = Vector2(126, 0)
+		else:
+			base = at + Vector2(18 if at.x < vp.x * 0.5 else -138, -9)
+			along = Vector2(0, 20)
+		var spot = null
+		for step in [0, 1, -1, 2, -2, 3, -3]:
+			var r = Rect2(base + along * step, Vector2(120, 18))
+			if not Rect2(Vector2.ZERO, vp).encloses(r) or panels.any(func(p): return p.intersects(r)) or blocked.any(func(p): return p.intersects(r)):
+				continue
+			spot = r
+			break
+		if spot == null:
+			continue
+		blocked.append(spot)
+		marker_rects.append(spot)
 		var dist = int(miner.pos.distance_to(mk[0]))
-		Ui.text(hud, at - dir * 30 + Vector2(-60, 5), "%s %dm" % [mk[1], dist], 13, mk[2], true, HORIZONTAL_ALIGNMENT_CENTER, 120)
+		Ui.text(hud, spot.position + Vector2(0, 14), "%s %dm" % [mk[1], dist], 13, mk[2], true, HORIZONTAL_ALIGNMENT_CENTER, 120)
+	marker_arrows = placed
 	# Banners.
 	var ny = vp.y * 0.24
 	for msg in main.messages:
@@ -639,6 +681,22 @@ func _draw_hud() -> void:
 		Ui.segment(hud, Rect2(r.position.x, r.end.y - 3, bw, 3), Color(msg.color, a), 0.0)
 		Ui.text(hud, Vector2(r.position.x, r.position.y + 29), msg.text, 22, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, bw)
 		ny += 50
+
+# A marker that lands on a HUD panel moves to the nearest side of it that's
+# still on screen.
+static func marker_spot(at: Vector2, vp: Vector2, panels: Array) -> Vector2:
+	for p in panels:
+		if not p.grow(14).has_point(at):
+			continue
+		var g = p.grow(24)
+		var best = at
+		var bd = INF
+		for q in [Vector2(at.x, g.end.y), Vector2(at.x, g.position.y), Vector2(g.position.x, at.y), Vector2(g.end.x, at.y)]:
+			if Rect2(Vector2.ZERO, vp).grow(-20).has_point(q) and q.distance_to(at) < bd:
+				bd = q.distance_to(at)
+				best = q
+		at = best
+	return at
 
 func draw_rect_on(r: Rect2, c: Color) -> void:
 	hud.draw_rect(r, c)
