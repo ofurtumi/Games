@@ -2,7 +2,8 @@ extends Node3D
 
 # Friendly traders flying between outposts. Slow down next to one and it
 # stops to deal: material swaps, a refuel, and one part at a discount. They
-# steer around planets on the way and take a breather at each outpost.
+# steer around planets on the way and take a breather at each outpost, where
+# they restock: three new swaps at new rates and a different part.
 
 const Parts = preload("res://scripts/Parts.gd")
 const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
@@ -10,19 +11,26 @@ const MeshKit = preload("res://scripts/MeshKit.gd")
 
 const SPEED = 15.0
 const NAMES = ["HOLLIS", "PIM", "MARGO"]
-const SWAPS = [
+# Swaps a trader might offer: give / get at the usual rate. Each restock
+# picks three and nudges what they ask by up to a quarter either way.
+const SWAP_POOL = [
 	[{"rock": 12}, {"metal": 3}],
+	[{"rock": 20}, {"crystal": 2}],
 	[{"metal": 6}, {"crystal": 2}],
+	[{"metal": 14}, {"core": 1}],
 	[{"crystal": 4}, {"core": 1}],
 	[{"metal": 3}, {"rock": 14}],
+	[{"crystal": 2}, {"metal": 7}],
+	[{"core": 1}, {"crystal": 5}],
 ]
+const DEALS = 3
 
 var mining
-var traders = []   # {name, pos, vel, to, wait, node, beacon, part, trading}
+var traders = []   # {name, pos, vel, to, wait, node, beacon, part, swaps, trading}
+var rng = RandomNumberGenerator.new()
 
 func setup(m) -> void:
 	mining = m
-	var rng = RandomNumberGenerator.new()
 	rng.seed = 77
 	for i in NAMES.size():
 		var lo = Parts.presets()[[0, 3, 2][i]].duplicate(true)
@@ -34,9 +42,26 @@ func setup(m) -> void:
 		var beacon = MeshKit.part(node, MeshKit.sphere(0.3, 6, 3), MeshKit.mat(Color(0.3, 0.7, 1.0), 2.0), Vector3(0, 1.4, 0), Vector3.ZERO, Vector3.ONE, false)
 		add_child(node)
 		var start = berth(i % mining.outposts.size(), i)
-		var ids = Parts.PARTS.keys().filter(func(id): return not Parts.PARTS[id].get("locked", false))
-		traders.append({"name": NAMES[i], "pos": start, "vel": Vector2.ZERO, "to": (i + 1) % mining.outposts.size(), "wait": rng.randf() * 4.0,
-			"node": node, "model": model, "beacon": beacon, "part": ids[rng.randi() % ids.size()], "trading": false})
+		var t = {"name": NAMES[i], "pos": start, "vel": Vector2.ZERO, "to": (i + 1) % mining.outposts.size(), "wait": rng.randf() * 4.0,
+			"node": node, "model": model, "beacon": beacon, "part": "", "swaps": [], "trading": false}
+		restock(t)
+		traders.append(t)
+
+# New stock: three swaps from the pool at today's rates, and a part (never
+# the one it just had).
+func restock(t: Dictionary) -> void:
+	var pool = range(SWAP_POOL.size())
+	var swaps = []
+	for k in DEALS:
+		var pick = pool.pop_at(rng.randi() % pool.size())
+		var give = {}
+		var sw = SWAP_POOL[pick]
+		for m in sw[0]:
+			give[m] = maxi(1, roundi(sw[0][m] * rng.randf_range(0.75, 1.25)))
+		swaps.append([give, sw[1].duplicate()])
+	t.swaps = swaps
+	var ids = Parts.PARTS.keys().filter(func(id): return not Parts.PARTS[id].get("locked", false) and id != t.part)
+	t.part = ids[rng.randi() % ids.size()]
 
 func step(delta: float) -> void:
 	for t in traders:
@@ -58,6 +83,7 @@ func step(delta: float) -> void:
 			if t.pos.distance_to(goal) < 6.0:
 				t.wait = 6.0
 				t.to = (t.to + 1 + randi() % 2) % mining.outposts.size()
+				restock(t)
 		t.pos += t.vel * delta
 		var f = t.vel.normalized() if t.vel.length() > 0.5 else Vector2(0, 1)
 		var f3 = Vector3(f.x, f.y, 0.0)
@@ -82,7 +108,7 @@ func open_deals(t: Dictionary) -> void:
 	t.trading = true
 	var main = mining.main
 	var rows = []
-	for sw in SWAPS:
+	for sw in t.swaps:
 		var give = sw[0]
 		var take = sw[1]
 		rows.append({"label": "Swap  " + mining._price_text(give), "value": "> " + mining._price_text(take),

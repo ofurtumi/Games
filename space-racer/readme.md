@@ -122,7 +122,9 @@ a downed one is back 40 s later once you're 60 m away.
 
 **Traders** (blue blinking beacon) fly between the outposts and park beside
 the pads. Pull up slowly next to one to deal: material swaps, a refuel for
-metal, and one part at 75% of the shop price. Within 500 m they get a
+metal, and one part at 75% of the shop price. They restock at every outpost
+they stop at: three swaps from a pool of eight at rates up to a quarter
+better or worse than usual, and a different part. Within 500 m they get a
 TRADER marker.
 
 ## Controls
