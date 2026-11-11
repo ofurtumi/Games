@@ -60,6 +60,12 @@ beam only bites every third of a second. Your homing missiles go for them
 too. When a rival's homing missile locks on to you, red chevrons around
 your ship point at it, a LOCK tag flashes and it beeps.
 
+**Rivals** (title and pause menus) sets how hard they race. Easy rivals
+bring only their first tool, ease off the throttle and use it less; Hard
+ones are keener and each borrows a tool from the next planet's crew. Every
+win on a planet also heats its locals up by half a step (up to three wins),
+so on Normal two wins make them race like Hard.
+
 ### Contracts
 
 Every outpost's **Contracts** board offers three jobs; you can carry three

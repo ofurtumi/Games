@@ -58,6 +58,7 @@ var sfx_on: bool:
 var progress_idx = 0
 var zap_cd = 0.0           # weapons can only hurt a racer this often
 var aggro = 1.0            # rivals: how keen they are to use their tools
+var pace = 1.0             # rivals: throttle they race at (Easy holds back)
 var _ai_cd = {}            # rivals: per-tool cooldowns
 var _ai_hold = {}          # rivals: tool keys held this frame
 
@@ -151,7 +152,7 @@ func _autopilot() -> Dictionary:
 	# Hop barriers if there's no drill to chew through them.
 	var ahead = terrain.get_kind(terrain.world_to_cell(position + forward() * (2.0 + vel.length() * 0.12)))
 	var jump = ahead == terrain.BARRIER and stats.drill_tier == 0
-	var out = {"throttle": 1.0, "brake": absf(diff) > 0.5 and vel.length() > 12.0, "steer": clampf(diff * 2.5, -1.0, 1.0),
+	var out = {"throttle": pace, "brake": absf(diff) > 0.5 and vel.length() > 12.0, "steer": clampf(diff * 2.5, -1.0, 1.0),
 		"boost": absf(diff) < 0.15 and boost > boost_max * 0.4, "jump": jump}
 	if rival:
 		_ai_tools(out, absf(diff), ahead)

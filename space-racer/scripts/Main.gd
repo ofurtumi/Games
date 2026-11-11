@@ -593,6 +593,7 @@ func open_menu() -> void:
 		{"label": "Render", "value": func(): return "Low-res" if get_viewport().scaling_3d_scale < 1.0 else "Full",
 			"action": _toggle_res, "left": _toggle_res, "right": _toggle_res},
 		{"label": "Controls", "action": func(): open_controls(open_menu)},
+		_rivals_row(),
 		{"label": "Sound", "action": func(): open_sound(open_menu)},
 		{"label": "Main menu", "action": func(): close_menu(); show_title()},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
@@ -750,6 +751,7 @@ func show_title() -> void:
 		{"label": "Garage", "action": func(): _leave_title(); open_garage()},
 		{"label": "Track Builder", "action": func(): _leave_title(); open_editor()},
 		{"label": "Controls", "action": func(): open_controls(show_title)},
+		_rivals_row(),
 		{"label": "Sound", "action": func(): open_sound(show_title)},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], Callable())
@@ -857,11 +859,39 @@ func race_on(palette: int) -> void:
 	_spawn_rivals(palette)
 	start_countdown()
 
-func _rival_loadout(spec: Array) -> Dictionary:
+func _rival_loadout(spec: Array, heat: float = 0.0, extra = null) -> Dictionary:
 	var lo = _rival_base(spec)
-	for tool in spec[2]:
+	# Easy rivals bring only their first tool; hot ones borrow one more.
+	var kit = spec[2].slice(0, 1) if heat < 0.0 else spec[2].duplicate()
+	if extra != null and heat >= 1.0 and not kit.any(func(t): return t[0] == extra[0]):
+		kit.append(extra)
+	for tool in kit:
 		fit(lo, {"id": tool[0], "cell": Vector2i.ZERO, "rot": 0, "cards": tool[1]})
 	return lo
+
+# ---------------------------------------------------------------- rival heat
+
+# How hard the locals race: the Rivals setting (Easy -1, Normal 0, Hard +1)
+# plus half a step for each win on that planet, up to three wins.
+const RIVAL_LEVELS = ["Easy", "Normal", "Hard"]
+
+func rival_level() -> int:
+	return save_data.get("rival_level", 1)
+
+func _nudge_rivals(d: int) -> void:
+	save_data.rival_level = clampi(rival_level() + d, 0, RIVAL_LEVELS.size() - 1)
+	save_game()
+
+func wins(planet: int) -> int:
+	return save_data.get("wins", {}).get(str(planet), 0)
+
+func rival_heat(planet: int) -> float:
+	return (rival_level() - 1) + mini(wins(planet), 3) * 0.5
+
+func _rivals_row() -> Dictionary:
+	return {"label": "Rivals", "value": func(): return RIVAL_LEVELS[rival_level()],
+		"action": func(): _nudge_rivals(1 if rival_level() < RIVAL_LEVELS.size() - 1 else -rival_level()),
+		"left": func(): _nudge_rivals(-1), "right": func(): _nudge_rivals(1)}
 
 # Put a part on a ship wherever it goes (nose parts as far forward as they
 # can, the rest from the back, any way round). Ships are usually full, so
@@ -932,14 +962,17 @@ func _spawn_rivals(palette: int) -> void:
 	var cp = track.checkpoints[0]
 	var side = Vector3(cp.dir.z, 0.0, -cp.dir.x)
 	var k = 0
+	var heat = rival_heat(palette)
+	var next_kit = RIVALS.get((palette + 1) % RIVALS.size(), RIVALS[0])
 	for spec in RIVALS.get(palette, RIVALS[0]):
 		var rv = ShipScript.new()
 		rv.rival = true
 		rv.pilot = PILOTS[(palette * 3 + k) % PILOTS.size()]
 		add_child(rv)
 		rv.setup(terrain, track, fx, self)
-		rv.equip(_rival_loadout(spec))
-		rv.aggro = spec[4]
+		rv.equip(_rival_loadout(spec, heat, next_kit[k % next_kit.size()][2][0]))
+		rv.aggro = maxf(0.4, spec[4] * (1.0 + 0.25 * heat))
+		rv.pace = 0.88 if heat < 0.0 else 1.0
 		rv.autopilot = true
 		k += 1
 		var lane = -1.0 if k % 2 == 1 else 1.0
@@ -1027,6 +1060,10 @@ func _finish_race() -> void:
 	ship.finish_time = race_time
 	var place = place_of(ship)
 	contract_event("race", {"planet": planet_index % 4, "place": place})
+	if place == 1:
+		var w = save_data.get("wins", {})
+		w[str(planet_index % 4)] = w.get(str(planet_index % 4), 0) + 1
+		save_data.wins = w
 	var reward = RACE_REWARDS[mini(place - 1, RACE_REWARDS.size() - 1)]
 	var bits = []
 	for k in reward:
