@@ -126,9 +126,9 @@ func _draw():
 			Ui.segment(self, Rect2(at.x - 46, at.y + 58, 92, 24), Color(0.85, 0.08, 0.06, 0.9))
 			Ui.text(self, Vector2(at.x - 46, at.y + 76), "LOCK", 16, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, 92)
 
-	# Banners.
+	# Banners (held back while the countdown is up).
 	var ny = vp.y * 0.24
-	for msg in main.messages:
+	for msg in ([] if main.countdown > 0.0 else main.messages):
 		var age = 2.2 - msg.t
 		var slide = Ui.ease_out(age / 0.25)
 		var a = clampf(msg.t / 0.3, 0.0, 1.0)

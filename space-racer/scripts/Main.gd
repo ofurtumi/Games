@@ -280,7 +280,7 @@ func _new_planet() -> void:
 	env.fog_light_color = p.ground.lerp(p.sky, 0.5)
 	env.ambient_light_color = p.ambient
 	sun.light_color = p.sun
-	notify(p.name.to_upper(), p.line)
+	notify(p.name.to_upper(), p.line, "planet")
 
 # Lays a blueprint onto a fresh copy of the planet and restarts the race.
 func build_blueprint(bp: Dictionary, announce: bool = true) -> void:
@@ -470,8 +470,12 @@ func equip(lo: Dictionary, announce: bool = true) -> void:
 	if announce:
 		notify(lo.name.to_upper(), Color.WHITE)
 
-func notify(text: String, color: Color) -> void:
-	messages.append({"text": text, "color": color, "t": 2.2})
+# A short banner. Banners with a key replace any older one with that key
+# (the planet name); all of them wait out a race countdown.
+func notify(text: String, color: Color, key: String = "") -> void:
+	if key != "":
+		messages = messages.filter(func(m): return m.get("key", "") != key)
+	messages.append({"text": text, "color": color, "t": 2.2, "key": key})
 	if messages.size() > 3:
 		messages.pop_front()
 
@@ -1058,7 +1062,8 @@ func _process(delta):
 	_update_charges(delta)
 	_update_camera(delta)
 	for m in messages:
-		m.t -= delta
+		if countdown <= 0.0:
+			m.t -= delta
 	messages = messages.filter(func(m): return m.t > 0.0)
 	hud.queue_redraw()
 	if shot_path != "":
