@@ -106,7 +106,7 @@ const RIVALS = {
 	# [preset, frame, tool kit ([part, wired nodes]), colour, aggression]
 	0: [["Stock", "basic", [["laser", []]], Color(0.85, 0.2, 0.2), 0.7], ["Sapper", "basic", [["dropper", []]], Color(0.3, 0.6, 0.95), 0.8],
 		["Grinder", "advanced", [["rocket", ["bomb"]]], Color(0.95, 0.75, 0.2), 0.7]],
-	1: [["Corvette", "dart", [["laser", ["fast"]]], Color(0.2, 0.9, 1.0), 1.0], ["Corvette", "dart", [["dash", []], ["dropper", ["bomb"]]], Color(0.95, 0.95, 0.95), 1.0],
+	1: [["Corvette", "dart", [["laser", ["fast"]]], Color(0.2, 0.9, 1.0), 1.0], ["Corvette", "dart", [["rocket_s", ["homing"]], ["dash", []]], Color(0.95, 0.95, 0.95), 1.0],
 		["Stock", "basic", [["laser", []]], Color(0.6, 0.3, 0.9), 0.9]],
 	2: [["Scavenger", "advanced", [["rocket", ["homing", "bomb"]]], Color(0.3, 0.75, 0.45), 1.1], ["Scavenger", "advanced", [["laser", []], ["dash", []]], Color(0.85, 0.6, 0.2), 1.1],
 		["Stock", "basic", [["dropper", ["timer", "bomb"]]], Color(0.9, 0.4, 0.6), 1.0]],

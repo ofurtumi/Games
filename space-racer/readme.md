@@ -45,7 +45,7 @@ place pays materials. Fuel-only depots sit between the planets.
 
 The locals race with tools, and each planet's crew has its own kit:
 - **Cinder**: a cutting laser, a bomb bay, a missile pod.
-- **Rime**: a fast laser, a dash jet with bombs, a laser.
+- **Rime**: a fast laser, homing Dart tubes with a dash jet, a laser.
 - **Moss**: homing missiles, a laser with a dash jet, timed bombs.
 - **Magma**: armoured Basalts with missiles and bombs, and a Lance.
 

@@ -327,6 +327,13 @@ static func _part(root: Node3D, lo: Dictionary, p: Dictionary, hull: Dictionary,
 				MeshKit.part(holder, MeshKit.box(Vector3(C * 0.55, C * 0.5, length * 0.9)), body if body else mats.dark, Vector3.ZERO)
 				MeshKit.part(holder, MeshKit.cyl(C * 0.12, C * 0.16, C * 0.8, 6), mats.steel, Vector3(0, 0, length * 0.5 + C * 0.3), Vector3(90, 0, 0))
 				MeshKit.part(holder, MeshKit.sphere(C * 0.16, 6, 3), MeshKit.mat(accent, 1.0), Vector3(0, 0, length * 0.5 + C * 0.72), Vector3.ZERO, Vector3.ONE, false)
+			elif n <= 2:
+				# Slim tube: one cell wide, two barrels stacked.
+				var length = n * C
+				MeshKit.part(holder, MeshKit.box(Vector3(C * 0.62, C * 0.8, length * 0.9)), body if body else mats.dark, Vector3.ZERO)
+				for k in 2:
+					MeshKit.part(holder, MeshKit.cyl(C * 0.17, C * 0.17, 0.06, 6), MeshKit.mat(Color(0.05, 0.05, 0.05)), Vector3(0, (k - 0.5) * C * 0.38, length * 0.45 + 0.01), Vector3(90, 0, 0), Vector3.ONE, false)
+				MeshKit.part(holder, MeshKit.box(Vector3(C * 0.64, 0.04, C * 0.3)), MeshKit.mat(accent, 0.4), Vector3(0, C * 0.41, -length * 0.2), Vector3.ZERO, Vector3.ONE, false)
 			else:
 				MeshKit.part(holder, MeshKit.box(Vector3(C * 1.7, C * 0.9, C * 1.6)), body if body else mats.dark, Vector3.ZERO)
 				for k in 4:

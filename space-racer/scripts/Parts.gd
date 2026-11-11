@@ -157,6 +157,8 @@ const PARTS = {
 		"shape": [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)]},
 	"rocket": {"name": "Missile pod", "mech": "arc", "kind": "rocket", "mass": 0.3, "ammo": 4, "nose": true, "slots": 3,
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]},
+	"rocket_s": {"name": "Dart tube", "mech": "vex", "kind": "rocket", "mass": 0.14, "ammo": 2, "nose": true, "slots": 2,
+		"shape": [Vector2i(0, 0), Vector2i(0, 1)]},
 
 	# Blueprint parts: locked until found in a wreck or bought on the black market.
 	"overdrive": {"name": "Overdrive core", "mech": "nine", "kind": "engine", "mass": 0.45, "power": 95.0, "locked": true,
@@ -357,6 +359,7 @@ const DESC = {
 	"laser": "Hold to cut rock at range and pop mines. Boost in races, fuel in the field.",
 	"laser_2": "Longer, hotter beam. Cuts anything a Maw can.",
 	"rocket": "Four missiles; what you wire up decides what they do. Reloads at gates and outposts.",
+	"rocket_s": "A slim pod for narrow noses: two missiles, wired like the big one.",
 	"overdrive": "Black-market engine. Absurd power for its size.",
 	"phase_drill": "Cuts anything, even a planet's core.",
 	"scoop": "Refills fuel while you cruise through open space.",
