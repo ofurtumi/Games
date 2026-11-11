@@ -1,0 +1,522 @@
+extends Control
+
+# Grid ship builder. Left: parts. Top: what the hovered/selected part does,
+# with a little demo of it working. Middle: the frame grid, with the cells
+# the selected part can go on marked green. Under the grid: rotation and the
+# reason a placement doesn't work. The ship turns on the showroom floor to the
+# right and rebuilds on every change.
+#
+# Click a part, click the grid to place it (R or the arrows rotate). Click a
+# placed part with nothing selected to pick it up, right-click to scrap it,
+# mouse wheel over it to repaint it. Q/E change frame. 1-5 presets, 0 random.
+# Saved builds (right): click an empty slot to save into it, click a full one
+# to load it, right-click a full one to overwrite it, Delete clears it.
+
+const Parts = preload("res://scripts/Parts.gd")
+const Ui = preload("res://scripts/Ui.gd")
+const Save = preload("res://scripts/Save.gd")
+const PartDemo = preload("res://scripts/PartDemo.gd")
+
+const BAND = Rect2(390, 12, 780, 104)
+const STAT_LABELS = [["power", "Power"], ["thrust", "Thrust"], ["tier", "Tier"], ["shield", "Shield +"],
+	["regen", "Regen +"], ["grip", "Grip +"], ["turn", "Turn +"], ["brake", "Brakes +"], ["magnet", "Magnet +"],
+	["boost", "Boost +"], ["fuel", "Fuel +"], ["charges", "Charges "], ["jump", "Hop +"], ["dps", "Damage "],
+	["range", "Range "], ["ammo", "Rockets "]]
+
+var main
+var lo = {}
+var selected = ""
+var rot = 0
+var hover = Vector2i(-99, -99)
+var t = 0.0
+var _ids = []
+var hover_list = -1
+var hover_slot = -1
+var name_edit: LineEdit
+var demo: SubViewport
+var demo_rect: TextureRect
+
+func _ready():
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	visible = false
+	for id in Parts.PARTS:
+		_ids.append(id)
+	name_edit = LineEdit.new()
+	name_edit.max_length = 18
+	name_edit.add_theme_font_override("font", Ui.font(true))
+	name_edit.add_theme_font_size_override("font_size", 18)
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Ui.PAPER
+	sb.skew = Vector2(0.25, 0)
+	sb.content_margin_left = 16
+	name_edit.add_theme_stylebox_override("normal", sb)
+	name_edit.add_theme_stylebox_override("focus", sb)
+	name_edit.add_theme_color_override("font_color", Ui.INK)
+	name_edit.text_changed.connect(func(tx): lo.name = tx; main.loadout.name = tx)
+	name_edit.text_submitted.connect(func(_tx): name_edit.release_focus())
+	add_child(name_edit)
+	demo = PartDemo.new()
+	add_child(demo)
+	demo_rect = TextureRect.new()
+	demo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	demo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	demo_rect.texture = demo.get_texture()
+	demo_rect.position = BAND.position + Vector2(10, 8)
+	demo_rect.size = Vector2(144, 88)
+	demo_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(demo_rect)
+
+func open(m) -> void:
+	main = m
+	lo = main.loadout.duplicate(true)
+	selected = ""
+	t = 0.0
+	visible = true
+	name_edit.text = lo.name
+
+func close() -> void:
+	visible = false
+	demo.show_part("")
+	main.garage_closed()
+
+func _commit() -> void:
+	main.equip(lo.duplicate(true), false)
+
+func _process(delta):
+	if not visible:
+		return
+	t += delta
+	var id = _info_id()
+	demo.show_part(id)
+	demo_rect.visible = id != ""
+	queue_redraw()
+
+# ---------------------------------------------------------------- layout
+
+func _cell_px() -> float:
+	var sz = Parts.frame_size(lo.frame)
+	return floorf(minf(48.0, 500.0 / maxf(sz.x, sz.y)))
+
+func _grid_origin() -> Vector2:
+	var sz = Parts.frame_size(lo.frame)
+	var cp = _cell_px()
+	return Vector2(410.0 + (540.0 - sz.x * cp) * 0.5, 190.0 + (500.0 - sz.y * cp) * 0.5)
+
+func _cell_at(px: Vector2) -> Vector2i:
+	var o = _grid_origin()
+	var cp = _cell_px()
+	return Vector2i(floori((px.x - o.x) / cp), floori((px.y - o.y) / cp))
+
+func _cell_rect(c: Vector2i) -> Rect2:
+	var cp = _cell_px()
+	return Rect2(_grid_origin() + Vector2(c) * cp, Vector2(cp, cp))
+
+func _list_rect(i: int) -> Rect2:
+	var appear = Ui.ease_out((t - i * 0.02) / 0.25)
+	return Rect2(30 - (1.0 - appear) * 400.0, 92 + i * 30, 300, 26)
+
+func _frame_rect() -> Rect2:
+	return Rect2(430, 132, 500, 38)
+
+func _rot_rects() -> Array:
+	return [Rect2(420, 716, 44, 40), Rect2(530, 716, 44, 40)]
+
+func _status_rect() -> Rect2:
+	return Rect2(600, 716, 360, 40)
+
+func _paint_rects() -> Array:
+	var y = 772.0
+	return [Rect2(430, y, 120, 34), Rect2(565, y, 120, 34), Rect2(700, y, 120, 34), Rect2(835, y, 120, 34)]
+
+func _slot_rect(i: int) -> Rect2:
+	return Rect2(size.x - 400, 668 + i * 36, 360, 32)
+
+# ---------------------------------------------------------------- input
+
+func _part_at(c: Vector2i) -> int:
+	return Parts.occupancy(lo.parts).get(c, -1)
+
+func _ghost() -> Dictionary:
+	return {"id": selected, "cell": hover, "rot": rot}
+
+func _slot_click(i: int, button: int) -> void:
+	var slots = main.save_data.get("slots", [])
+	slots.resize(Save.SLOTS)
+	var full = slots[i] != null
+	if button == MOUSE_BUTTON_LEFT and full:
+		lo = Save.clean_loadout(slots[i])
+		name_edit.text = lo.name
+		main.equip(lo.duplicate(true), false)
+	elif button == MOUSE_BUTTON_LEFT or (button == MOUSE_BUTTON_RIGHT and full):
+		slots[i] = lo.duplicate(true)
+		main.save_data.slots = slots
+		main.save_game()
+		main.notify("SAVED  " + lo.name.to_upper(), Color.WHITE)
+
+func _gui_input(event):
+	if event is InputEventMouseMotion:
+		hover = _cell_at(event.position)
+		hover_list = -1
+		hover_slot = -1
+		for i in _ids.size():
+			if _list_rect(i).has_point(event.position):
+				hover_list = i
+		for i in Save.SLOTS:
+			if _slot_rect(i).has_point(event.position):
+				hover_slot = i
+	elif event is InputEventMouseButton and event.pressed:
+		var pos = event.position
+		var c = _cell_at(pos)
+		var left = event.button_index == MOUSE_BUTTON_LEFT
+		var right = event.button_index == MOUSE_BUTTON_RIGHT
+		if left:
+			name_edit.release_focus()
+		if left or right:
+			for i in Save.SLOTS:
+				if _slot_rect(i).has_point(pos):
+					_slot_click(i, event.button_index)
+					return
+			var prs = _paint_rects()
+			for i in prs.size():
+				if prs[i].has_point(pos):
+					_paint(i, 1 if left else -1)
+					return
+			var rr = _rot_rects()
+			if rr[0].has_point(pos) or rr[1].has_point(pos):
+				rot = (rot + (3 if rr[0].has_point(pos) else 1)) % 4
+				return
+			if _frame_rect().has_point(pos):
+				_cycle_frame(-1 if pos.x < _frame_rect().get_center().x else 1)
+				return
+		if left:
+			for i in _ids.size():
+				if _list_rect(i).has_point(pos):
+					# Clicking the selected part again puts it down.
+					selected = "" if selected == _ids[i] else _ids[i]
+					return
+			if selected != "":
+				var g = _ghost()
+				if Parts.can_place(lo.frame, lo.parts, g):
+					lo.parts.append(g)
+					_commit()
+			else:
+				var idx = _part_at(c)
+				if idx >= 0:
+					selected = lo.parts[idx].id
+					rot = lo.parts[idx].get("rot", 0)
+					lo.parts.remove_at(idx)
+					_commit()
+		elif right:
+			# Scrap whatever is under the cursor; the selection stays put.
+			var idx = _part_at(c)
+			if idx >= 0:
+				lo.parts.remove_at(idx)
+				_commit()
+		elif event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			var idx = _part_at(c)
+			if idx >= 0:
+				var dir = 1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1
+				var col = _next_color(lo.parts[idx].get("color", null), dir, true)
+				if col == null:
+					lo.parts[idx].erase("color")
+				else:
+					lo.parts[idx].color = col
+				_commit()
+		accept_event()
+
+func _unhandled_key_input(event):
+	if not visible or not event.pressed or event.echo:
+		return
+	match event.physical_keycode:
+		KEY_R:
+			rot = (rot + (3 if event.shift_pressed else 1)) % 4
+		KEY_Q:
+			_cycle_frame(-1)
+		KEY_E:
+			_cycle_frame(1)
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
+			lo = Parts.presets()[event.physical_keycode - KEY_1]
+			name_edit.text = lo.name
+			main.equip(lo.duplicate(true), false)
+		KEY_0:
+			lo = Parts.random_loadout(main.rng)
+			name_edit.text = lo.name
+			main.equip(lo.duplicate(true), false)
+		KEY_DELETE:
+			if hover_slot >= 0:
+				var slots = main.save_data.get("slots", [])
+				slots.resize(Save.SLOTS)
+				slots[hover_slot] = null
+				main.save_data.slots = slots
+				main.save_game()
+		KEY_ESCAPE, KEY_G:
+			close()
+		_:
+			return
+	get_viewport().set_input_as_handled()
+
+func _cycle_frame(dir: int) -> void:
+	var keys = Parts.FRAMES.keys().filter(func(f): return not Parts.FRAMES[f].get("hidden", false))
+	lo.frame = keys[(keys.find(lo.frame) + dir + keys.size()) % keys.size()]
+	var kept = []
+	for p in lo.parts:
+		if Parts.can_place(lo.frame, kept, p):
+			kept.append(p)
+	lo.parts = kept
+	_commit()
+
+func _next_color(current, dir: int, allow_none: bool):
+	var options = Parts.PALETTE.duplicate()
+	if allow_none:
+		options.push_front(null)
+	var i = 0
+	for k in options.size():
+		if options[k] != null and current != null and options[k].is_equal_approx(current):
+			i = k
+	return options[(i + dir + options.size()) % options.size()]
+
+func _paint(i: int, dir: int) -> void:
+	var paint = lo.paint
+	match i:
+		0: paint.primary = _next_color(paint.primary, dir, false)
+		1: paint.secondary = _next_color(paint.secondary, dir, false)
+		2: paint.pattern = Parts.PATTERNS[(Parts.PATTERNS.find(paint.pattern) + dir + Parts.PATTERNS.size()) % Parts.PATTERNS.size()]
+		3: paint.glow = _next_color(paint.get("glow", null), dir, true)
+	_commit()
+
+# ---------------------------------------------------------------- drawing
+
+func _part_color(p: Dictionary) -> Color:
+	if p.has("color"):
+		return p.color
+	var m = Parts.PARTS[p.id].mech
+	return Parts.MECHANICS[m].accent.darkened(0.15) if m != "" else Color(0.62, 0.64, 0.68)
+
+# Tiny glyph per kind so parts read without labels.
+func _glyph(r: Rect2, kind: String, facing: Vector2i, col: Color) -> void:
+	var c = r.get_center()
+	var s = r.size.x * 0.28
+	var d = Vector2(facing)
+	var n = Vector2(-d.y, d.x)
+	match kind:
+		"engine":
+			draw_circle(c, s, col)
+			draw_circle(c, s * 0.5, Color(0, 0, 0, 0.5))
+		"thruster":
+			draw_colored_polygon(PackedVector2Array([c - d * s, c + d * s + n * s, c + d * s - n * s]), col)
+		"drill", "laser", "rocket":
+			draw_colored_polygon(PackedVector2Array([c + d * s * 1.3, c - d * s + n * s, c - d * s - n * s]), col)
+		"shield":
+			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0), c + Vector2(0, s), c + Vector2(-s, 0)]), col)
+		"fin", "brake":
+			draw_line(c, c + d * s * 1.4, col, 4.0)
+			draw_line(c - n * s * 0.6, c + n * s * 0.6, col, 3.0)
+		"magnet":
+			draw_arc(c, s, 0, TAU, 16, col, 3.0)
+		"tank":
+			draw_rect(Rect2(c - Vector2(s * 0.5, s), Vector2(s, s * 2)), col)
+		"charges":
+			draw_circle(c + Vector2(-s * 0.5, 0), s * 0.4, col)
+			draw_circle(c + Vector2(s * 0.5, 0), s * 0.4, col)
+		"hopjet":
+			draw_arc(c, s * 0.7, 0, TAU, 12, col, 2.0)
+			draw_circle(c, s * 0.25, col)
+
+func _facing(p: Dictionary) -> Vector2i:
+	var def = Parts.PARTS[p.id]
+	if def.has("exhaust"):
+		return Parts.exhaust_of(p)
+	if def.get("facing", false):
+		return Parts.facing_of(p, Vector2i(1, 0))
+	return Parts.facing_of(p, Vector2i(0, -1))
+
+func _draw_part(p: Dictionary, fill: Color, edge: Color) -> void:
+	var cells = Parts.cells_of(p)
+	for c in cells:
+		draw_rect(_cell_rect(c).grow(-2), fill)
+	for c in cells:
+		var r = _cell_rect(c).grow(-2)
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if cells.has(c + d):
+				continue
+			var a = r.position
+			var b = r.position
+			if d.x == 1:
+				a = Vector2(r.end.x, r.position.y)
+				b = r.end
+			elif d.x == -1:
+				b = Vector2(r.position.x, r.end.y)
+			elif d.y == 1:
+				a = Vector2(r.position.x, r.end.y)
+				b = r.end
+			else:
+				b = Vector2(r.end.x, r.position.y)
+			draw_line(a, b, edge, 2.0)
+	var kind = Parts.PARTS[p.id].kind
+	for c in cells:
+		_glyph(_cell_rect(c), kind, _facing(p), Color(0, 0, 0, 0.55))
+
+func _info_id() -> String:
+	if hover_list >= 0:
+		return _ids[hover_list]
+	var idx = _part_at(hover)
+	if idx >= 0 and selected == "":
+		return lo.parts[idx].id
+	return selected
+
+func _draw():
+	if main == null:
+		return
+	var frame = Parts.frame_cells(lo.frame)
+	var sz = Parts.frame_size(lo.frame)
+	Ui.segment(self, Rect2(-30, 22, 380, 50), Ui.INK)
+	Ui.segment(self, Rect2(-30, 68, 380, 4), Ui.HILITE, 0.0)
+	Ui.text(self, Vector2(30, 58), "GARAGE", 30, Color.WHITE, true)
+	_draw_info()
+	var fr = _frame_rect()
+	Ui.segment(self, fr, Ui.PAPER)
+	Ui.text(self, fr.position + Vector2(0, 27), "‹   " + Parts.FRAMES[lo.frame].name.to_upper() + "   ›", 20, Ui.INK, true, HORIZONTAL_ALIGNMENT_CENTER, fr.size.x)
+	var cp = _cell_px()
+	var o = _grid_origin()
+	draw_rect(Rect2(o - Vector2(14, 14), Vector2(sz) * cp + Vector2(28, 28)), Color(0.03, 0.035, 0.045, 0.85))
+	for y in sz.y:
+		for x in sz.x:
+			var c = Vector2i(x, y)
+			draw_rect(_cell_rect(c).grow(-1), Color(0.78, 0.8, 0.83) if frame.has(c) else Color(1, 1, 1, 0.04))
+	# Where the selected part may go: green on every cell that works as its
+	# anchor with the current rotation, a dim red wash on the rest.
+	if selected != "":
+		for c in frame:
+			var ok = Parts.can_place(lo.frame, lo.parts, {"id": selected, "cell": c, "rot": rot})
+			var r = _cell_rect(c).grow(-1)
+			if ok:
+				draw_rect(r, Color(0.35, 0.85, 0.4, 0.55))
+			elif Parts.occupancy(lo.parts).get(c, -1) < 0:
+				draw_rect(r, Color(0.8, 0.2, 0.15, 0.18))
+	for p in lo.parts:
+		if Parts.PARTS[p.id].has("exhaust"):
+			var ex = Parts.exhaust_of(p)
+			for c in Parts.cells_of(p):
+				var r = _cell_rect(c + ex).grow(-4)
+				for k in 4:
+					var f = k / 4.0
+					draw_line(r.position + Vector2(r.size.x * f, 0), r.position + Vector2(0, r.size.y * f), Color(1, 0.6, 0.2, 0.5), 1.5)
+	for p in lo.parts:
+		var col = _part_color(p)
+		_draw_part(p, col, col.darkened(0.5))
+	var err = ""
+	if selected != "" and Rect2(Vector2.ZERO, Vector2(sz)).has_point(Vector2(hover)):
+		var g = _ghost()
+		err = Parts.placement_error(lo.frame, lo.parts, g)
+		var ok = err == ""
+		_draw_part(g, Color(1, 1, 1, 0.5) if ok else Color(1, 0.2, 0.15, 0.45), Color.WHITE if ok else Color(1, 0.3, 0.2))
+	_draw_status(err)
+	for i in _ids.size():
+		var id = _ids[i]
+		var def = Parts.PARTS[id]
+		var r = _list_rect(i)
+		var sel = id == selected
+		Ui.segment(self, r, Ui.HILITE if sel else (Color.WHITE if i == hover_list else Ui.PAPER), 8.0)
+		draw_rect(Rect2(r.position.x + 2, r.position.y + 4, 4, r.size.y - 8), Parts.MECHANICS[def.mech].accent)
+		Ui.text(self, r.position + Vector2(14, 19), def.name, 15, Color.WHITE if sel else Ui.INK, sel)
+		var minc = Vector2i(99, 99)
+		for sc in def.shape:
+			minc = Vector2i(mini(minc.x, sc.x), mini(minc.y, sc.y))
+		for sc in def.shape:
+			var q = sc - minc
+			draw_rect(Rect2(r.end.x - 70 + q.x * 6, r.position.y + 3 + q.y * 6, 5, 5), Color.WHITE if sel else Color(0.3, 0.32, 0.36))
+	_draw_slots()
+	var prs = _paint_rects()
+	var paint = lo.paint
+	var labels = ["HULL", "TRIM", paint.pattern.to_upper(), "GLOW"]
+	var swatches = [paint.primary, paint.secondary, null, paint.get("glow", null)]
+	for i in prs.size():
+		Ui.segment(self, prs[i], Ui.PAPER, 8.0)
+		Ui.text(self, prs[i].position + Vector2(12, 23), labels[i], 15, Ui.INK, true)
+		if swatches[i] != null:
+			draw_rect(Rect2(prs[i].end.x - 34, prs[i].position.y + 8, 18, 18), swatches[i])
+
+# Rotation control + the one line that says what's wrong.
+func _draw_status(err: String) -> void:
+	var rr = _rot_rects()
+	for i in 2:
+		Ui.segment(self, rr[i], Ui.PAPER, 8.0)
+		var c = rr[i].get_center()
+		draw_arc(c, 10, PI * 0.2, PI * 1.6, 12, Ui.INK, 3.0)
+		var tip = c + Vector2(cos(PI * (1.6 if i == 1 else 0.2)), sin(PI * (1.6 if i == 1 else 0.2))) * 10
+		draw_circle(tip, 4, Ui.INK)
+	# Current facing, as an arrow between the buttons.
+	var mid = Rect2(470, 716, 56, 40)
+	Ui.segment(self, mid, Ui.INK, 8.0)
+	var f = Vector2(Parts.rotate(Vector2i(0, -1), rot))
+	var n = Vector2(-f.y, f.x)
+	var cc = mid.get_center()
+	draw_colored_polygon(PackedVector2Array([cc + f * 12, cc - f * 8 + n * 9, cc - f * 8 - n * 9]), Color.WHITE)
+	Ui.text(self, Vector2(rr[1].end.x + 6, rr[1].position.y + 26), "R", 13, Ui.DIM, true)
+	var sr = _status_rect()
+	var st = main.ship.stats
+	if err != "":
+		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
+		Ui.text(self, sr.position + Vector2(18, 27), err.to_upper(), 18, Color.WHITE, true)
+	elif not st.can_move:
+		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
+		Ui.text(self, sr.position + Vector2(18, 27), "NO THRUST", 18, Color.WHITE, true)
+	elif st.thrust_raw > st.power + 0.1:
+		Ui.segment(self, sr, Color(0.95, 0.7, 0.2), 8.0)
+		Ui.text(self, sr.position + Vector2(18, 27), "POWER LIMITED  %d / %d" % [st.power, st.thrust_raw], 18, Ui.INK, true)
+	else:
+		Ui.segment(self, sr, Color(0.03, 0.035, 0.045, 0.8), 8.0)
+
+func _draw_info() -> void:
+	var id = _info_id()
+	Ui.segment(self, BAND, Color(0.03, 0.035, 0.045, 0.9), 10.0)
+	if id == "":
+		return
+	var def = Parts.PARTS[id]
+	var mech = Parts.MECHANICS[def.mech]
+	Ui.segment(self, Rect2(BAND.position, Vector2(BAND.size.x, 4)), mech.accent, 0.0)
+	var x = BAND.position.x + 166
+	var y = BAND.position.y
+	Ui.text(self, Vector2(x, y + 32), def.name.to_upper(), 22, Color.WHITE, true)
+	var nw = Ui.font(true).get_string_size(def.name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+	Ui.text(self, Vector2(x + nw + 14, y + 32), mech.name, 15, mech.accent, true)
+	Ui.text(self, Vector2(x, y + 56), Parts.DESC.get(id, ""), 15, Color(0.85, 0.87, 0.9))
+	var bits = []
+	for sl in STAT_LABELS:
+		if def.has(sl[0]):
+			var v = def[sl[0]]
+			var sep = "" if sl[1].ends_with("+") or sl[1].ends_with(" ") else " "
+			bits.append(sl[1] + sep + (str(v) if v is int else ("%.2f" % v).rstrip("0").rstrip(".")))
+	bits.append("Mass %.2f" % def.mass)
+	Ui.text(self, Vector2(x, y + 82), "   ".join(bits), 13, Ui.DIM, true)
+	var rule = ""
+	if def.get("edge", false):
+		rule = "EDGE ONLY"
+	elif def.get("facing", false):
+		rule = "FACES OPEN SPACE"
+	elif def.get("nose", false):
+		rule = "NEEDS OPEN SPACE AHEAD"
+	elif def.has("exhaust"):
+		rule = "NEEDS A FREE CELL BEHIND"
+	if rule != "":
+		var rw = Ui.font(true).get_string_size(rule, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 24
+		Ui.segment(self, Rect2(BAND.end.x - rw - 20, y + 66, rw, 24), Color(0.95, 0.7, 0.2), 6.0)
+		Ui.text(self, Vector2(BAND.end.x - rw - 8, y + 83), rule, 13, Ui.INK, true)
+
+func _draw_slots() -> void:
+	var slots = main.save_data.get("slots", [])
+	var x = size.x - 400
+	name_edit.position = Vector2(x, 626)
+	name_edit.size = Vector2(360, 34)
+	for i in Save.SLOTS:
+		var r = _slot_rect(i)
+		var lo_i = slots[i] if i < slots.size() else null
+		var hot = i == hover_slot
+		Ui.segment(self, r, (Color.WHITE if hot else Ui.PAPER) if lo_i != null else Color(0.2, 0.22, 0.25, 0.9), 8.0)
+		Ui.text(self, r.position + Vector2(14, 22), str(i + 1), 15, Ui.DIM, true)
+		if lo_i != null:
+			Ui.text(self, r.position + Vector2(40, 22), str(lo_i.get("name", "")).to_upper(), 16, Ui.INK, true)
+			Ui.text(self, r.position + Vector2(40, 22), Parts.FRAMES.get(lo_i.get("frame", ""), {"name": ""}).name, 13, Ui.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 56)
+		else:
+			Ui.text(self, r.position + Vector2(40, 22), "+ SAVE", 15, Color(0.6, 0.63, 0.68), true)
