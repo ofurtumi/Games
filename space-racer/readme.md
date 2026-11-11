@@ -54,7 +54,8 @@ at whoever is right in front, fire missiles down the straights, drop bombs
 on anyone tailing them, and dash when the road is clear. They reload every
 half lap. Their shots hit you and each other but never themselves, and a
 beam only bites every third of a second. Your homing missiles go for them
-too.
+too. When a rival's homing missile locks on to you, red chevrons around
+your ship point at it, a LOCK tag flashes and it beeps.
 
 ### Contracts
 

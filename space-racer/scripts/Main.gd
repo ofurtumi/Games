@@ -1070,7 +1070,26 @@ func _process(delta):
 			print("saved ", shot_path, " garage=", garage, " ship=", ship.position, " cam=", cam.position)
 			get_tree().quit()
 
+# Rival homing missiles that have locked on to you (their target is where
+# you are), as world positions. The HUD points at them and it beeps.
+func missile_locks() -> Array:
+	var out = []
+	if mode != "race" or _respawn_left > 0.0:
+		return out
+	var me = ship.pos2()
+	for rv in rivals:
+		for s in rv.weapons.shots:
+			if s.prog.get("homing", false) and s.target != null and s.target.distance_to(me) < 4.0 and s.pos.distance_to(me) < 45.0:
+				out.append(Vector3(s.pos.x, ship.position.y, s.pos.y))
+	return out
+
+var _lock_beep = 0.0
+
 func _race(delta: float) -> void:
+	_lock_beep -= delta
+	if _lock_beep <= 0.0 and not missile_locks().is_empty():
+		_lock_beep = 0.28
+		Sfx.play("tick", -2.0, 1.9)
 	var before = ship.progress_idx
 	ship.progress_idx = track.nearest(ship.position, ship.progress_idx)
 	_track_distance(ship, before)

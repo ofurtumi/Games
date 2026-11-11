@@ -112,6 +112,20 @@ func _draw():
 		draw_rect(Rect2(cx - bump * 0.5, 30 - bump * 0.5, 12 + bump, 12 + bump), MAT_COLORS[m])
 		Ui.text(self, Vector2(cx + 18, 43), s, 20, Color.WHITE, true)
 
+	# Missile lock: red chevrons round your ship pointing at whatever's coming.
+	var locks = main.missile_locks()
+	if not locks.is_empty() and main.cam != null:
+		var at = main.cam.unproject_position(ship.position)
+		var on = fmod(Time.get_ticks_msec() * 0.001, 0.28) < 0.17
+		for p in locks:
+			var d = (main.cam.unproject_position(p) - at).normalized()
+			var tip = at + d * 70.0
+			var side = Vector2(-d.y, d.x)
+			draw_colored_polygon(PackedVector2Array([tip, tip - d * 22.0 + side * 16.0, tip - d * 13.0, tip - d * 22.0 - side * 16.0]), Color(1.0, 0.2, 0.15, 1.0 if on else 0.45))
+		if on:
+			Ui.segment(self, Rect2(at.x - 46, at.y + 58, 92, 24), Color(0.85, 0.08, 0.06, 0.9))
+			Ui.text(self, Vector2(at.x - 46, at.y + 76), "LOCK", 16, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, 92)
+
 	# Banners.
 	var ny = vp.y * 0.24
 	for msg in main.messages:
