@@ -94,6 +94,7 @@ var _respawn_left = 0.0
 var rivals = []
 var race_laps = 0          # 0 = open practice (medals); >0 = a race against rivals
 var race_over = 0.0
+var session = {"laps": 0, "best": -1.0, "medals": [], "earned": {}}  # this practice run: laps, best, medals and materials won
 var race_time = 0.0
 var race_origin = "practice"   # where Race again / back goes: practice or expedition
 var countdown = 0.0
@@ -308,6 +309,7 @@ func editor_closed() -> void:
 	ship.set_process(not garage)
 
 func _reset_race() -> void:
+	session = {"laps": 0, "best": -1.0, "medals": [], "earned": {}}
 	lap = 1
 	lap_time = 0.0
 	next_cp = 1
@@ -469,6 +471,8 @@ func _award_medals(t: float) -> void:
 			for k in m.reward:
 				inventory[k] = inventory.get(k, 0) + m.reward[k]
 				bits.append("+%d %s" % [m.reward[k], k])
+				session.earned[k] = session.earned.get(k, 0) + m.reward[k]
+			session.medals.append(m.name)
 			notify("%s  %s" % [m.name.to_upper(), "  ".join(bits)], m.color)
 			Sfx.play("coins")
 	all[track_key()] = won
@@ -533,8 +537,11 @@ func _unhandled_input(event):
 
 func open_menu() -> void:
 	ship.set_process(false)
+	var practice = []
+	if mode == "race" and race_laps == 0 and countdown <= 0.0:
+		practice = [{"label": "End session", "value": func(): return "%d laps" % session.get("laps", 0), "action": show_session}]
 	menu.show_menu("PAUSE", [
-		{"label": "Resume", "action": close_menu},
+		{"label": "Resume", "action": close_menu}] + practice + [
 		{"label": "Garage", "action": func(): close_menu(); open_garage()},
 		{"label": "Pit shop", "action": func(): open_pit(open_menu)},
 		{"label": "Track Builder", "action": func(): close_menu(); open_editor()},
@@ -1019,6 +1026,31 @@ func show_results(place_name: String, prize: String) -> void:
 	menu.show_menu("RESULTS  ·  " + place_name, rows, Callable())
 	menu.selected = field.size() + 1
 
+# Practice results: what this run came to, against the track's medals.
+func show_session() -> void:
+	var best = session.get("best", -1.0)
+	var rows = [
+		{"label": "Laps", "value": str(session.get("laps", 0))},
+		{"label": "Best lap", "value": Hud.laptime(best)},
+		{"label": "Last lap", "value": Hud.laptime(last_lap if session.get("laps", 0) > 0 else -1.0)},
+	]
+	var won = medals_won()
+	for m in MEDALS:
+		var t = medal_time(m)
+		var state = "NEW" if session.get("medals", []).has(m.name) else ("WON" if won.has(m.name) else
+			("+%.2fs" % (best - t) if best >= 0.0 else "-"))
+		rows.append({"label": m.name.capitalize(), "value": "%s   %s" % [Hud.laptime(t), state], "swatch": m.color})
+	var bits = []
+	for k in session.get("earned", {}):
+		bits.append("+%d %s" % [session.earned[k], k])
+	rows.append({"label": "Earned", "value": "  ".join(bits) if not bits.is_empty() else "-"})
+	rows.append({"label": "Keep driving", "action": close_menu})
+	rows.append({"label": "Restart", "action": func(): menu.hide_menu(); _reset_race(); start_countdown()})
+	rows.append({"label": "Main menu", "action": func(): menu.hide_menu(); show_title()})
+	var head = "NEW MEDAL" if not session.get("medals", []).is_empty() else ("BEST  " + Hud.laptime(best) if best >= 0.0 else "NO LAPS")
+	menu.show_menu("PRACTICE  ·  " + head, rows, close_menu)
+	menu.selected = rows.size() - 3
+
 func _close_results() -> void:
 	menu.hide_menu()
 	ship.autopilot = has_meta("auto")
@@ -1227,6 +1259,9 @@ func _race(delta: float) -> void:
 			if best_lap < 0.0 or lap_time < best_lap:
 				best_lap = lap_time
 			notify("LAP %d  %.2fs" % [lap, lap_time], Color(1.0, 0.95, 0.5))
+			session.laps += 1
+			if session.best < 0.0 or lap_time < session.best:
+				session.best = lap_time
 			_award_medals(lap_time)
 			if race_laps > 0 and lap >= race_laps and race_over <= 0.0:
 				_finish_race()
