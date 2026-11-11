@@ -12,6 +12,11 @@ const RATE = 22050
 const VOICES = 16
 
 static var instance = null
+static var fx_gain = 1.0      # one-shots (0..1, the Sound menu sets these)
+static var loop_gain = 1.0    # engine, drill, laser... loops
+
+static func _db(g: float) -> float:
+	return linear_to_db(g) if g > 0.001 else -80.0
 
 var sounds = {}       # name -> AudioStreamWAV
 var voices = []
@@ -46,7 +51,7 @@ func _play(name: String, volume_db: float, pitch: float) -> void:
 	var p: AudioStreamPlayer = voices[_next]
 	_next = (_next + 1) % VOICES
 	p.stream = sounds[name]
-	p.volume_db = volume_db - 6.0
+	p.volume_db = volume_db - 6.0 + _db(fx_gain)
 	p.pitch_scale = clampf(pitch * randf_range(0.96, 1.04), 0.2, 4.0)
 	p.play()
 	plays += 1
@@ -63,7 +68,7 @@ func _loop(name: String, on: bool, volume_db: float, pitch: float) -> void:
 	var p: AudioStreamPlayer = l.player
 	if on:
 		l.seen = 0.0
-		p.volume_db = volume_db - 8.0
+		p.volume_db = volume_db - 8.0 + _db(loop_gain)
 		p.pitch_scale = clampf(pitch, 0.2, 4.0)
 		if not p.playing:
 			p.play()

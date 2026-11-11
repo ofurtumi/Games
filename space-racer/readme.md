@@ -208,7 +208,8 @@ rises with speed, boost, drift skid, drill and laser loops, explosions sized
 to the blast, missile launch, warp, hop, hits, shield down, gate chime, lap
 arpeggio, pickups, bomb ticks, menu ticks and garage clunks. Only your ship
 makes engine noise; rivals' weapons are heard when they're within 30 m, and
-their explosions always.
+their explosions always. **Sound** (title, pause and outpost menus) sets
+Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 
 ## Code map (`scripts/`)
 

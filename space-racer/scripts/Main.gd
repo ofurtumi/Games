@@ -130,6 +130,7 @@ func _ready():
 		_migrate_owned()
 	Controls.apply(save_data.get("keys", {}))
 	add_child(Sfx.new())
+	apply_sound()
 	_build_world()
 	terrain = TerrainScript.new()
 	terrain.name = "Terrain"
@@ -535,9 +536,45 @@ func open_menu() -> void:
 		{"label": "Render", "value": func(): return "Low-res" if get_viewport().scaling_3d_scale < 1.0 else "Full",
 			"action": _toggle_res, "left": _toggle_res, "right": _toggle_res},
 		{"label": "Controls", "action": func(): open_controls(open_menu)},
+		{"label": "Sound", "action": func(): open_sound(open_menu)},
 		{"label": "Main menu", "action": func(): close_menu(); show_title()},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], close_menu)
+
+# ---------------------------------------------------------------- sound
+
+const SOUND_ROWS = [["master", "Master"], ["fx", "Effects"], ["loops", "Engines"]]
+
+func sound_levels() -> Dictionary:
+	if not save_data.has("sound"):
+		save_data.sound = {"master": 8, "fx": 10, "loops": 10}
+	return save_data.sound
+
+func apply_sound() -> void:
+	var lv = sound_levels()
+	AudioServer.set_bus_volume_db(0, Sfx._db(lv.master / 10.0))
+	Sfx.fx_gain = lv.fx / 10.0
+	Sfx.loop_gain = lv.loops / 10.0
+
+func _nudge_sound(key: String, d: int) -> void:
+	var lv = sound_levels()
+	lv[key] = clampi(lv[key] + d, 0, 10)
+	apply_sound()
+	Sfx.play("ui_move" if key != "loops" else "tick")
+	save_game()
+
+# Master / effects / engines, 0 to 10, left and right to change.
+func open_sound(back: Callable) -> void:
+	var rows = []
+	for r in SOUND_ROWS:
+		var key = r[0]
+		rows.append({"label": r[1],
+			"value": func():
+				var n = sound_levels()[key]
+				return "■".repeat(n) + "□".repeat(10 - n) + "  %d" % n,
+			"left": func(): _nudge_sound(key, -1), "right": func(): _nudge_sound(key, 1)})
+	rows.append({"label": "Back", "action": back})
+	menu.show_menu("SOUND", rows, back, menu.title == "SOUND")
 
 # Every action and its key. Pick a row, press a key to rebind it.
 func open_controls(back: Callable) -> void:
@@ -590,6 +627,7 @@ func show_title() -> void:
 		{"label": "Garage", "action": func(): _leave_title(); open_garage()},
 		{"label": "Track Builder", "action": func(): _leave_title(); open_editor()},
 		{"label": "Controls", "action": func(): open_controls(show_title)},
+		{"label": "Sound", "action": func(): open_sound(show_title)},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], Callable())
 

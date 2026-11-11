@@ -437,6 +437,7 @@ func open_menu() -> void:
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
 			{"label": "Race here", "value": def.name, "action": func(): main.menu.hide_menu(); main.race_on(def.palette)},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
+			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
 			{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
 		], launch)
 	else:
@@ -444,6 +445,7 @@ func open_menu() -> void:
 			{"label": "Resume", "action": main.menu.hide_menu},
 			{"label": "Tow home", "value": "lose cargo", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
+			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
 			{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
 		], main.menu.hide_menu)
 
