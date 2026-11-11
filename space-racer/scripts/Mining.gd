@@ -1074,28 +1074,4 @@ func _buy_part(id: String, mech: String, title: String) -> void:
 # ---------------------------------------------------------------- contracts
 
 func open_contracts() -> void:
-	var here = outposts[at_outpost].planet
-	var rows = []
-	var active = main.contracts()
-	for i in active.size():
-		var c = active[i]
-		var k = i
-		rows.append({"label": Contracts.title(c), "value": func(): return "ACTIVE  " + Contracts.progress(c),
-			"action": func(): _confirm_abandon(k)})
-	var offers = main.contract_offers(here)
-	for i in offers.size():
-		var c = offers[i]
-		var k = i
-		rows.append({"label": Contracts.title(c), "value": Contracts.reward_text(c),
-			"action": func():
-				if main.accept_contract(here, k):
-					open_contracts()})
-	rows.append({"label": "Back", "action": open_menu})
-	main.menu.show_menu(PLANETS[here].name.to_upper() + " CONTRACTS", rows, open_menu, main.menu.title.ends_with("CONTRACTS"))
-
-func _confirm_abandon(k: int) -> void:
-	main.menu.show_menu("ABANDON?", [
-		{"label": Contracts.title(main.contracts()[k]), "value": "no refund"},
-		{"label": "Abandon", "action": func(): main.abandon_contract(k); open_contracts()},
-		{"label": "Keep it", "action": open_contracts},
-	], open_contracts)
+	main.open_board(outposts[at_outpost].planet, open_menu)

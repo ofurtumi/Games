@@ -73,7 +73,8 @@ at once (they show on the expedition HUD with their progress):
 - **Bounty**: destroy a number of drones
 Rewards are materials; salvage jobs sometimes also pay a blueprint you
 haven't found. Taking a job puts up a fresh offer. Pick an active job on
-the board to abandon it.
+the board to abandon it. The race pause menu has **Contracts** too: the
+board of the planet you're racing on, the same offers its outpost has.
 
 ### Dying
 

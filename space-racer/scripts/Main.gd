@@ -439,6 +439,35 @@ func contract_event(event: String, data: Dictionary) -> void:
 	if not done.is_empty():
 		save_game()
 
+# A planet's contract board: what you're on (pick one to abandon it), then
+# the planet's three offers. Outposts and the race pause menu both open it.
+func open_board(here: int, back: Callable) -> void:
+	var again = func(): open_board(here, back)
+	var rows = []
+	var active = contracts()
+	for i in active.size():
+		var c = active[i]
+		var k = i
+		rows.append({"label": Contracts.title(c), "value": func(): return "ACTIVE  " + Contracts.progress(c),
+			"action": func(): _confirm_abandon(k, again)})
+	var offers = contract_offers(here)
+	for i in offers.size():
+		var c = offers[i]
+		var k = i
+		rows.append({"label": Contracts.title(c), "value": Contracts.reward_text(c),
+			"action": func():
+				if accept_contract(here, k):
+					again.call()})
+	rows.append({"label": "Back", "action": back})
+	menu.show_menu(Contracts.PLANET_NAMES[here] + " CONTRACTS", rows, back, menu.title.ends_with("CONTRACTS"))
+
+func _confirm_abandon(k: int, back: Callable) -> void:
+	menu.show_menu("ABANDON?", [
+		{"label": Contracts.title(contracts()[k]), "value": "no refund"},
+		{"label": "Abandon", "action": func(): abandon_contract(k); back.call()},
+		{"label": "Keep it", "action": back},
+	], back)
+
 # Blueprints and salvaged frames, by display name.
 func unlocks() -> Array:
 	return save_data.get("unlocks", [])
@@ -544,6 +573,8 @@ func open_menu() -> void:
 		{"label": "Resume", "action": close_menu}] + practice + [
 		{"label": "Garage", "action": func(): close_menu(); open_garage()},
 		{"label": "Pit shop", "action": func(): open_pit(open_menu)},
+		{"label": "Contracts", "value": func(): return "%d / %d active" % [contracts().size(), Contracts.MAX_ACTIVE],
+			"action": func(): open_board(planet_index % 4, open_menu)},
 		{"label": "Track Builder", "action": func(): close_menu(); open_editor()},
 		{"label": "Expedition", "action": func(): close_menu(); enter_mining()},
 		{"label": "New Planet", "action": func(): close_menu(); _next_planet()},
