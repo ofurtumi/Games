@@ -46,6 +46,7 @@ var drift_charge = 0.0
 var hit_flash = 0.0
 var stall = 0.0
 var autopilot = false
+const ENGINE_HEARD = 40.0  # rivals' engines are heard within this many metres
 var rival = false          # AI racer: no input, no notifications
 var distance = 0.0         # centreline samples travelled this race (for standings)
 var down_left = 0.0        # rivals: seconds until back on track after a wreck
@@ -452,6 +453,13 @@ func _animate(delta: float, inp: Dictionary) -> void:
 		Sfx.loop("boost", boosting, -4.0)
 		Sfx.loop("skid", drifting, -6.0, 0.8 + sp * 0.4)
 		Sfx.loop("drill", drilling, -4.0)
+	elif rival and main.ship != null and main.ship != self:
+		# Rivals are heard when they're close: louder nearer you, panned by
+		# where they are on screen.
+		var d = position.distance_to(main.ship.position)
+		var sp = clampf(speed / maxf(stats.top, 1.0), 0.0, 1.5)
+		Sfx.loop_at("rival%d" % get_instance_id(), "engine", position, d < ENGINE_HEARD and down_left <= 0.0,
+			-12.0 + _throttle * 3.0 - d * 0.55, 0.7 + sp * 0.9 + (get_instance_id() % 7) * 0.02)
 	model.position.y = HOVER + alt + sin(_t * 2.6) * 0.05
 	model.rotation.z = -_steer_vis * 0.3 * clampf(speed / 15.0, 0.0, 1.0)
 	model.rotation.x = -_throttle * 0.04 - clampf(vy * 0.03, -0.25, 0.25)

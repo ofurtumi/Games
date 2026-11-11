@@ -210,9 +210,10 @@ used for the moment (see `ShipBuilder.gd` for how the hull is built).
 All synthesised at start-up in `Sfx.gd` (no audio files): engine hum that
 rises with speed, boost, drift skid, drill and laser loops, explosions sized
 to the blast, missile launch, warp, hop, hits, shield down, gate chime, lap
-arpeggio, pickups, bomb ticks, menu ticks and garage clunks. Only your ship
-makes engine noise; rivals' weapons are heard when they're within 30 m, and
-their explosions always. **Sound** (title, pause and outpost menus) sets
+arpeggio, pickups, bomb ticks, menu ticks and garage clunks. Rivals' engines are
+heard within 40 m, louder the closer they are and panned to where they are
+on screen (each at a slightly different pitch); their weapons within 30 m,
+and their explosions always. **Sound** (title, pause and outpost menus) sets
 Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 
 ## Code map (`scripts/`)

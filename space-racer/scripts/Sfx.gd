@@ -57,7 +57,7 @@ func _play(name: String, volume_db: float, pitch: float) -> void:
 	plays += 1
 
 func _loop(name: String, on: bool, volume_db: float, pitch: float) -> void:
-	if not sounds.has(name):
+	if not sounds.has(name) and not loops.has(name):
 		return
 	if not loops.has(name):
 		var p = AudioStreamPlayer.new()
@@ -65,7 +65,7 @@ func _loop(name: String, on: bool, volume_db: float, pitch: float) -> void:
 		add_child(p)
 		loops[name] = {"player": p, "seen": 0.0}
 	var l = loops[name]
-	var p: AudioStreamPlayer = l.player
+	var p = l.player   # 2D or 3D player
 	if on:
 		l.seen = 0.0
 		p.volume_db = volume_db - 8.0 + _db(loop_gain)
@@ -75,13 +75,41 @@ func _loop(name: String, on: bool, volume_db: float, pitch: float) -> void:
 	elif p.playing:
 		p.stop()
 
+# A loop that sounds from somewhere in the world (a rival's engine): panned
+# by where it is from the camera, volume set by the caller. `key` names this
+# copy, `name` the sound.
+static func loop_at(key: String, name: String, at: Vector3, on: bool, volume_db: float = 0.0, pitch: float = 1.0) -> void:
+	if instance != null:
+		instance._loop_at(key, name, at, on, volume_db, pitch)
+
+func _loop_at(key: String, name: String, at: Vector3, on: bool, volume_db: float, pitch: float) -> void:
+	if not sounds.has(name):
+		return
+	if not loops.has(key):
+		var p = AudioStreamPlayer3D.new()
+		p.stream = sounds[name]
+		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+		p.panning_strength = 0.8
+		add_child(p)
+		loops[key] = {"player": p, "seen": 0.0, "placed": true}
+	var l = loops[key]
+	l.player.global_position = at
+	_loop(key, on, volume_db, pitch)
+
 func _process(delta):
-	# Loops nobody refreshed lately (menus, garage, mode switches) go quiet.
+	# Loops nobody refreshed lately (menus, garage, mode switches) go quiet;
+	# placed ones whose owner is gone are dropped.
+	var gone = []
 	for name in loops:
 		var l = loops[name]
 		l.seen += delta / maxf(Engine.time_scale, 0.05)
 		if l.seen > 0.15 and l.player.playing:
 			l.player.stop()
+		if l.get("placed", false) and l.seen > 5.0:
+			gone.append(name)
+	for name in gone:
+		loops[name].player.queue_free()
+		loops.erase(name)
 
 func loop_playing(name: String) -> bool:
 	return loops.has(name) and loops[name].player.playing
