@@ -25,6 +25,7 @@ const MECHANICS = {
 	"aegis": {"name": "Aegis Works", "accent": Color(0.55, 0.55, 1.0)},
 	"lode": {"name": "Lodestone", "accent": Color(1.0, 0.28, 0.35)},
 	"arc": {"name": "Arclight Arms", "accent": Color(0.45, 1.0, 0.45)},
+	"nine": {"name": "Nine Fingers", "accent": Color(0.75, 0.35, 1.0)},
 }
 
 const FRAMES = {
@@ -52,6 +53,35 @@ const FRAMES = {
 		"######",
 		"######",
 		"######",
+	]},
+	# Salvaged frames: found as derelicts, unlocked by towing them home.
+	"manta": {"name": "Manta frame", "mech": "", "mass": 0.7, "locked": true, "rows": [
+		"...##...",
+		"..####..",
+		".######.",
+		"########",
+		"########",
+		".##..##.",
+	]},
+	"needle": {"name": "Needle frame", "mech": "", "mass": 0.4, "locked": true, "rows": [
+		".#.",
+		".#.",
+		".#.",
+		"###",
+		"###",
+		".#.",
+		"###",
+		"###",
+		"#.#",
+	]},
+	"brick": {"name": "Brick frame", "mech": "", "mass": 1.3, "locked": true, "rows": [
+		".######.",
+		"########",
+		"########",
+		"########",
+		"########",
+		"########",
+		".######.",
 	]},
 	"advanced": {"name": "Advanced frame", "mech": "grind", "mass": 0.9, "rows": [
 		"....##....",
@@ -88,11 +118,11 @@ const PARTS = {
 	"burner": {"name": "Hauler burner", "mech": "grind", "kind": "thruster", "mass": 0.25, "thrust": 32.0, "exhaust": BACK,
 		"shape": [Vector2i(0, 0), Vector2i(1, 0)]},
 
-	"drill_1": {"name": "Pilot drill", "mech": "", "kind": "drill", "mass": 0.1, "tier": 1, "power": 3.5, "nose": true,
+	"drill_1": {"name": "Pilot drill", "mech": "", "kind": "drill", "mass": 0.1, "tier": 1, "power": 3.5, "nose": true, "slots": 1,
 		"shape": [Vector2i(0, 0), Vector2i(0, 1)]},
-	"drill_2": {"name": "Auger", "mech": "grind", "kind": "drill", "mass": 0.3, "tier": 2, "power": 6.0, "nose": true,
+	"drill_2": {"name": "Auger", "mech": "grind", "kind": "drill", "mass": 0.3, "tier": 2, "power": 6.0, "nose": true, "slots": 1,
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]},
-	"drill_3": {"name": "Maw", "mech": "grind", "kind": "drill", "mass": 0.6, "tier": 3, "power": 11.0, "nose": true,
+	"drill_3": {"name": "Maw", "mech": "grind", "kind": "drill", "mass": 0.6, "tier": 3, "power": 11.0, "nose": true, "slots": 2,
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)]},
 
 	"shield": {"name": "Shield plate", "mech": "aegis", "kind": "shield", "mass": 0.05, "shield": 25.0, "edge": true,
@@ -121,13 +151,186 @@ const PARTS = {
 	"hopjet": {"name": "Hop jet", "mech": "", "kind": "hopjet", "mass": 0.05, "jump": 1.5,
 		"shape": [Vector2i(0, 0)]},
 
-	"laser": {"name": "Cutting laser", "mech": "arc", "kind": "laser", "mass": 0.12, "dps": 6.5, "tier": 2, "range": 9.0, "nose": true,
+	"laser": {"name": "Cutting laser", "mech": "arc", "kind": "laser", "mass": 0.12, "dps": 6.5, "tier": 2, "range": 9.0, "nose": true, "slots": 2,
 		"shape": [Vector2i(0, 0), Vector2i(0, 1)]},
-	"laser_2": {"name": "Lance", "mech": "arc", "kind": "laser", "mass": 0.25, "dps": 12.0, "tier": 3, "range": 14.0, "nose": true,
+	"laser_2": {"name": "Lance", "mech": "arc", "kind": "laser", "mass": 0.25, "dps": 12.0, "tier": 3, "range": 14.0, "nose": true, "slots": 3,
 		"shape": [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)]},
-	"rocket": {"name": "Rocket pod", "mech": "arc", "kind": "rocket", "mass": 0.3, "ammo": 4, "nose": true,
+	"rocket": {"name": "Missile pod", "mech": "arc", "kind": "rocket", "mass": 0.3, "ammo": 4, "nose": true, "slots": 3,
+		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]},
+
+	# Blueprint parts: locked until found in a wreck or bought on the black market.
+	"overdrive": {"name": "Overdrive core", "mech": "nine", "kind": "engine", "mass": 0.45, "power": 95.0, "locked": true,
+		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2)]},
+	"phase_drill": {"name": "Phase drill", "mech": "nine", "kind": "drill", "mass": 0.5, "tier": 4, "power": 9.0, "nose": true, "locked": true, "slots": 2,
+		"shape": [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)]},
+	"scoop": {"name": "Fuel scoop", "mech": "lode", "kind": "scoop", "mass": 0.1, "scoop": 1.5, "nose": true, "locked": true,
+		"shape": [Vector2i(0, 0), Vector2i(1, 0)]},
+	"tractor": {"name": "Tractor beam", "mech": "lode", "kind": "magnet", "mass": 0.2, "magnet": 6.0, "tow": 1.0, "locked": true,
+		"shape": [Vector2i(0, 0), Vector2i(0, 1)]},
+
+	"dropper": {"name": "Bomb bay", "mech": "grind", "kind": "dropper", "mass": 0.2, "ammo": 3, "slots": 2,
+		"shape": [Vector2i(0, 0), Vector2i(0, 1)]},
+	"dash": {"name": "Dash jet", "mech": "vex", "kind": "warp", "mass": 0.08, "warp": "dash", "cooldown": 2.5, "exhaust": BACK,
+		"shape": [Vector2i(0, 0)]},
+	"blink": {"name": "Blink drive", "mech": "nine", "kind": "warp", "mass": 0.25, "warp": "blink", "cooldown": 5.0, "locked": true,
 		"shape": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]},
 }
+
+# Which section of the ship each kind belongs to (garage tabs).
+const SECTIONS = ["power", "movement", "tools", "defense", "utility"]
+const SECTION_NAMES = {"power": "POWER", "movement": "MOVE", "tools": "TOOLS", "defense": "DEFENSE", "utility": "UTILITY"}
+const SECTION_OF = {"engine": "power", "thruster": "movement", "fin": "movement", "brake": "movement", "hopjet": "movement",
+	"warp": "movement", "drill": "tools", "laser": "tools", "rocket": "tools", "dropper": "tools", "charges": "tools",
+	"shield": "defense", "magnet": "utility", "tank": "utility", "scoop": "utility"}
+
+# Component sub-grids. Every component with behaviour has a little grid of
+# its own (part.sub = {nodes: [{id, cell}], wires: [[from, to]]}; -1 is the
+# component's core). Nodes only count when wired back to the core.
+#
+# Tool nodes build a program that runs left to right along the wires:
+#   mod     - changes the shot as it passes (homing, phasing, ...)
+#   split   - two outputs: one shot goes down each branch
+#   payload - what happens when the shot lands; anything wired after a
+#             payload launches from where it went off
+# Upgrade nodes add to the component they're wired into.
+const NODES = {
+	"homing": {"name": "Homing", "type": "mod", "for": ["tool"], "tag": "HOM", "locked": true, "desc": "Steers toward the nearest target or ore."},
+	"phase": {"name": "Phasing", "type": "mod", "for": ["tool"], "tag": "PHS", "locked": true, "desc": "Passes through up to six metres of rock."},
+	"fast": {"name": "Fast", "type": "mod", "for": ["tool"], "tag": "FST", "desc": "Twice the speed, twice the reach."},
+	"timer": {"name": "Timer", "type": "mod", "for": ["tool"], "tag": "TMR", "desc": "Sticks where it lands, goes off two seconds later."},
+	"orbit": {"name": "Orbit", "type": "mod", "for": ["tool"], "tag": "ORB", "locked": true, "desc": "Swings around the ship. On a drill: wrecking ball."},
+	"split": {"name": "Split", "type": "split", "for": ["tool"], "tag": "SPL", "outs": 2, "desc": "Two outputs: one shot down each branch."},
+	"bomb": {"name": "Bomb", "type": "payload", "for": ["tool"], "tag": "BMB", "desc": "Blows a hole in anything up to hard rock."},
+	"cluster": {"name": "Cluster", "type": "payload", "for": ["tool"], "tag": "CLU", "locked": true, "desc": "Five homing bomblets."},
+	"gravity": {"name": "Gravity well", "type": "payload", "for": ["tool"], "tag": "GRV", "locked": true, "desc": "A few seconds of pull: ore, loose bits, ships."},
+	"quench": {"name": "Quench", "type": "payload", "for": ["tool"], "tag": "QNC", "locked": true, "desc": "Turns lava and gas around it into rock."},
+	"dig": {"name": "Excavate", "type": "payload", "for": ["tool"], "tag": "DIG", "locked": true, "desc": "Smaller blast that breaks deep rock."},
+	"capacitor": {"name": "Capacitor", "type": "upgrade", "for": ["engine"], "tag": "CAP", "desc": "+15 power."},
+	"economizer": {"name": "Economizer", "type": "upgrade", "for": ["engine"], "tag": "ECO", "locked": true, "desc": "Burns 20% less fuel."},
+	"afterburner": {"name": "Afterburner", "type": "upgrade", "for": ["thruster"], "tag": "AFT", "desc": "+25% thrust from this thruster."},
+	"vector": {"name": "Vectoring", "type": "upgrade", "for": ["thruster"], "tag": "VEC", "desc": "Sharper turning."},
+	"hardener": {"name": "Hardener", "type": "upgrade", "for": ["shield"], "tag": "HRD", "desc": "+20 shield."},
+	"regen": {"name": "Regenerator", "type": "upgrade", "for": ["shield"], "tag": "RGN", "locked": true, "desc": "Shield regenerates 2 a second."},
+	"amplifier": {"name": "Amplifier", "type": "upgrade", "for": ["utility"], "tag": "AMP", "desc": "Boosts the part: magnet reach, tank size, scoop rate."},
+}
+const NODE_FAMILY = {"drill": "tool", "laser": "tool", "rocket": "tool", "dropper": "tool", "engine": "engine",
+	"thruster": "thruster", "shield": "shield", "magnet": "utility", "tank": "utility", "scoop": "utility"}
+
+# Nodes that do nothing on a given kind of tool are left out of its palette.
+const NODE_ONLY = {"drill": ["orbit"]}
+const NODE_NOT = {"laser": ["timer", "orbit", "homing"], "dropper": ["orbit"]}
+
+static func node_allowed(part_id: String, node_id: String) -> bool:
+	var fam = node_family(part_id)
+	if not NODES[node_id].for.has(fam):
+		return false
+	var kind = PARTS[part_id].kind
+	if NODE_ONLY.has(kind):
+		return NODE_ONLY[kind].has(node_id)
+	return not NODE_NOT.get(kind, []).has(node_id)
+
+static func node_family(part_id: String) -> String:
+	return NODE_FAMILY.get(PARTS[part_id].kind, "")
+
+# Sub-grid size: grows with the component.
+static func sub_size(part_id: String) -> Vector2i:
+	if node_family(part_id) == "":
+		return Vector2i.ZERO
+	var n = PARTS[part_id].shape.size()
+	var wdt = 3 + (1 if n >= 2 else 0) + (1 if n >= 4 else 0) + (1 if n >= 8 else 0)
+	var hgt = 1 if n == 1 else (2 if n < 4 else 3)
+	return Vector2i(wdt, hgt)
+
+static func core_cell(part_id: String) -> Vector2i:
+	return Vector2i(0, (sub_size(part_id).y - 1) / 2)
+
+static func node_outs(id: String) -> int:
+	if id == "":
+		return 1
+	return NODES[id].get("outs", 1)
+
+# Old card lists become a straight wired chain.
+static func sub_of(p: Dictionary) -> Dictionary:
+	if p.has("sub"):
+		return p.sub
+	var nodes = []
+	var wires = []
+	var cards = p.get("cards", [])
+	var sz = sub_size(p.id)
+	var y = core_cell(p.id).y
+	for i in cards.size():
+		if not NODES.has(cards[i]):
+			continue
+		nodes.append({"id": cards[i], "cell": Vector2i(1 + i, y)})
+		wires.append([nodes.size() - 2, nodes.size() - 1])
+	return {"nodes": nodes, "wires": wires}
+
+static func wires_from(sub: Dictionary, from: int) -> Array:
+	var out = []
+	for w in sub.wires:
+		if w[0] == from and w[1] >= 0 and w[1] < sub.nodes.size():
+			out.append(w[1])
+	return out
+
+# Nodes reachable from the core.
+static func live_nodes(sub: Dictionary) -> Array:
+	var seen = []
+	var todo = [-1]
+	while not todo.is_empty():
+		var n = todo.pop_back()
+		for t in wires_from(sub, n):
+			if not seen.has(t):
+				seen.append(t)
+				todo.append(t)
+	return seen
+
+# Tool program from the wiring: {payload, children: [prog], forks: [prog],
+# + mod flags}. Mods carry down the chain into forks and children.
+static func program_of(p: Dictionary) -> Dictionary:
+	return _chain(sub_of(p), wires_from(sub_of(p), -1), {}, 0)
+
+static func _chain(sub: Dictionary, starts: Array, mods: Dictionary, depth: int) -> Dictionary:
+	var prog = mods.duplicate()
+	prog.payload = ""
+	prog.children = []
+	prog.forks = []
+	if depth > 6 or starts.is_empty():
+		return prog
+	var cur = starts[0]
+	var steps = 0
+	while cur >= 0 and steps < 12:
+		steps += 1
+		var id = sub.nodes[cur].id
+		var def = NODES.get(id, {})
+		match def.get("type", ""):
+			"mod":
+				prog[id] = true
+			"split":
+				var base = prog.duplicate()
+				base.erase("payload")
+				base.erase("children")
+				base.erase("forks")
+				for o in wires_from(sub, cur):
+					prog.forks.append(_chain(sub, [o], base, depth + 1))
+				return prog
+			"payload":
+				prog.payload = id
+				for o in wires_from(sub, cur):
+					prog.children.append(_chain(sub, [o], {}, depth + 1))
+				return prog
+		var nxt = wires_from(sub, cur)
+		cur = nxt[0] if not nxt.is_empty() else -1
+	return prog
+
+# Upgrade nodes wired into this part, by id -> count.
+static func upgrades_of(p: Dictionary) -> Dictionary:
+	var sub = sub_of(p)
+	var out = {}
+	for i in live_nodes(sub):
+		var id = sub.nodes[i].id
+		if NODES.has(id) and NODES[id].type == "upgrade":
+			out[id] = out.get(id, 0) + 1
+	return out
 
 # One line each, shown in the garage.
 const DESC = {
@@ -153,7 +356,14 @@ const DESC = {
 	"hopjet": "Hop higher.",
 	"laser": "Hold to cut rock at range and pop mines. Boost in races, fuel in the field.",
 	"laser_2": "Longer, hotter beam. Cuts anything a Maw can.",
-	"rocket": "Four rockets. Blow open walls, clear mines. Reloads at gates.",
+	"rocket": "Four missiles; what you wire up decides what they do. Reloads at gates and outposts.",
+	"overdrive": "Black-market engine. Absurd power for its size.",
+	"phase_drill": "Cuts anything, even a planet's core.",
+	"scoop": "Refills fuel while you cruise through open space.",
+	"tractor": "Long-range magnet; towed hulls feel half as heavy.",
+	"dropper": "Drops timed bombs behind you. Three per reload.",
+	"dash": "Warp key: a hard kick forward.",
+	"blink": "Warp key: jump nine metres ahead, through whatever's in between.",
 }
 
 const PALETTE = [
@@ -317,7 +527,7 @@ static func stats(lo: Dictionary) -> Dictionary:
 		"shield": 60.0, "regen": 0.0, "impact": 1.0, "magnet": 2.0, "charges": 0, "jump": 0.0,
 		"drill_tier": 0, "drill_power": 0.0, "drill_radius": 0.0, "drill_drag": 0.0,
 		"engines": 0, "engine_scale": 1.0, "strafe": 0.0, "retro": 0.0, "drills": [], "fuel": 100.0,
-		"lasers": [], "launchers": [], "ammo": 0,
+		"lasers": [], "launchers": [], "ammo": 0, "scoop": 0.0, "tow": 1.0, "droppers": [], "bombs": 0, "warp": {}, "burn_mult": 1.0,
 		"radius": maxf(sz.x * CELL * 0.5 * 0.8, 0.5), "length": sz.y * CELL, "width": sz.x * CELL,
 		"can_move": false,
 	}
@@ -349,12 +559,20 @@ static func stats(lo: Dictionary) -> Dictionary:
 				centre /= d.shape.size()
 				var dir = Vector3(-fwd.x, 0.0, -fwd.y)
 				var span = 3.0 if d.tier == 3 else 2.0
-				s.drills.append({"tier": d.tier, "power": d.power, "dir": dir,
+				s.drills.append({"tier": d.tier, "power": d.power, "dir": dir, "prog": program_of(p),
 					"pos": centre + dir * (span * CELL * 0.5 + 0.35), "radius": 0.35 + d.shape.size() * 0.12, "forward": fwd == Vector2i(0, -1)})
 				if d.tier > s.drill_tier:
 					s.drill_tier = d.tier
 					s.drill_power = d.power
-					s.drill_drag = [0.0, 3.0, 2.2, 1.4][d.tier]
+					s.drill_drag = [0.0, 3.0, 2.2, 1.4, 1.2][d.tier]
+		if d.kind == "dropper":
+			var bc = Vector3.ZERO
+			for c in cells_of(p):
+				bc += cell_pos(lo.frame, c)
+			s.droppers.append({"pos": bc / d.shape.size(), "prog": program_of(p)})
+			s.bombs += d.ammo
+		if d.kind == "warp" and s.warp.is_empty():
+			s.warp = {"type": d.warp, "cooldown": d.cooldown}
 		if d.kind == "laser" or d.kind == "rocket":
 			var wf = facing_of(p, Vector2i(0, -1))
 			var wc = Vector3.ZERO
@@ -362,13 +580,25 @@ static func stats(lo: Dictionary) -> Dictionary:
 				wc += cell_pos(lo.frame, c)
 			wc /= d.shape.size()
 			var wdir = Vector3(-wf.x, 0.0, -wf.y)
-			var w = {"pos": wc + wdir * (CELL * d.shape.size() * 0.4 + 0.2), "dir": wdir}
+			var w = {"pos": wc + wdir * (CELL * d.shape.size() * 0.4 + 0.2), "dir": wdir, "prog": program_of(p)}
 			if d.kind == "laser":
 				w.merge({"dps": d.dps, "tier": d.tier, "range": d.range})
 				s.lasers.append(w)
 			else:
 				s.launchers.append(w)
 				s.ammo += d.ammo
+		var up = upgrades_of(p)
+		s.power += 15.0 * up.get("capacitor", 0)
+		s.burn_mult *= pow(0.8, up.get("economizer", 0))
+		if d.kind == "thruster" and exhaust_of(p) == BACK:
+			s.thrust_raw += d.thrust * 0.25 * up.get("afterburner", 0)
+		s.turn += 0.15 * up.get("vector", 0)
+		s.shield += 20.0 * up.get("hardener", 0)
+		s.regen += 2.0 * up.get("regen", 0)
+		var amp = up.get("amplifier", 0)
+		s.magnet += 3.0 * amp * (1.0 if d.has("magnet") else 0.0)
+		s.fuel += 30.0 * amp * (1.0 if d.has("fuel") else 0.0)
+		s.scoop += 0.5 * amp * (1.0 if d.has("scoop") else 0.0)
 		s.grip += d.get("grip", 0.0)
 		s.turn += d.get("turn", 0.0)
 		s.brake += d.get("brake", 0.0)
@@ -380,6 +610,8 @@ static func stats(lo: Dictionary) -> Dictionary:
 		s.impact *= d.get("impact", 1.0)
 		hop += d.get("jump", 0.0)
 		s.fuel += d.get("fuel", 0.0)
+		s.scoop += d.get("scoop", 0.0)
+		s.tow += d.get("tow", 0.0)
 	s.thrust = minf(s.thrust_raw, s.power)
 	s.can_move = s.thrust > 0.0
 	s.accel = s.thrust / s.mass
@@ -399,18 +631,22 @@ static func stats(lo: Dictionary) -> Dictionary:
 	s.cargo = ncells * 3
 	# Fuel burned per second at full thrust: heavy ships with big thrust
 	# drink it, light ones sip.
-	s.fuel_burn = 0.045 * (s.thrust + s.strafe * 0.5) * sqrt(s.mass)
+	s.fuel_burn = 0.045 * (s.thrust + s.strafe * 0.5) * sqrt(s.mass) * s.burn_mult
 	s.economy = clampf(1.5 / maxf(s.fuel_burn, 0.1), 0.0, 1.0)
 	s.engine_scale = clampf(s.mass * 0.5, 0.6, 1.4)
 	return s
 
+static func is_locked(def: Dictionary, unlocks: Array) -> bool:
+	return def.get("locked", false) and not unlocks.has(def.name)
+
 # Random but legal: drop random parts at random spots until it gets full.
-static func random_loadout(rng: RandomNumberGenerator) -> Dictionary:
-	var frames = FRAMES.keys().filter(func(f): return not FRAMES[f].get("hidden", false))
+# `unlocks` lists names of locked parts/frames the player has.
+static func random_loadout(rng: RandomNumberGenerator, unlocks: Array = []) -> Dictionary:
+	var frames = FRAMES.keys().filter(func(f): return not FRAMES[f].get("hidden", false) and not is_locked(FRAMES[f], unlocks))
 	var frame = frames[rng.randi() % frames.size()]
 	var cells = frame_cells(frame).keys()
 	var parts = []
-	var ids = PARTS.keys()
+	var ids = PARTS.keys().filter(func(id): return not is_locked(PARTS[id], unlocks))
 	var order = [["engine_1", "engine_v", "engine_2"][rng.randi() % 3]]
 	for k in 3:
 		order.append(["thruster", "thruster_v", "burner"][rng.randi() % 3])

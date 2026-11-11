@@ -1,0 +1,525 @@
+extends Control
+
+# A component's own sub-grid. The core (the component itself) sits on the
+# left; place nodes from the palette and wire output ports (right side) to
+# other nodes. Only nodes wired back to the core do anything. For tools the
+# wiring is the program: mods change the shot as it passes, Split sends one
+# shot down each branch, payloads go off where it lands and launch whatever
+# is wired after them.
+#
+# Click a palette node, then a cell, to place it. Drag from a port to a node
+# to wire it. Right-click a node or a wire to remove it. Esc or DONE closes.
+
+const Parts = preload("res://scripts/Parts.gd")
+const Ui = preload("res://scripts/Ui.gd")
+const ToolDemo = preload("res://scripts/ToolDemo.gd")
+
+# Which numbers to compare live for each kind of component.
+const STAT_ROWS = {
+	"engine": [["POWER", "power", "%.0f"], ["TOP SPEED", "top", "%.1f"], ["ACCEL", "accel", "%.1f"], ["FUEL / S", "fuel_burn", "%.1f"]],
+	"thruster": [["THRUST", "thrust_raw", "%.0f"], ["USABLE", "thrust", "%.0f"], ["TOP SPEED", "top", "%.1f"], ["TURN", "turn", "%.2f"]],
+	"shield": [["SHIELD", "shield", "%.0f"], ["REGEN", "regen", "%.1f"]],
+	"utility": [["MAGNET", "magnet", "%.1f"], ["FUEL", "fuel", "%.0f"], ["SCOOP", "scoop", "%.1f"]],
+}
+
+const CELL = 88.0
+const PAL_W = 230.0
+const INFO_W = 320.0
+const TYPE_COLORS = {"mod": Color(0.25, 0.5, 0.95), "split": Color(0.6, 0.35, 0.95), "payload": Color(0.95, 0.5, 0.15), "upgrade": Color(0.3, 0.75, 0.4)}
+
+var garage
+var idx = -1
+var pid = ""
+var sub = {}
+var gsize = Vector2i.ZERO
+var placing = ""
+var drag_from = -2
+var mouse = Vector2.ZERO
+var hover_node = -2
+var hover_pal = -1
+var t = 0.0
+var base = {}       # ship stats when the editor opened
+var base_part = {}  # the component as it was when the editor opened
+var demo: SubViewport
+var demo_rect: TextureRect
+
+func _ready():
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	visible = false
+	demo = ToolDemo.new()
+	add_child(demo)
+	demo_rect = TextureRect.new()
+	demo_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	demo_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	demo_rect.texture = demo.get_texture()
+	demo_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(demo_rect)
+
+func open(g, part_index: int) -> void:
+	garage = g
+	idx = part_index
+	pid = garage.lo.parts[idx].id
+	sub = Parts.sub_of(garage.lo.parts[idx]).duplicate(true)
+	gsize = Parts.sub_size(pid)
+	placing = ""
+	drag_from = -2
+	t = 0.0
+	base = Parts.stats(garage.lo)
+	base_part = garage.lo.parts[idx].duplicate(true)
+	visible = true
+
+func close() -> void:
+	var p = garage.lo.parts[idx]
+	p.sub = sub
+	p.erase("cards")
+	visible = false
+	demo_rect.visible = false
+	garage._commit()
+
+func _process(delta):
+	if visible:
+		t += delta
+		queue_redraw()
+
+# ---------------------------------------------------------------- layout
+
+func _panel() -> Rect2:
+	var gw = gsize.x * CELL
+	var gh = gsize.y * CELL
+	var w = PAL_W + gw + 90.0 + INFO_W
+	var h = maxf(maxf(gh + 330.0, 560.0), 110.0 + _palette().size() * 36.0 + 80.0)
+	return Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h)
+
+func _origin() -> Vector2:
+	var pr = _panel()
+	return Vector2(pr.position.x + PAL_W + 50.0, pr.position.y + 110.0)
+
+func _cell_rect(c: Vector2i) -> Rect2:
+	return Rect2(_origin() + Vector2(c) * CELL, Vector2(CELL, CELL))
+
+func _cell_of(i: int) -> Vector2i:
+	return Parts.core_cell(pid) if i == -1 else sub.nodes[i].cell
+
+func _node_rect(i: int) -> Rect2:
+	return _cell_rect(_cell_of(i)).grow(-12)
+
+func _out_port(i: int, k: int) -> Vector2:
+	var r = _node_rect(i)
+	var n = Parts.node_outs("" if i == -1 else sub.nodes[i].id)
+	return Vector2(r.end.x + 2, r.position.y + r.size.y * (k + 1) / (n + 1))
+
+func _in_port(i: int) -> Vector2:
+	var r = _node_rect(i)
+	return Vector2(r.position.x - 2, r.get_center().y)
+
+func _palette() -> Array:
+	return Parts.NODES.keys().filter(func(n): return Parts.node_allowed(pid, n))
+
+func _pal_rect(i: int) -> Rect2:
+	var pr = _panel()
+	return Rect2(pr.position.x + 24, pr.position.y + 110 + i * 36, PAL_W - 40, 30)
+
+func _info_rect() -> Rect2:
+	var pr = _panel()
+	return Rect2(pr.end.x - INFO_W - 10, pr.position.y + 80, INFO_W - 20, pr.size.y - 160)
+
+func _demo_area() -> Rect2:
+	var ir = _info_rect()
+	return Rect2(ir.position.x + 10, ir.end.y - 200, ir.size.x - 20, 186)
+
+# The ship's stats with this component wired the way it is right now.
+func _live_stats() -> Dictionary:
+	var lo = garage.lo.duplicate(true)
+	lo.parts[idx].sub = sub
+	lo.parts[idx].erase("cards")
+	return Parts.stats(lo)
+
+func _describe(prog: Dictionary) -> String:
+	var bits = []
+	for k in ["homing", "phase", "fast", "timer", "orbit"]:
+		if prog.get(k, false):
+			bits.append(Parts.NODES[k].tag)
+	var head = " ".join(bits)
+	var forks = prog.get("forks", [])
+	if not forks.is_empty():
+		var parts = []
+		for f in forks:
+			parts.append(_describe(f))
+		return (head + " " if head != "" else "") + "SPLIT ( " + "  |  ".join(parts) + " )"
+	# Missiles and bombs go off as a plain bomb by default; a beam just burns.
+	var dflt = "" if Parts.PARTS[pid].kind == "laser" else "BMB"
+	var pay = Parts.NODES[prog.payload].tag if prog.get("payload", "") != "" else dflt
+	var out = head + (" " if head != "" and pay != "" else "") + pay
+	if out == "":
+		out = "BEAM"
+	var kids = prog.get("children", [])
+	if not kids.is_empty():
+		var parts = []
+		for c in kids:
+			parts.append(_describe(c))
+		out += " > " + "  |  ".join(parts)
+	return out
+
+func _done_rect() -> Rect2:
+	var ir = _info_rect()
+	return Rect2(ir.position.x + 10, ir.end.y + 22, ir.size.x - 20, 42)
+
+# ---------------------------------------------------------------- graph
+
+func _node_at(c: Vector2i) -> int:
+	if c == Parts.core_cell(pid):
+		return -1
+	for i in sub.nodes.size():
+		if sub.nodes[i].cell == c:
+			return i
+	return -2
+
+func _has_input(i: int) -> bool:
+	for w in sub.wires:
+		if w[1] == i:
+			return true
+	return false
+
+func _reaches(from: int, target: int) -> bool:
+	var todo = [from]
+	var seen = []
+	while not todo.is_empty():
+		var n = todo.pop_back()
+		if n == target:
+			return true
+		for o in Parts.wires_from(sub, n):
+			if not seen.has(o):
+				seen.append(o)
+				todo.append(o)
+	return false
+
+func _remove_node(i: int) -> void:
+	sub.nodes.remove_at(i)
+	var keep = []
+	for w in sub.wires:
+		if w[0] == i or w[1] == i:
+			continue
+		keep.append([w[0] - (1 if w[0] > i else 0), w[1] - (1 if w[1] > i else 0)])
+	sub.wires = keep
+
+func _wire_near(p: Vector2) -> int:
+	for k in sub.wires.size():
+		var w = sub.wires[k]
+		var pts = _wire_points(w[0], w[1], _port_index(w[0], w[1]))
+		for s in range(pts.size() - 1):
+			if Geometry2D.get_closest_point_to_segment(p, pts[s], pts[s + 1]).distance_to(p) < 8.0:
+				return k
+	return -1
+
+func _port_index(from: int, to: int) -> int:
+	var outs = Parts.wires_from(sub, from)
+	return maxi(outs.find(to), 0)
+
+func _wire_points(from: int, to: int, k: int) -> PackedVector2Array:
+	var a = _out_port(from, k)
+	var b = _in_port(to)
+	var mx = (a.x + b.x) * 0.5 if b.x > a.x + 20 else a.x + 18
+	return PackedVector2Array([a, Vector2(mx, a.y), Vector2(mx, b.y), b])
+
+# ---------------------------------------------------------------- input
+
+func _gui_input(event):
+	if event is InputEventMouseMotion:
+		mouse = event.position
+		var c = Vector2i(((mouse - _origin()) / CELL).floor())
+		hover_node = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
+		hover_pal = -1
+		var pal = _palette()
+		for i in pal.size():
+			if _pal_rect(i).has_point(mouse):
+				hover_pal = i
+	elif event is InputEventMouseButton:
+		var pos = event.position
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			if _done_rect().has_point(pos):
+				close()
+				return
+			var pal = _palette()
+			for i in pal.size():
+				if _pal_rect(i).has_point(pos):
+					if not Parts.is_locked(Parts.NODES[pal[i]], garage.main.unlocks()):
+						placing = "" if placing == pal[i] else pal[i]
+					return
+			# Ports first: start a wire.
+			for i in range(-1, sub.nodes.size()):
+				var outs = Parts.node_outs("" if i == -1 else sub.nodes[i].id)
+				if Parts.NODES.get("" if i == -1 else sub.nodes[i].id, {}).get("type", "") == "upgrade" and false:
+					continue
+				for k in outs:
+					if _out_port(i, k).distance_to(pos) < 12.0 and Parts.wires_from(sub, i).size() < outs:
+						drag_from = i
+						return
+			var c = Vector2i(((pos - _origin()) / CELL).floor())
+			if placing != "" and Rect2i(Vector2i.ZERO, gsize).has_point(c) and _node_at(c) == -2:
+				sub.nodes.append({"id": placing, "cell": c})
+		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and drag_from != -2:
+			var c = Vector2i(((pos - _origin()) / CELL).floor())
+			var target = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
+			if target >= 0 and target != drag_from and not _has_input(target) and not _reaches(target, drag_from):
+				sub.wires.append([drag_from, target])
+			drag_from = -2
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			var c = Vector2i(((pos - _origin()) / CELL).floor())
+			var n = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
+			if n >= 0 and _node_rect(n).has_point(pos):
+				_remove_node(n)
+			else:
+				var w = _wire_near(pos)
+				if w >= 0:
+					sub.wires.remove_at(w)
+		accept_event()
+
+func _unhandled_key_input(event):
+	if visible and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+		close()
+		get_viewport().set_input_as_handled()
+
+# ---------------------------------------------------------------- drawing
+
+func _draw_node(i: int, live: bool) -> void:
+	var r = _node_rect(i)
+	var id = "" if i == -1 else sub.nodes[i].id
+	var col: Color
+	var tag: String
+	if i == -1:
+		var def = Parts.PARTS[pid]
+		col = Parts.MECHANICS[def.mech].accent.darkened(0.2) if def.mech != "" else Color(0.6, 0.62, 0.66)
+		tag = "CORE"
+	else:
+		var nd = Parts.NODES[id]
+		col = TYPE_COLORS[nd.type]
+		tag = nd.tag
+	if not live:
+		col = col.darkened(0.6)
+	var hot = i == hover_node
+	Ui.segment(self, Rect2(r.position + Vector2(4, 4), r.size), Color(0, 0, 0, 0.4), 8.0)
+	Ui.segment(self, r, col.lightened(0.2) if hot else col, 8.0)
+	Ui.text(self, r.position + Vector2(0, r.size.y * 0.5 + 8), tag, 20, Color.WHITE if live else Color(1, 1, 1, 0.5), true, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+	if i != -1:
+		draw_circle(_in_port(i), 6.0, Color(0.9, 0.9, 0.95))
+	for k in Parts.node_outs(id):
+		draw_circle(_out_port(i, k), 7.0, Color(1, 1, 1) if live else Color(0.6, 0.6, 0.6))
+		draw_circle(_out_port(i, k), 3.5, col)
+
+func _draw():
+	if pid == "":
+		return
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.55))
+	var pr = _panel()
+	Ui.segment(self, pr, Color(0.06, 0.065, 0.075, 0.97), 16.0)
+	Ui.segment(self, Rect2(pr.position, Vector2(pr.size.x, 54)), Ui.INK, 16.0)
+	Ui.segment(self, Rect2(pr.position.x, pr.position.y + 54, pr.size.x, 4), Ui.HILITE, 0.0)
+	Ui.text(self, pr.position + Vector2(30, 38), Parts.PARTS[pid].name.to_upper(), 28, Color.WHITE, true)
+	# Palette.
+	var pal = _palette()
+	for i in pal.size():
+		var nd = Parts.NODES[pal[i]]
+		var r = _pal_rect(i)
+		if Parts.is_locked(nd, garage.main.unlocks()):
+			Ui.segment(self, r, Color(0.14, 0.15, 0.17), 6.0)
+			Ui.text(self, r.position + Vector2(14, 21), "? ? ?", 15, Color(0.4, 0.42, 0.46), true)
+			continue
+		var on = placing == pal[i]
+		Ui.segment(self, r, Ui.HILITE if on else (Color.WHITE if i == hover_pal else Ui.PAPER), 6.0)
+		draw_rect(Rect2(r.position.x + 4, r.position.y + 5, 5, r.size.y - 10), TYPE_COLORS[nd.type])
+		Ui.text(self, r.position + Vector2(18, 21), nd.name, 15, Color.WHITE if on else Ui.INK, on)
+	# Grid.
+	var o = _origin()
+	draw_rect(Rect2(o - Vector2(10, 10), Vector2(gsize) * CELL + Vector2(20, 20)), Color(0.02, 0.025, 0.03))
+	for y in gsize.y:
+		for x in gsize.x:
+			var cr = _cell_rect(Vector2i(x, y)).grow(-3)
+			draw_rect(cr, Color(1, 1, 1, 0.05))
+			if placing != "" and _node_at(Vector2i(x, y)) == -2 and cr.has_point(mouse):
+				draw_rect(cr, Color(0.35, 0.85, 0.4, 0.3))
+	var live = Parts.live_nodes(sub)
+	# Wires under the nodes.
+	for w in sub.wires:
+		var pts = _wire_points(w[0], w[1], _port_index(w[0], w[1]))
+		var on = w[0] == -1 or live.has(w[0])
+		draw_polyline(pts, Color(0, 0, 0, 0.6), 7.0)
+		draw_polyline(pts, Color(0.95, 0.95, 1.0) if on else Color(0.45, 0.45, 0.5), 3.0)
+	if drag_from != -2:
+		draw_line(_out_port(drag_from, Parts.wires_from(sub, drag_from).size()), mouse, Color(1, 1, 1, 0.8), 3.0)
+	_draw_node(-1, true)
+	for i in sub.nodes.size():
+		_draw_node(i, live.has(i))
+	_draw_info(pal, live)
+	_draw_effect()
+	var dr = _done_rect()
+	Ui.segment(self, dr, Ui.HILITE, 8.0)
+	Ui.text(self, dr.position + Vector2(0, 29), "DONE", 20, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, dr.size.x)
+
+# Right-hand column: what the hovered node (or the component) does.
+func _draw_info(pal: Array, live: Array) -> void:
+	var ir = _info_rect()
+	draw_rect(ir, Color(0.02, 0.025, 0.03))
+	var id = ""
+	if hover_pal >= 0 and not Parts.is_locked(Parts.NODES[pal[hover_pal]], garage.main.unlocks()):
+		id = pal[hover_pal]
+	elif hover_node >= 0:
+		id = sub.nodes[hover_node].id
+	elif placing != "":
+		id = placing
+	var x = ir.position.x + 20
+	var y = ir.position.y + 40
+	var wrap = ir.size.x - 40
+	var font = Ui.font(false)
+	if id == "":
+		var def = Parts.PARTS[pid]
+		Ui.text(self, Vector2(x, y), "CORE", 14, Ui.DIM, true)
+		Ui.text(self, Vector2(x, y + 32), def.name.to_upper(), 24, Color.WHITE, true)
+		draw_multiline_string(font, Vector2(x, y + 66), Parts.DESC.get(pid, ""), HORIZONTAL_ALIGNMENT_LEFT, wrap, 17, -1, Color(0.85, 0.87, 0.9))
+		draw_multiline_string(font, Vector2(x, y + 150), "%d node%s wired to the core" % [live.size(), "" if live.size() == 1 else "s"], HORIZONTAL_ALIGNMENT_LEFT, wrap, 15, -1, Ui.DIM)
+		return
+	var nd = Parts.NODES[id]
+	var col = TYPE_COLORS[nd.type]
+	var chip = {"mod": "MODIFIER", "split": "SPLIT", "payload": "PAYLOAD", "upgrade": "UPGRADE"}[nd.type]
+	var cw = Ui.font(true).get_string_size(chip, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 24
+	Ui.segment(self, Rect2(x, y - 18, cw, 24), col, 6.0)
+	Ui.text(self, Vector2(x + 12, y - 1), chip, 13, Color.WHITE, true)
+	Ui.text(self, Vector2(x, y + 36), nd.name.to_upper(), 26, Color.WHITE, true)
+	draw_multiline_string(font, Vector2(x, y + 72), nd.desc, HORIZONTAL_ALIGNMENT_LEFT, wrap, 18, -1, Color(0.88, 0.9, 0.93))
+	var how = {"mod": "Changes the shot as it passes through.", "split": "Wire both outputs: one shot goes down each branch.",
+		"payload": "Goes off where the shot lands. Anything wired after it launches from there.", "upgrade": "Counts once it's wired to the core."}[nd.type]
+	draw_multiline_string(font, Vector2(x, y + 150), how, HORIZONTAL_ALIGNMENT_LEFT, wrap, 15, -1, Ui.DIM)
+	if hover_node >= 0 and not live.has(hover_node):
+		Ui.text(self, Vector2(x, y + 210), "NOT WIRED TO THE CORE", 14, Color(1.0, 0.45, 0.35), true)
+
+# Under the grid: what the wiring does to the ship, live. Tools also get a
+# one-line read-out of their program; the test range runs it for real.
+func _draw_effect() -> void:
+	var fam = Parts.node_family(pid)
+	var o = _origin()
+	var y = o.y + gsize.y * CELL + 44
+	var now = _live_stats()
+	if fam == "tool":
+		var p = garage.lo.parts[idx].duplicate(true)
+		p.sub = sub
+		p.erase("cards")
+		var kind = Parts.PARTS[pid].kind
+		var label = {"laser": "BEAM", "rocket": "MISSILE", "dropper": "BOMB", "drill": "DRILL"}.get(kind, "")
+		var prog = Parts.program_of(p)
+		var line = label + "  " + _describe(prog)
+		if kind == "drill" and not prog.get("orbit", false):
+			line = "DRILL  (wire ORB to swing it as a wrecking ball)"
+		Ui.text(self, Vector2(o.x, y), "PROGRAM", 13, Ui.DIM, true)
+		draw_multiline_string(Ui.font(true), Vector2(o.x, y + 24), line, HORIZONTAL_ALIGNMENT_LEFT, gsize.x * CELL, 17, -1, Color.WHITE)
+		y += 70
+		demo.show_tool(p)
+	# [label, before, after, format, lower is better]
+	var rows = []
+	for r in STAT_ROWS.get(fam, []):
+		rows.append([r[0], base.get(r[1], 0.0), now.get(r[1], 0.0), r[2], r[1] in ["fuel_burn", "mass"]])
+	if fam == "tool":
+		var now_part = garage.lo.parts[idx].duplicate(true)
+		now_part.sub = sub
+		now_part.erase("cards")
+		var pa = Parts.program_of(base_part)
+		var pb = Parts.program_of(now_part)
+		var def = Parts.PARTS[pid]
+		var yn = func(v): return 1.0 if v else 0.0
+		match def.kind:
+			"drill":
+				rows.append(["TIER", def.tier, def.tier, "%d", false])
+				rows.append(["CUTTING", def.power, def.power, "%.1f", false])
+				rows.append(["WRECKING BALL", yn.call(pa.get("orbit", false)), yn.call(pb.get("orbit", false)), "%s", false])
+			"laser":
+				rows.append(["BEAMS", _shots(pa), _shots(pb), "%d", false])
+				rows.append(["DAMAGE / S", def.dps * (1.0 if _shots(pa) == 1 else 0.7), def.dps * (1.0 if _shots(pb) == 1 else 0.7), "%.1f", false])
+				rows.append(["REACH", _reach(pa), _reach(pb), "%.0f m", false])
+				rows.append(["PHASING", _count(pa, "phase"), _count(pb, "phase"), "%d", false])
+				rows.append(["BLASTS / PULSE", _laser_blasts(pa), _laser_blasts(pb), "%d", false])
+			_:
+				rows.append(["SHOTS", _shots(pa), _shots(pb), "%d", false])
+				rows.append(["BLASTS", _blasts(pa), _blasts(pb), "%d", false])
+				rows.append(["REACH", _reach(pa), _reach(pb), "%.0f m", false])
+				rows.append(["HOMING", yn.call(_homes(pa)), yn.call(_homes(pb)), "%s", false])
+	var x = o.x
+	for r in rows:
+		var a = float(r[1])
+		var b = float(r[2])
+		var d = b - a
+		var better = d < 0.0 if r[4] else d > 0.0
+		var col = Color.WHITE if absf(d) < 0.001 else (Color(0.45, 1.0, 0.5) if better else Color(1.0, 0.45, 0.35))
+		Ui.text(self, Vector2(x, y), r[0], 13, Ui.DIM, true)
+		var fa = ("yes" if a > 0.5 else "no") if r[3] == "%s" else (r[3] % (int(a) if r[3] == "%d" else a))
+		var fb = ("yes" if b > 0.5 else "no") if r[3] == "%s" else (r[3] % (int(b) if r[3] == "%d" else b))
+		Ui.text(self, Vector2(x, y + 26), fa + "  >  " + fb, 18, col, true)
+		x += 150
+		if x + 130 > o.x + gsize.x * CELL + 20:
+			x = o.x
+			y += 56
+	demo_rect.visible = fam == "tool"
+	var da = _demo_area()
+	demo_rect.position = da.position
+	demo_rect.size = da.size
+	if fam == "tool":
+		draw_rect(da.grow(2), Color(0.3, 0.32, 0.36))
+
+# Read-outs of a tool program for the live numbers.
+func _shots(prog: Dictionary) -> int:
+	var forks = prog.get("forks", [])
+	if forks.is_empty():
+		return 1
+	var n = 0
+	for f in forks:
+		n += _shots(f)
+	return n
+
+func _blasts(prog: Dictionary) -> int:
+	var forks = prog.get("forks", [])
+	if not forks.is_empty():
+		var n = 0
+		for f in forks:
+			n += _blasts(f)
+		return n
+	var n = 6 if prog.get("payload", "") == "cluster" else 1
+	for c in prog.get("children", []):
+		n += _blasts(c)
+	return n
+
+func _reach(prog: Dictionary) -> float:
+	var kind = Parts.PARTS[pid].kind
+	var fast = prog.get("fast", false)
+	if kind == "laser":
+		return Parts.PARTS[pid].range * (1.6 if fast else 1.0)
+	if kind == "rocket":
+		return 34.0 * 2.5 * (1.8 if fast else 1.0)
+	if kind == "drill" and prog.get("orbit", false):
+		return 3.2
+	return 0.0
+
+func _homes(prog: Dictionary) -> bool:
+	if prog.get("homing", false):
+		return true
+	for f in prog.get("forks", []) + prog.get("children", []):
+		if _homes(f):
+			return true
+	return prog.get("payload", "") == "cluster"
+
+# Beams with a payload, counting through forks.
+func _laser_blasts(prog: Dictionary) -> int:
+	var forks = prog.get("forks", [])
+	if not forks.is_empty():
+		var n = 0
+		for f in forks:
+			n += _laser_blasts(f)
+		return n
+	return 0 if prog.get("payload", "") == "" else _blasts(prog)
+
+# Leaf shots/beams carrying a mod.
+func _count(prog: Dictionary, mod: String) -> int:
+	var forks = prog.get("forks", [])
+	if not forks.is_empty():
+		var n = 0
+		for f in forks:
+			n += _count(f, mod)
+		return n
+	return 1 if prog.get(mod, false) else 0

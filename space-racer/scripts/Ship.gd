@@ -11,6 +11,8 @@ const Parts = preload("res://scripts/Parts.gd")
 const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
 const TrailScript = preload("res://scripts/Trail.gd")
 const MeshKit = preload("res://scripts/MeshKit.gd")
+const WeaponsScript = preload("res://scripts/Weapons.gd")
+const Worlds = preload("res://scripts/Worlds.gd")
 
 const HOVER = 0.55
 const IMPACT_SAFE = 5.0        # m/s into a wall before the shield takes damage
@@ -43,18 +45,16 @@ var drift_charge = 0.0
 var hit_flash = 0.0
 var stall = 0.0
 var autopilot = false
+var rival = false          # AI racer: no input, no notifications
+var distance = 0.0         # centreline samples travelled this race (for standings)
+var down_left = 0.0        # rivals: seconds until back on track after a wreck
 var progress_idx = 0
 
 var _t = 0.0
 var _steer_vis = 0.0
 var _throttle = 0.0
 var _fx_cd = 0.0
-var ammo = 0
-var lasing = false
-var beams = []
-var rockets = []          # {pos, vel, life, node}
-var _rocket_prev = false
-var _next_launcher = 0
+var weapons
 var _drift_dir = 0.0
 var _braking = false
 var _flap = 0.0
@@ -86,20 +86,11 @@ func equip(lo: Dictionary) -> void:
 	boost_max = 100.0 * stats.boost
 	boost = boost_max
 	charges = stats.charges
-	ammo = stats.ammo
 	exposed = false
-	for b in beams:
-		b.queue_free()
-	beams.clear()
-	for l in stats.lasers:
-		var bm = MeshInstance3D.new()
-		bm.mesh = MeshKit.box(Vector3(0.2, 0.2, 1.0))
-		bm.material_override = MeshKit.add_mat(Color(0.5, 1.0, 0.5, 0.9))
-		bm.top_level = true
-		bm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		bm.visible = false
-		add_child(bm)
-		beams.append(bm)
+	if weapons == null:
+		weapons = WeaponsScript.new()
+		add_child(weapons)
+	weapons.setup(self, Worlds.RaceWorld.new(main), stats)
 	for nz in rig.nozzles:
 		var tr = TrailScript.new()
 		tr.setup(rig.accent, 0.2 * stats.engine_scale)
@@ -134,6 +125,8 @@ func _input_state() -> Dictionary:
 		"jump": Input.is_action_pressed("hop"),
 		"laser": Input.is_action_pressed("laser"),
 		"rocket": Input.is_action_pressed("rocket"),
+		"drop": Input.is_action_pressed("drop"),
+		"warp": Input.is_action_pressed("warp"),
 	}
 
 # Chases a point a little way down the centreline. Handy for screenshots and
@@ -164,7 +157,7 @@ func _process(delta):
 	_hop(delta, inp)
 	_drive(delta, inp)
 	_drill(delta)
-	_weapons(delta, inp)
+	weapons.update(delta, inp)
 	_collide()
 	_animate(delta, inp)
 
@@ -268,6 +261,8 @@ func _drill(delta: float) -> void:
 	drilling = false
 	var clank_at = Vector3.INF
 	for d in stats.drills:
+		if d.prog.get("orbit", false):
+			continue
 		var dir = transform.basis * d.dir
 		var tip = position + transform.basis * d.pos
 		var r = d.radius
@@ -296,78 +291,6 @@ func _drill(delta: float) -> void:
 		vel *= 1.0 - minf(1.0, stats.drill_drag * delta)
 	if clank_at != Vector3.INF and randf() < 20.0 * delta:
 		fx.spawn(clank_at + Vector3(0, 0.4, 0), Vector3(randf_range(-4, 4), 5.0, randf_range(-4, 4)), Color(1.0, 0.8, 0.4), 1.2, 0.07, 0.25)
-
-# Lasers: a beam marched forward until it meets rock (damaged up to the
-# laser's tier) or a mine (set off). Rockets: fly straight, blow up on rock,
-# mines or after two seconds. Both run off the ship's boost / ammo.
-func _weapons(delta: float, inp: Dictionary) -> void:
-	var y = HOVER + alt + 0.3
-	lasing = inp.get("laser", false) and boost > 0.0 and not stats.lasers.is_empty()
-	if lasing:
-		boost = maxf(0.0, boost - 22.0 * delta)
-	for i in stats.lasers.size():
-		var l = stats.lasers[i]
-		var bm = beams[i]
-		bm.visible = lasing
-		if not lasing:
-			continue
-		var tip = position + transform.basis * l.pos + Vector3(0, y, 0)
-		var dir = transform.basis * l.dir
-		var end = tip + dir * l.range
-		var t = 0.0
-		var done = false
-		while t < l.range and not done:
-			var p = tip + dir * t
-			var c = terrain.world_to_cell(p)
-			if terrain.is_solid(c) and terrain.top_of(c) > y * 0.6:
-				var res = terrain.damage(c, l.dps * delta, l.tier)
-				if randf() < 25.0 * delta:
-					fx.spawn(p, Vector3(randf_range(-3, 3), 4.0, randf_range(-3, 3)), Color(0.7, 1.0, 0.5) if res >= 0 else Color(1, 0.8, 0.4), 1.2, 0.08, 0.3)
-				end = p
-				done = true
-			for m in track.mines:
-				if m.timer <= 0.0 and Vector2(p.x - m.pos.x, p.z - m.pos.z).length() < 0.7:
-					main.detonate_mine(m)
-					end = p
-					done = true
-					break
-			t += 0.4
-		var length = tip.distance_to(end)
-		bm.global_transform = Transform3D(Basis.looking_at(dir, Vector3.UP) * Basis.from_scale(Vector3(1, 1, maxf(length, 0.05))), (tip + end) * 0.5)
-	var fire = inp.get("rocket", false)
-	if fire and not _rocket_prev and ammo > 0 and not stats.launchers.is_empty():
-		var l = stats.launchers[_next_launcher % stats.launchers.size()]
-		_next_launcher += 1
-		ammo -= 1
-		var node = Node3D.new()
-		node.top_level = true
-		MeshKit.part(node, MeshKit.cyl(0.08, 0.08, 0.6, 6), MeshKit.mat(Color(0.85, 0.85, 0.8)), Vector3.ZERO, Vector3(90, 0, 0))
-		MeshKit.part(node, MeshKit.cyl(0.07, 0.0, 0.5, 6), MeshKit.add_mat(Color(1.0, 0.6, 0.2, 0.9)), Vector3(0, 0, -0.5), Vector3(90, 0, 0), Vector3.ONE, false)
-		add_child(node)
-		var d = transform.basis * l.dir
-		rockets.append({"pos": position + transform.basis * l.pos + Vector3(0, y, 0), "vel": d * 38.0 + vel * 0.6, "life": 2.0, "node": node})
-	_rocket_prev = fire
-	var keep = []
-	for r in rockets:
-		r.life -= delta
-		r.pos += r.vel * delta
-		r.node.global_transform = Transform3D(Basis.looking_at(-r.vel.normalized(), Vector3.UP), r.pos)
-		if randf() < 30.0 * delta:
-			fx.spawn(r.pos, -r.vel * 0.05 + Vector3(0, 1.0, 0), Color(0.35, 0.35, 0.35), 0.0, 0.18, 0.5, -1.0)
-		var c = terrain.world_to_cell(r.pos)
-		var boom = r.life <= 0.0 or (terrain.is_solid(c) and terrain.top_of(c) > r.pos.y * 0.6)
-		for m in track.mines:
-			if m.timer <= 0.0 and Vector2(r.pos.x - m.pos.x, r.pos.z - m.pos.z).length() < 1.0:
-				main.detonate_mine(m)
-				boom = true
-		if boom:
-			main._explode(r.pos, 2.8, 2)
-			if position.distance_to(r.pos) < 3.2:
-				take_hit(12.0)
-			r.node.queue_free()
-		else:
-			keep.append(r)
-	rockets = keep
 
 # Circle vs. grid cells. Hard impacts drain the shield.
 func _collide() -> void:
@@ -406,13 +329,21 @@ func _collide() -> void:
 func take_hit(amount: float) -> void:
 	hit_flash = 1.0
 	if exposed:
+		# No shield left: a real hit ends you.
+		if amount >= 6.0:
+			if rival:
+				main.rival_destroyed(self)
+			else:
+				main.ship_destroyed()
+			return
 		stall = minf(0.6, 0.15 + amount * 0.01)
 		return
 	shield -= amount
 	if shield <= 0.0:
 		shield = 0.0
 		exposed = true
-		main.notify("SHIELD DOWN", Color(1.0, 0.3, 0.3))
+		if not rival:
+			main.notify("SHIELD DOWN", Color(1.0, 0.3, 0.3))
 		fx.burst(position + Vector3(0, 1, 0), Color(0.5, 0.7, 1.0), 30, 8.0, 3.0, 0.1, 0.6, 4.0)
 
 # Checkpoint nanobots: full shield, back in the race.
@@ -421,12 +352,13 @@ func restore() -> void:
 	shield = stats.shield
 	exposed = false
 	charges = stats.charges
-	ammo = stats.ammo
+	if weapons != null:
+		weapons.refill()
 	for k in 40:
 		var a = randf() * TAU
 		var p = position + Vector3(cos(a) * 1.4, randf_range(0.2, 1.6), sin(a) * 1.4)
 		fx.spawn(p, Vector3(-sin(a) * 5.0, randf_range(0.5, 2.0), cos(a) * 5.0) + vel * 0.8, Color(0.3, 1.0, 0.55), 1.2, 0.07, 0.7, 0.0)
-	if was_exposed:
+	if was_exposed and not rival:
 		main.notify("SHIELD RESTORED", Color(0.3, 1.0, 0.55))
 
 func _animate(delta: float, inp: Dictionary) -> void:
@@ -459,3 +391,36 @@ func _animate(delta: float, inp: Dictionary) -> void:
 		if _fx_cd <= 0.0:
 			_fx_cd = 0.06
 			fx.spawn(position + Vector3(0, 0.9, 0), Vector3(randf_range(-0.5, 0.5), 2.0, randf_range(-0.5, 0.5)) - vel * 0.2, Color(0.15, 0.15, 0.15), 0.0, 0.3, 0.8, -1.0)
+
+# ---------------------------------------------------------------- weapons host
+
+func pos2() -> Vector2:
+	return Vector2(position.x, position.z)
+
+func vel2() -> Vector2:
+	return Vector2(vel.x, vel.z)
+
+func l2w(local: Vector3) -> Vector2:
+	var p = position + transform.basis * local
+	return Vector2(p.x, p.z)
+
+func d2w(d: Vector3) -> Vector2:
+	var w = transform.basis * d
+	return Vector2(w.x, w.z).normalized()
+
+func spend(amount: float) -> bool:
+	if boost < amount:
+		return false
+	boost -= amount
+	return true
+
+func add_vel2(v: Vector2) -> void:
+	vel += Vector3(v.x, 0.0, v.y)
+
+func teleport2(p: Vector2) -> void:
+	position = Vector3(p.x, 0.0, p.y)
+	for tr in trails:
+		tr.clear_points()
+
+func fx_height() -> float:
+	return HOVER + alt + 0.3

@@ -20,6 +20,7 @@ const GtMenuScript = preload("res://scripts/GtMenu.gd")
 const Save = preload("res://scripts/Save.gd")
 const MiningScript = preload("res://scripts/Mining.gd")
 const Controls = preload("res://scripts/Controls.gd")
+const OverlayScript = preload("res://scripts/Overlay.gd")
 
 # Lap times that earn materials, as average speed over the lap (m/s). Each
 # medal pays out once per track.
@@ -79,7 +80,23 @@ var save_data = {}
 var mode = "race"   # or "mining"
 var mining = null
 var rebinding = ""
-var rivals = []   # other racers (Node3D); none yet, but the minimap draws them
+var overlay
+var shake = 0.0
+var pieces = []          # shattered ship parts: {node, vel, spin, life, gravity}
+var _slowmo_left = 0.0   # real seconds of slow motion left
+var _last_real = 0
+var _respawn_left = 0.0
+var rivals = []
+var race_laps = 0          # 0 = open practice (medals); >0 = a race against rivals
+var race_over = 0.0
+const RACE_REWARDS = [{"crystal": 6, "metal": 10, "core": 1}, {"metal": 8, "crystal": 3}, {"metal": 5, "rock": 10}, {"rock": 8}]
+# Who you race on each planet (by palette).
+const RIVALS = {
+	0: [["Stock", "basic", ["drill_1"], Color(0.85, 0.2, 0.2)], ["Sapper", "basic", [], Color(0.3, 0.6, 0.95)], ["Grinder", "advanced", [], Color(0.95, 0.75, 0.2)]],
+	1: [["Corvette", "dart", [], Color(0.2, 0.9, 1.0)], ["Corvette", "dart", [], Color(0.95, 0.95, 0.95)], ["Stock", "basic", [], Color(0.6, 0.3, 0.9)]],
+	2: [["Scavenger", "advanced", [], Color(0.3, 0.75, 0.45)], ["Scavenger", "advanced", [], Color(0.85, 0.6, 0.2)], ["Stock", "basic", [], Color(0.9, 0.4, 0.6)]],
+	3: [["Basalt", "advanced", [], Color(0.25, 0.22, 0.2)], ["Basalt", "advanced", [], Color(0.5, 0.18, 0.1)], ["Grinder", "advanced", [], Color(0.75, 0.35, 0.1)]],
+}   # other racers (Node3D); none yet, but the minimap draws them
 var shot_path = ""
 var shot_frames = 120
 var _frame = 0
@@ -126,6 +143,11 @@ func _ready():
 	add_child(menu_layer)
 	menu = GtMenuScript.new()
 	menu_layer.add_child(menu)
+	var top = CanvasLayer.new()
+	top.layer = 5
+	add_child(top)
+	overlay = OverlayScript.new()
+	top.add_child(overlay)
 	_pickup_mesh = MeshKit.box(Vector3.ONE * 0.32)
 	if loadout.is_empty():
 		loadout = Parts.presets()[preset_index]
@@ -288,6 +310,19 @@ func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		save_game()
 
+# Blueprints and salvaged frames, by display name.
+func unlocks() -> Array:
+	return save_data.get("unlocks", [])
+
+func unlock(name: String) -> void:
+	var u = unlocks()
+	if u.has(name):
+		return
+	u.append(name)
+	save_data.unlocks = u
+	notify("UNLOCKED  " + name.to_upper(), Color(0.75, 0.35, 1.0))
+	save_game()
+
 func track_key() -> String:
 	return str(hash(var_to_str(track.blueprint)))
 
@@ -418,6 +453,10 @@ func _toggle_res() -> void:
 	vp.scaling_3d_scale = 1.0 if vp.scaling_3d_scale < 1.0 else 0.5
 
 func _next_planet() -> void:
+	race_laps = 0
+	for rv in rivals:
+		rv.queue_free()
+	rivals.clear()
 	planet_index += 1
 	track_seed = rng.randi() % 100000
 	_new_planet()
@@ -443,6 +482,10 @@ func enter_mining() -> void:
 	if mode == "mining":
 		return
 	mode = "mining"
+	race_laps = 0
+	for rv in rivals:
+		rv.queue_free()
+	rivals.clear()
 	for n in [terrain, track, ship, hud]:
 		n.visible = false
 	ship.set_process(false)
@@ -453,6 +496,131 @@ func enter_mining() -> void:
 	mining.name = "Mining"
 	add_child(mining)
 	mining.setup(self)
+
+# From an outpost: that planet's own track, three laps against the locals.
+func race_on(palette: int) -> void:
+	leave_mining()
+	planet_index = palette
+	track_seed = 500 + palette * 37
+	_new_planet()
+	race_laps = 3
+	_spawn_rivals(palette)
+
+func _rival_loadout(spec: Array) -> Dictionary:
+	if spec[0] == "Basalt":
+		# Lava planet locals: armour everywhere, not much go.
+		return {"name": "Basalt", "frame": "advanced", "paint": {"primary": spec[3], "secondary": Color(1.0, 0.45, 0.1), "pattern": "twin"},
+			"parts": [{"id": "engine_1", "cell": Vector2i(4, 4), "rot": 0}, {"id": "burner", "cell": Vector2i(0, 9), "rot": 0}, {"id": "burner", "cell": Vector2i(8, 9), "rot": 0},
+				{"id": "plate", "cell": Vector2i(0, 8), "rot": 0}, {"id": "plate", "cell": Vector2i(8, 8), "rot": 0}, {"id": "plate", "cell": Vector2i(2, 3), "rot": 0},
+				{"id": "plate", "cell": Vector2i(6, 3), "rot": 0}, {"id": "shield", "cell": Vector2i(4, 0), "rot": 0}, {"id": "shield", "cell": Vector2i(5, 0), "rot": 0},
+				{"id": "emitter", "cell": Vector2i(3, 7), "rot": 0}]}
+	for p in Parts.presets():
+		if p.name == spec[0]:
+			var lo = p.duplicate(true)
+			lo.paint.primary = spec[3]
+			return lo
+	return Parts.presets()[0]
+
+func _spawn_rivals(palette: int) -> void:
+	for rv in rivals:
+		rv.queue_free()
+	rivals.clear()
+	var cp = track.checkpoints[0]
+	var side = Vector3(cp.dir.z, 0.0, -cp.dir.x)
+	var k = 0
+	for spec in RIVALS.get(palette, RIVALS[0]):
+		var rv = ShipScript.new()
+		rv.rival = true
+		add_child(rv)
+		rv.setup(terrain, track, fx, self)
+		rv.equip(_rival_loadout(spec))
+		rv.autopilot = true
+		k += 1
+		var lane = -1.0 if k % 2 == 1 else 1.0
+		rv.place(cp.pos - cp.dir * (3.0 + 4.0 * k) + side * lane * minf(track.hw[cp.idx] * 0.5, 2.5), atan2(cp.dir.x, cp.dir.z))
+		rv.progress_idx = cp.idx
+		rivals.append(rv)
+	ship.distance = 0.0
+	race_over = 0.0
+
+func rival_destroyed(rv) -> void:
+	if rv.down_left > 0.0:
+		return
+	shatter(rv.model, Vector3.UP, rv.vel, 18.0)
+	_slowmo_left = 0.0
+	Engine.time_scale = 1.0
+	shake = 0.4
+	rv.model.visible = false
+	rv.set_process(false)
+	rv.down_left = 2.2
+
+# Standings: who has covered the most track.
+func place_of(who) -> int:
+	var p = 1
+	for rv in rivals:
+		if rv != who and rv.distance > who.distance:
+			p += 1
+	if who != ship and ship.distance > who.distance:
+		p += 1
+	return p
+
+func _track_distance(s, delta_idx_from: int) -> void:
+	var n = track.pts.size()
+	var d = s.progress_idx - delta_idx_from
+	if d > n / 2:
+		d -= n
+	elif d < -n / 2:
+		d += n
+	s.distance += d
+
+func _race_rivals(delta: float) -> void:
+	for rv in rivals:
+		if rv.down_left > 0.0:
+			rv.down_left -= delta
+			if rv.down_left <= 0.0:
+				var i = rv.progress_idx
+				rv.place(track.pts[i], atan2(track.tangents[i].x, track.tangents[i].z))
+				rv.model.visible = true
+				rv.set_process(true)
+				rv.restore()
+			continue
+		var before = rv.progress_idx
+		rv.progress_idx = track.nearest(rv.position, rv.progress_idx)
+		_track_distance(rv, before)
+		# Bumping: push apart by mass, trade some speed, hurt on hard hits.
+		for other in [ship] + rivals:
+			if other == rv or (other == ship and _respawn_left > 0.0) or (other != ship and other.down_left > 0.0):
+				continue
+			var d = Vector2(rv.position.x - other.position.x, rv.position.z - other.position.z)
+			var min_d = rv.stats.radius + other.stats.radius
+			if d.length() < min_d and d.length() > 0.01:
+				var n = d.normalized()
+				var wa = 1.0 / rv.stats.mass
+				var wb = 1.0 / other.stats.mass
+				var push = (min_d - d.length()) / (wa + wb)
+				rv.position += Vector3(n.x, 0, n.y) * push * wa
+				other.position -= Vector3(n.x, 0, n.y) * push * wb
+				var rel = (rv.vel - other.vel).dot(Vector3(n.x, 0, n.y))
+				if rel < 0.0:
+					var j = -rel * 1.4 / (wa + wb)
+					rv.vel += Vector3(n.x, 0, n.y) * j * wa
+					other.vel -= Vector3(n.x, 0, n.y) * j * wb
+					if -rel > 8.0:
+						rv.take_hit((-rel - 8.0) * 1.5)
+						other.take_hit((-rel - 8.0) * 1.5)
+						fx.burst((rv.position + other.position) * 0.5 + Vector3(0, 0.7, 0), Color(1.0, 0.75, 0.4), 12, 7.0, 1.2, 0.08, 0.35)
+
+func _finish_race() -> void:
+	var place = place_of(ship)
+	var reward = RACE_REWARDS[mini(place - 1, RACE_REWARDS.size() - 1)]
+	var bits = []
+	for k in reward:
+		inventory[k] = inventory.get(k, 0) + reward[k]
+		bits.append("+%d %s" % [reward[k], k])
+	var names = ["1ST", "2ND", "3RD", "4TH"]
+	overlay.show_banner(names[mini(place - 1, 3)], "  ".join(bits), Color(1.0, 0.82, 0.25) if place == 1 else Color(0.4, 0.6, 1.0))
+	race_over = 4.0
+	save_game()
 
 func leave_mining() -> void:
 	if mode != "mining":
@@ -482,7 +650,98 @@ func _set_garage(on: bool) -> void:
 			ship.place(_saved_pose[0], _saved_pose[1])
 	cam_focus = ship.position
 
+# Blow `model` apart: every visible mesh becomes a tumbling piece, plus fire,
+# a camera kick, slow motion and the red flash. `up` is the world's up for
+# the pieces (they fall back down it unless gravity is 0).
+func shatter(model: Node3D, up: Vector3, base_vel: Vector3, gravity: float) -> void:
+	var origin = model.global_position
+	var n = 0
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		if not mi.is_visible_in_tree() or mi.mesh == null or n >= 70:
+			continue
+		if mi.material_override is ShaderMaterial:
+			continue
+		n += 1
+		var copy = MeshInstance3D.new()
+		copy.mesh = mi.mesh
+		copy.material_override = mi.material_override
+		add_child(copy)
+		copy.global_transform = mi.global_transform
+		var out = mi.global_position - origin
+		out = out.normalized() if out.length() > 0.01 else Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized()
+		out -= up * out.dot(up) * 0.5
+		pieces.append({"node": copy, "vel": base_vel * 0.4 + out * randf_range(4.0, 11.0) + up * randf_range(3.0, 8.0),
+			"spin": Vector3(randf_range(-9, 9), randf_range(-9, 9), randf_range(-9, 9)), "life": randf_range(2.2, 3.5), "gravity": gravity, "up": up})
+	var c = origin + up * 0.6
+	fx.burst(c, Color(1.0, 0.55, 0.15), 60, 16.0, 1.5, 0.3, 0.9, gravity)
+	fx.burst(c, Color(1.0, 0.9, 0.6), 30, 10.0, 2.0, 0.15, 0.5, 0.0)
+	fx.burst(c, Color(0.15, 0.15, 0.15), 30, 5.0, 0.0, 0.7, 1.6, -gravity * 0.1)
+	shake = 1.0
+	_slowmo_left = 0.9
+	Engine.time_scale = 0.25
+
+func _update_pieces(delta: float) -> void:
+	var keep = []
+	for p in pieces:
+		p.life -= delta
+		p.vel -= p.up * p.gravity * delta
+		p.vel *= 1.0 - 0.4 * delta
+		var n: Node3D = p.node
+		n.global_position += p.vel * delta
+		if p.gravity > 0.0 and n.global_position.dot(p.up) < 0.1:
+			n.global_position -= p.up * (n.global_position.dot(p.up) - 0.1)
+			p.vel = p.vel - p.up * p.vel.dot(p.up) * 1.4
+			p.vel *= 0.6
+		n.rotate_x(p.spin.x * delta)
+		n.rotate_y(p.spin.y * delta)
+		n.rotate_z(p.spin.z * delta)
+		if p.life < 0.6:
+			n.scale = Vector3.ONE * maxf(p.life / 0.6, 0.01)
+		if p.life <= 0.0:
+			n.queue_free()
+		else:
+			keep.append(p)
+	pieces = keep
+
+# Real-time bookkeeping for slow motion, shake and the death overlay.
+func _real_time_tick() -> float:
+	var now = Time.get_ticks_msec()
+	var real_dt = clampf((now - _last_real) / 1000.0, 0.0, 0.1) if _last_real > 0 else 0.0
+	_last_real = now
+	if _slowmo_left > 0.0:
+		_slowmo_left -= real_dt
+		Engine.time_scale = lerpf(1.0, 0.25, clampf(_slowmo_left / 0.5, 0.0, 1.0))
+		if _slowmo_left <= 0.0:
+			Engine.time_scale = 1.0
+	shake = maxf(0.0, shake - real_dt * 1.6)
+	overlay.tick(real_dt)
+	return real_dt
+
+func shake_offset() -> Vector3:
+	return Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * shake * shake * 1.2
+
+# Race: a hit with no shield left. The ship goes up, the clock keeps running,
+# and you're back at the last gate a couple of seconds later.
+func ship_destroyed() -> void:
+	if _respawn_left > 0.0:
+		return
+	shatter(ship.model, Vector3.UP, ship.vel, 18.0)
+	ship.model.visible = false
+	ship.set_process(false)
+	for tr in ship.trails:
+		tr.clear_points()
+	overlay.show_death("DESTROYED", "back to the last gate  ·  the clock keeps running")
+	_respawn_left = 2.4
+
 func _process(delta):
+	var real_dt = _real_time_tick()
+	_update_pieces(delta)
+	if _respawn_left > 0.0:
+		_respawn_left -= real_dt
+		if _respawn_left <= 0.0:
+			ship.model.visible = true
+			ship.set_process(not garage and mode == "race")
+			_respawn()
 	delta = minf(delta, 1.0 / 30.0)
 	if mode == "mining" and not garage:
 		for m in messages:
@@ -517,7 +776,19 @@ func _process(delta):
 			get_tree().quit()
 
 func _race(delta: float) -> void:
+	var before = ship.progress_idx
 	ship.progress_idx = track.nearest(ship.position, ship.progress_idx)
+	_track_distance(ship, before)
+	_race_rivals(delta)
+	if race_over > 0.0:
+		race_over -= delta
+		if race_over <= 0.0:
+			lap = 1
+			lap_time = 0.0
+			next_cp = 1
+			last_cp = 0
+			_respawn()
+			_spawn_rivals(planet_index)
 	# Checkpoints: in order, but you may get there however you like.
 	var cp = track.checkpoints[next_cp]
 	if ship.position.distance_to(cp.pos) < track.hw[cp.idx] + 1.5:
@@ -529,6 +800,8 @@ func _race(delta: float) -> void:
 				best_lap = lap_time
 			notify("LAP %d  %.2fs" % [lap, lap_time], Color(1.0, 0.95, 0.5))
 			_award_medals(lap_time)
+			if race_laps > 0 and lap >= race_laps and race_over <= 0.0:
+				_finish_race()
 			lap += 1
 			lap_time = 0.0
 		next_cp = (next_cp + 1) % track.checkpoints.size()
@@ -667,7 +940,7 @@ func _update_camera(delta: float) -> void:
 	cam_focus = cam_focus.lerp(target, minf(1.0, (8.0 if garage else 4.0) * delta))
 	var dist = GARAGE_DIST if garage else get_meta("camdist", CAM_DIST) + speed * 0.35
 	var off = Vector3(0, sin(deg_to_rad(pitch)), cos(deg_to_rad(pitch))) * dist
-	cam.position = cam_focus + off + (Vector3(-4.2, 0.6, 0) if garage else Vector3.ZERO)
+	cam.position = cam_focus + off + (Vector3(-4.2, 0.6, 0) if garage else Vector3.ZERO) + shake_offset()
 	cam.rotation_degrees = Vector3(-pitch, 0, 0)
 	if ortho and not garage:
 		cam.projection = Camera3D.PROJECTION_ORTHOGONAL

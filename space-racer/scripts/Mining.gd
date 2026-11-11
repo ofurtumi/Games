@@ -12,17 +12,31 @@ extends Node3D
 # and patch you up, but don't take cargo. Wreck the ship and the tow home
 # costs you the cargo. The camera pulls back the longer you keep moving
 # (mouse wheel sets the base zoom).
+#
+# Exploration sites (see _build_sites): crashed ships to salvage (materials,
+# fuel, rockets, sometimes a blueprint), fuel canisters, derelict hulls to tow
+# to an outpost (unlocks that frame), and a black market that sells
+# blueprints. Hover slowly next to a site to work it. Sites only get a marker
+# once you've been near them; buried ones are found by digging.
 
 const Parts = preload("res://scripts/Parts.gd")
 const MeshKit = preload("res://scripts/MeshKit.gd")
 const Ui = preload("res://scripts/Ui.gd")
 const TerrainScript = preload("res://scripts/Terrain.gd")
 const MinerScript = preload("res://scripts/Miner.gd")
+const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
 
+# Each planet has an outpost above its north pole run by one mechanic, who
+# sells program cards and parts for materials.
 const PLANETS = [
-	{"name": "Cinder", "palette": 0, "pos": Vector2(0, 0), "radius": 34, "gravity": 7.0, "gas": 0.02, "lava": true, "heat": 1.0},
-	{"name": "Rime", "palette": 1, "pos": Vector2(160, 50), "radius": 44, "gravity": 4.5, "gas": 0.06, "lava": false, "heat": 0.5},
-	{"name": "Moss", "palette": 2, "pos": Vector2(-150, 95), "radius": 26, "gravity": 11.0, "gas": 0.14, "lava": false, "heat": 1.5},
+	{"name": "Cinder", "palette": 0, "pos": Vector2(0, 0), "radius": 110, "gravity": 7.0, "gas": 0.02, "lava": true, "heat": 1.0,
+		"mech": "grind", "offers": [{"name": "Excavate", "price": {"metal": 10, "rock": 20}}, {"name": "Cluster", "price": {"metal": 12, "crystal": 4}}]},
+	{"name": "Rime", "palette": 1, "pos": Vector2(760, 260), "radius": 160, "gravity": 4.5, "gas": 0.06, "lava": false, "heat": 0.5,
+		"mech": "vex", "offers": [{"name": "Phasing", "price": {"crystal": 10}}, {"name": "Orbit", "price": {"crystal": 6, "metal": 8}}]},
+	{"name": "Moss", "palette": 2, "pos": Vector2(-640, 400), "radius": 80, "gravity": 11.0, "gas": 0.14, "lava": false, "heat": 1.5,
+		"mech": "lode", "offers": [{"name": "Gravity well", "price": {"crystal": 8, "metal": 6}}, {"name": "Tractor beam", "price": {"crystal": 12, "metal": 10}}]},
+	{"name": "Magma", "palette": 3, "pos": Vector2(220, -720), "radius": 130, "gravity": 8.0, "gas": 0.03, "lava": true, "lava_crust": true, "heat": 2.2,
+		"mech": "arc", "offers": [{"name": "Quench", "price": {"metal": 10, "core": 1}}, {"name": "Homing", "price": {"crystal": 8}}]},
 ]
 const LAYERS = [[0.28, "CRUST"], [0.55, "MANTLE"], [0.84, "DEEP"], [2.0, "CORE"]]
 const MAT_COLORS = {"rock": Color(0.7, 0.6, 0.5), "metal": Color(1.0, 0.6, 0.25), "crystal": Color(0.5, 0.9, 1.0), "core": Color(0.95, 0.3, 0.9)}
@@ -43,7 +57,30 @@ var depots = []          # Vector2 pad positions
 var _depot_used = -1     # last depot serviced; resets once you fly off
 var zoom = 30.0
 var travel = 0.0
-const DEPOTS = [Vector2(160, 50 + 44 + 12), Vector2(-150, 95 + 26 + 12), Vector2(80, 70)]
+# Fuel-only stops out between the planets.
+const DEPOTS = [Vector2(380, 130), Vector2(-320, 200), Vector2(110, -360), Vector2(-900, -420)]
+# Nine Fingers' stock.
+const MARKET = [
+	{"name": "Phase drill", "price": {"core": 6, "crystal": 10}},
+	{"name": "Overdrive core", "price": {"core": 4, "metal": 20}},
+	{"name": "Blink drive", "price": {"core": 5, "crystal": 8}},
+	{"name": "Fuel scoop", "price": {"metal": 15, "crystal": 5}},
+]
+const SPACE_TOP = 70.0     # speed cap away from planets
+const AIR_TOP = 32.0       # near a planet
+var outposts = []          # {pad, planet}
+var at_outpost = 0
+const SITE_COLORS = {"wreck": Color(0.95, 0.6, 0.35), "hull": Color(0.92, 0.92, 0.95), "cache": Color(0.25, 0.95, 0.75), "market": Color(0.75, 0.35, 1.0)}
+
+var sites = []           # {type, pos, vel, node, found, done, data}
+var tow = null           # the hull on the cable
+var rope: MeshInstance3D
+var salvage = 0.0
+var salvage_site = null
+var _market_cool = false
+var _dead_left = 0.0
+var _own_wreck = null
+const REPAIR_BILL = {"metal": 8, "rock": 10}
 var pickups = []
 var _env_saved = {}
 var _pickup_mesh: Mesh
@@ -81,11 +118,15 @@ func setup(m) -> void:
 		t.h = def.radius * 2 + 8
 		pl.node.add_child(t)
 		t.generate_planet(9000 + i * 77, def)
-		t.rebuild()
 		t.cell_destroyed.connect(_on_cell_destroyed.bind(pl))
 		pl.terrain = t
 		planets.append(pl)
-	_build_station()
+	_build_sites()
+	for pl in planets:
+		pl.terrain.rebuild()
+	for i in PLANETS.size():
+		_build_outpost(i)
+	station_pad = outposts[0].pad
 	for d in DEPOTS:
 		_build_depot(d)
 	_build_stars()
@@ -97,7 +138,7 @@ func setup(m) -> void:
 	add_child(light)
 	cam = Camera3D.new()
 	cam.fov = 40.0
-	cam.far = 600.0
+	cam.far = 5000.0
 	add_child(cam)
 	miner = MinerScript.new()
 	miner.mining = self
@@ -137,23 +178,25 @@ func leave() -> void:
 		pk.node.queue_free()
 	queue_free()
 
-func _build_station() -> void:
-	var home = PLANETS[0]
-	station_pad = home.pos + Vector2(0, home.radius + 14.0)
-	station = Node3D.new()
-	station.position = Vector3(station_pad.x, station_pad.y, 0.0)
-	add_child(station)
+func _build_outpost(pi: int) -> void:
+	var def = PLANETS[pi]
+	var pad = def.pos + Vector2(0, def.radius + 16.0)
+	outposts.append({"pad": pad, "planet": pi})
+	var n = Node3D.new()
+	n.position = Vector3(pad.x, pad.y, 0.0)
+	add_child(n)
 	var steel = MeshKit.mat(Color(0.55, 0.57, 0.62), 0.0, 0.4, 0.7)
 	var dark = MeshKit.mat(Color(0.15, 0.16, 0.18), 0.0, 0.5, 0.5)
-	var lamp = MeshKit.mat(Color(1.0, 0.75, 0.3), 1.0)
-	MeshKit.part(station, MeshKit.box(Vector3(7.0, 0.5, 2.5)), steel, Vector3(0, -0.4, 0))
-	MeshKit.part(station, MeshKit.box(Vector3(2.5, 3.0, 2.0)), dark, Vector3(-4.6, 0.8, -0.5))
-	MeshKit.part(station, MeshKit.box(Vector3(2.0, 1.4, 1.8)), dark, Vector3(4.4, 0.2, -0.5))
-	MeshKit.part(station, MeshKit.cyl(0.08, 0.08, 4.0, 6), steel, Vector3(-4.6, 4.2, -0.5))
-	for x in [-3.2, -1.6, 0.0, 1.6, 3.2]:
-		MeshKit.part(station, MeshKit.box(Vector3(0.3, 0.08, 0.3)), lamp, Vector3(x, -0.12, 1.1), Vector3.ZERO, Vector3.ONE, false)
-	for x in [-2.5, 2.5]:
-		MeshKit.part(station, MeshKit.box(Vector3(0.25, 14.0, 0.25)), steel, Vector3(x, -7.6, -1.0))
+	var lamp = MeshKit.mat(Parts.MECHANICS[def.mech].accent, 1.0)
+	MeshKit.part(n, MeshKit.box(Vector3(9.0, 0.5, 2.5)), steel, Vector3(0, -0.4, 0))
+	MeshKit.part(n, MeshKit.box(Vector3(2.8, 3.4, 2.0)), dark, Vector3(-5.6, 1.0, -0.5))
+	MeshKit.part(n, MeshKit.box(Vector3(2.4, 1.6, 1.8)), dark, Vector3(5.4, 0.3, -0.5))
+	MeshKit.part(n, MeshKit.box(Vector3(2.6, 0.3, 0.3)), lamp, Vector3(-5.6, 2.8, 0.55), Vector3.ZERO, Vector3.ONE, false)
+	MeshKit.part(n, MeshKit.cyl(0.08, 0.08, 4.0, 6), steel, Vector3(-5.6, 4.6, -0.5))
+	for x in [-3.6, -1.8, 0.0, 1.8, 3.6]:
+		MeshKit.part(n, MeshKit.box(Vector3(0.3, 0.08, 0.3)), lamp, Vector3(x, -0.12, 1.1), Vector3.ZERO, Vector3.ONE, false)
+	for x in [-3.0, 3.0]:
+		MeshKit.part(n, MeshKit.box(Vector3(0.3, 18.0, 0.3)), steel, Vector3(x, -9.6, -1.0))
 
 func _build_depot(at: Vector2) -> void:
 	depots.append(at)
@@ -176,7 +219,7 @@ func _service_depots() -> void:
 		if d < 3.5 and miner.vel.length() < 6.0:
 			_depot_used = i
 			miner.fuel = miner.stats.fuel
-			miner.ammo = miner.stats.ammo
+			miner.weapons.refill()
 			miner.shield = miner.stats.shield
 			miner.hull = 100.0
 			miner.exposed = false
@@ -189,19 +232,19 @@ func _unhandled_input(event):
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom = maxf(14.0, zoom - 3.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom = minf(110.0, zoom + 3.0)
+			zoom = minf(260.0, zoom + 5.0)
 
 func _build_stars() -> void:
 	var mm = MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.mesh = MeshKit.box(Vector3.ONE)
-	mm.instance_count = 900
+	mm.instance_count = 2200
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 42
 	for i in mm.instance_count:
-		var s = rng.randf_range(0.25, 0.7)
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * s), Vector3(rng.randf_range(-600, 600), rng.randf_range(-400, 500), rng.randf_range(-260, -120))))
+		var s = rng.randf_range(0.8, 2.6)
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * s), Vector3(rng.randf_range(-3000, 3000), rng.randf_range(-2400, 2400), rng.randf_range(-900, -400))))
 		var b = rng.randf_range(0.4, 1.0)
 		mm.set_instance_color(i, Color(b, b, b * rng.randf_range(0.9, 1.1)))
 	var node = MultiMeshInstance3D.new()
@@ -247,23 +290,48 @@ func gravity_at(p: Vector2) -> Vector2:
 
 func _process(delta):
 	delta = minf(delta, 1.0 / 30.0)
+	# Stream rock around the ship (even while a menu is up).
+	var view = cam.position.z * 0.9 + 40.0
+	for pl in planets:
+		pl.terrain.focus = pl.local(miner.pos)
+		pl.terrain.view_r = view
 	if main.menu_open() or main.mode != "mining":
 		hud.queue_redraw()
 		return
+	if _dead_left > 0.0:
+		_dead_left -= delta / maxf(Engine.time_scale, 0.05)
+		if _dead_left <= 0.0:
+			miner.model.visible = true
+			_dock()
+			var bill = []
+			for k in REPAIR_BILL:
+				var paid = mini(main.inventory.get(k, 0), REPAIR_BILL[k])
+				main.inventory[k] = main.inventory.get(k, 0) - paid
+				if paid > 0:
+					bill.append("-%d %s" % [paid, k])
+			if bill.size() > 0:
+				main.notify("REPAIRS  " + "  ".join(bill), Color(1.0, 0.4, 0.3))
+		cam.position = cam.position + main.shake_offset()
+		hud.queue_redraw()
+		return
 	if docked:
-		miner.pos = station_pad + Vector2(0, 1.0)
+		miner.pos = outposts[at_outpost].pad + Vector2(0, 1.0)
 		miner.vel = Vector2.ZERO
 		miner.heading = PI * 0.5
 		miner.step(0.0, false)
 	else:
 		miner.step(delta, true)
-		# Docking: slow, over the pad, and not straight after launching.
+		# Docking: slow, over a pad, and not straight after launching.
 		_undock_cd -= delta
-		if _undock_cd <= 0.0 and miner.pos.distance_to(station_pad + Vector2(0, 1.0)) < 3.0 and miner.vel.length() < 6.0:
-			_dock()
+		if _undock_cd <= 0.0 and miner.vel.length() < 6.0:
+			for i in outposts.size():
+				if miner.pos.distance_to(outposts[i].pad + Vector2(0, 1.0)) < 3.0:
+					_dock(i)
+					break
 	_update_pickups(delta)
 	if not docked:
 		_service_depots()
+		_update_sites(delta)
 	var speed = miner.vel.length()
 	# Keep moving and the view opens up; stop and it settles back in.
 	if speed > 4.0:
@@ -271,12 +339,15 @@ func _process(delta):
 	else:
 		travel = maxf(0.0, travel - 60.0 * delta)
 	var target = Vector3(miner.pos.x, miner.pos.y, 0.0) + Vector3(miner.vel.x, miner.vel.y, 0.0) * 0.25
-	var dist = zoom + minf(travel * 0.12, 70.0) + speed * 0.3
-	cam.position = cam.position.lerp(target + Vector3(0, -4.0, dist), minf(1.0, 3.0 * delta))
+	var dist = zoom + minf(travel * 0.15, 220.0) + speed * 0.3
+	cam.position = cam.position.lerp(target + Vector3(0, -4.0, dist), minf(1.0, 3.0 * delta)) + main.shake_offset()
 	cam.look_at(cam.position + Vector3(0, 0.12, -1.0), Vector3.UP)
 	hud.queue_redraw()
 
-func _dock() -> void:
+func _dock(i: int = -1) -> void:
+	if i >= 0:
+		at_outpost = i
+	station_pad = outposts[at_outpost].pad
 	docked = true
 	var gained = []
 	for k in cargo:
@@ -287,6 +358,7 @@ func _dock() -> void:
 	miner.refill()
 	miner.pos = station_pad + Vector2(0, 1.0)
 	miner.vel = Vector2.ZERO
+	miner.weapons.refill()
 	cam.position = Vector3(miner.pos.x, miner.pos.y - 4.0, 30.0)
 	if gained.size() > 0:
 		main.notify("UNLOADED  " + "  ".join(gained), Color(0.5, 0.9, 1.0))
@@ -300,18 +372,42 @@ func launch() -> void:
 	miner.vel = Vector2(0, 7.0)
 	miner.pos = station_pad + Vector2(0, 2.0)
 
+# Wrecked: the ship comes apart, the hold stays in your wreck where you died
+# (go back for it; die again first and that wreck is gone), the tow home
+# takes a few seconds and the repairs come out of the bank.
 func wrecked() -> void:
+	if _dead_left > 0.0:
+		return
+	main.shatter(miner.model, Vector3(0, 0, 1), Vector3(miner.vel.x, miner.vel.y, 0.0), 0.0)
+	miner.model.visible = false
+	for tr in miner.trails:
+		tr.clear_points()
+	if _own_wreck != null:
+		sites.erase(_own_wreck)
+		_own_wreck.node.queue_free()
+		_own_wreck = null
+	var held = 0
+	for k in cargo:
+		held += cargo[k]
+	if held > 0:
+		_site(miner.pos, "wreck", {"loot": cargo.duplicate(), "own": true})
+		_own_wreck = sites[-1]
+		_own_wreck.found = true
 	cargo.clear()
-	main.notify("WRECKED  -  CARGO LOST", Color(1.0, 0.3, 0.3))
-	main.fx.burst(Vector3(miner.pos.x, miner.pos.y, 1.0), Color(1.0, 0.5, 0.15), 40, 12.0, 1.2, 0.2, 0.8, 0.0)
-	_dock()
+	if tow != null:
+		tow = null
+	main.overlay.show_death("WRECKED", "your cargo is in the wreck  ·  towing you home" if held > 0 else "towing you home")
+	_dead_left = 2.6
 
 func open_menu() -> void:
 	if docked:
-		main.menu.show_menu("STATION", [
+		var def = PLANETS[outposts[at_outpost].planet]
+		var mech = Parts.MECHANICS[def.mech].name
+		main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
 			{"label": "Launch", "action": launch},
+			{"label": "Market", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
-			{"label": "Race", "action": func(): main.menu.hide_menu(); main.leave_mining()},
+			{"label": "Race here", "value": def.name, "action": func(): main.menu.hide_menu(); main.race_on(def.palette)},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
 			{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
 		], launch)
@@ -334,6 +430,10 @@ func _on_cell_destroyed(p: Vector3, k: int, pl) -> void:
 	var t = pl.terrain
 	var g = pl.node.to_global(p)
 	var w = Vector2(g.x, g.y)
+	if k == t.FUEL:
+		miner.fuel = minf(miner.stats.fuel, miner.fuel + 12.0)
+		main.fx.burst(Vector3(w.x, w.y, 1.2), Color(0.25, 0.95, 0.75), 16, 6.0, 1.2, 0.16, 0.5, 0.0)
+		return
 	main.fx.burst(Vector3(w.x, w.y, 1.2), t.kind_color(k), 5, 5.0, 0.0, 0.22, 0.6, 0.0)
 	if k == t.GAS:
 		main.fx.burst(Vector3(w.x, w.y, 1.2), Color(0.8, 0.9, 0.3), 30, 10.0, 1.2, 0.2, 0.6, 0.0)
@@ -432,7 +532,7 @@ func _draw_hud() -> void:
 	_gauge(Rect2(bx + 38, by + 92, 290, 12), miner.fuel / st.fuel, Color(1.0, 0.6, 0.2) if miner.fuel > st.fuel * 0.2 else Color(1.0, 0.2, 0.1))
 	_gauge(Rect2(bx + 32, by + 112, 290, 12), miner.boost / (100.0 * st.boost), Color(0.3, 0.85, 1.0))
 	for i in st.ammo:
-		Ui.segment(hud, Rect2(bx + 330 - (i + 1) * 14, by + 14, 9, 9), Color(0.45, 1.0, 0.45) if i < miner.ammo else Color(1, 1, 1, 0.15), 2.0)
+		Ui.segment(hud, Rect2(bx + 330 - (i + 1) * 14, by + 14, 9, 9), Color(0.45, 1.0, 0.45) if i < miner.weapons.ammo else Color(1, 1, 1, 0.15), 2.0)
 	Ui.text(hud, Vector2(bx + 8, by + 84), "S", 12, Ui.DIM, true)
 	Ui.text(hud, Vector2(bx + 2, by + 104), "F", 12, Ui.DIM, true)
 	# Cargo.
@@ -445,10 +545,24 @@ func _draw_hud() -> void:
 		cx -= w + 34
 		draw_rect_on(Rect2(cx, 30, 12, 12), MAT_COLORS[m])
 		Ui.text(hud, Vector2(cx + 18, 43), s, 20, Color.WHITE, true)
+	# Salvage progress around the ship, and what's on the cable.
+	if salvage_site != null:
+		var sp2 = cam.unproject_position(Vector3(miner.pos.x, miner.pos.y, 0.0))
+		var need = 0.4 if salvage_site.type == "cache" else 1.4
+		hud.draw_arc(sp2, 46, -PI * 0.5, -PI * 0.5 + TAU * clampf(salvage / need, 0.0, 1.0), 32, SITE_COLORS[salvage_site.type], 6.0)
+		Ui.text(hud, sp2 + Vector2(-100, -58), _site_label(salvage_site), 16, SITE_COLORS[salvage_site.type], true, HORIZONTAL_ALIGNMENT_CENTER, 200)
+	if tow != null:
+		Ui.segment(hud, Rect2(vp.x * 0.5 - 150, 18, 300, 34), Color(0.03, 0.035, 0.045, 0.8))
+		Ui.text(hud, Vector2(vp.x * 0.5 - 150, 42), "TOWING  " + _site_label(tow), 17, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, 300)
 	# Off-screen markers: planets and the station.
-	var marks = [[station_pad, "STATION", Color(1.0, 0.75, 0.3)]]
+	var marks = []
+	for o in outposts:
+		marks.append([o.pad, "OUTPOST", Parts.MECHANICS[PLANETS[o.planet].mech].accent])
 	for d in depots:
 		marks.append([d, "DEPOT", Color(0.3, 1.0, 0.4)])
+	for s in sites:
+		if s.found and not s.done and s != tow:
+			marks.append([s.pos, _site_label(s), SITE_COLORS[s.type]])
 	for p2 in planets:
 		if miner.pos.distance_to(p2.centre) > p2.def.radius * 1.6:
 			marks.append([p2.centre, p2.def.name.to_upper(), p2.terrain.planet.rock.lightened(0.3)])
@@ -479,3 +593,258 @@ func _draw_hud() -> void:
 
 func draw_rect_on(r: Rect2, c: Color) -> void:
 	hud.draw_rect(r, c)
+
+# ---------------------------------------------------------------- exploration
+
+func _build_sites() -> void:
+	var P = planets
+	_site_on(P[0], 200.0, 1.0, "wreck", {"blueprint": "Fuel scoop"})
+	_site_on(P[0], 300.0, 0.5, "wreck", {"loot": {"crystal": 6, "metal": 4}})
+	_site(Vector2(300, -260), "wreck", {})
+	_site_on(P[1], 120.0, 1.0, "wreck", {"blueprint": "Tractor beam"})
+	_site_on(P[1], 30.0, 0.35, "wreck", {"loot": {"core": 3, "crystal": 4}})
+	_site_on(P[2], 250.0, 1.0, "wreck", {"loot": {"metal": 6}})
+	_site(Vector2(-420, -500), "wreck", {"blueprint": "Overdrive core"})
+	_site(Vector2(1150, -150), "hull", {"frame": "manta"})
+	_site_on(P[1], 330.0, 1.0, "hull", {"frame": "needle"})
+	_site_on(P[2], 200.0, 0.4, "hull", {"frame": "brick"})
+	for c in [Vector2(200, -60), Vector2(450, 60), Vector2(-330, 240), Vector2(800, -150)]:
+		_site(c, "cache", {})
+	_site(Vector2(-1300, -900), "market", {})
+	_site_on(P[3], 200.0, 1.0, "wreck", {"loot": {"core": 2, "metal": 4}})
+	_site_on(P[3], 60.0, 0.45, "wreck", {"blueprint": "Homing"})
+	_site(Vector2(600, -480), "wreck", {"blueprint": "Orbit"})
+	_site_on(P[0], 30.0, 0.3, "wreck", {"blueprint": "Phasing", "loot": {"core": 2}})
+
+# On or in a planet: depth 1.0 sits on the surface in a little crater, less
+# than that is buried in a pocket that far out from the centre.
+func _site_on(pl, angle_deg: float, depth: float, type: String, data: Dictionary) -> void:
+	var dir = Vector2(cos(deg_to_rad(angle_deg)), sin(deg_to_rad(angle_deg)))
+	var pos = pl.centre + dir * (pl.def.radius * depth - (0.5 if depth >= 1.0 else 0.0))
+	var hole = (4.5 if type == "hull" else 3.0) if depth < 1.0 else 2.6
+	var t = pl.terrain
+	var c0 = t.world_to_cell(pl.local(pos))
+	var r = ceili(hole) + 1
+	for dj in range(-r, r + 1):
+		for di in range(-r, r + 1):
+			var c = c0 + Vector2i(di, dj)
+			if t.in_bounds(c) and pl.cell_world(c).distance_to(pos) < hole:
+				t.set_kind(c, t.EMPTY)
+	_site(pos, type, data)
+
+func _site(pos: Vector2, type: String, data: Dictionary) -> void:
+	var node = Node3D.new()
+	node.position = Vector3(pos.x, pos.y, 0.3)
+	add_child(node)
+	var rng = RandomNumberGenerator.new()
+	rng.seed = int(pos.x * 31 + pos.y * 17)
+	match type:
+		"wreck", "hull":
+			var lo = Parts.random_loadout(rng) if type == "wreck" else {"name": "", "frame": data.frame, "parts": []}
+			if data.get("own", false):
+				lo = main.loadout.duplicate(true)
+			lo.paint = {"primary": Color(0.28, 0.22, 0.18) if type == "wreck" else Color(0.5, 0.36, 0.24), "secondary": Color(0.12, 0.1, 0.1), "pattern": "stripe"}
+			var m = ShipBuilder.build(lo, Parts.stats(lo))
+			var rig = m.get_meta("rig")
+			rig.shield.visible = false
+			for f in rig.flames:
+				f.visible = false
+			var h = rng.randf() * TAU
+			var f3 = Vector3(cos(h), sin(h), 0.0)
+			var up = Vector3(0, 0, 1)
+			m.transform = Transform3D(Basis(up.cross(f3), up, f3).rotated(f3, rng.randf_range(-0.4, 0.4)), Vector3.ZERO)
+			node.add_child(m)
+		"cache":
+			MeshKit.part(node, MeshKit.cyl(0.45, 0.45, 1.3, 8), MeshKit.mat(Color(0.2, 0.22, 0.25), 0.0, 0.4, 0.6), Vector3.ZERO, Vector3(90, 0, 0))
+			MeshKit.part(node, MeshKit.cyl(0.47, 0.47, 0.3, 8), MeshKit.mat(SITE_COLORS.cache, 1.0), Vector3.ZERO, Vector3(90, 0, 0), Vector3.ONE, false)
+		"market":
+			var dark = MeshKit.mat(Color(0.1, 0.09, 0.12), 0.0, 0.5, 0.6)
+			var lamp = MeshKit.mat(SITE_COLORS.market, 1.2)
+			MeshKit.part(node, MeshKit.box(Vector3(9.0, 0.6, 3.0)), dark, Vector3(0, -0.6, 0))
+			MeshKit.part(node, MeshKit.box(Vector3(3.0, 4.0, 2.5)), dark, Vector3(-2.5, 1.4, -0.5))
+			MeshKit.part(node, MeshKit.box(Vector3(2.0, 2.5, 2.0)), dark, Vector3(2.8, 0.8, -0.5), Vector3(0, 0, 12))
+			for x in [-4.0, -1.0, 1.5, 4.0]:
+				MeshKit.part(node, MeshKit.box(Vector3(0.3, 0.1, 0.3)), lamp, Vector3(x, -0.25, 1.4), Vector3.ZERO, Vector3.ONE, false)
+			MeshKit.part(node, MeshKit.sphere(0.35, 8, 4), lamp, Vector3(-2.5, 3.8, -0.5), Vector3.ZERO, Vector3.ONE, false)
+	sites.append({"type": type, "pos": pos, "vel": Vector2.ZERO, "node": node, "found": false, "done": false, "data": data})
+
+func _site_label(s: Dictionary) -> String:
+	match s.type:
+		"wreck": return "YOUR WRECK" if s.data.get("own", false) else "WRECK"
+		"hull": return Parts.FRAMES[s.data.frame].name.to_upper()
+		"cache": return "FUEL"
+		"market": return "NINE FINGERS"
+	return ""
+
+func _update_sites(delta: float) -> void:
+	var near = null
+	for s in sites:
+		var d = miner.pos.distance_to(s.pos)
+		if not s.found and d < 45.0:
+			s.found = true
+			if s.type in ["wreck", "hull", "market"]:
+				main.notify("FOUND  " + _site_label(s), SITE_COLORS[s.type])
+		if s.done or s == tow:
+			continue
+		if s.type == "market" and _market_cool:
+			if d > 12.0:
+				_market_cool = false
+			continue
+		var reach = 5.0 if s.type in ["hull", "market"] else 3.2
+		if d < reach and miner.vel.length() < 5.0:
+			near = s
+		if s.type == "wreck" and randf() < 4.0 * delta:
+			main.fx.spawn(Vector3(s.pos.x, s.pos.y, 1.0) + Vector3(randf_range(-0.6, 0.6), randf_range(-0.6, 0.6), 0), Vector3(0, 0, 1.5), Color(0.2, 0.2, 0.2), 0.0, 0.35, 1.2, 0.0)
+	if near != salvage_site:
+		salvage = 0.0
+		salvage_site = near
+	if near != null:
+		salvage += delta
+		if salvage >= (0.4 if near.type == "cache" else 1.4):
+			salvage = 0.0
+			salvage_site = null
+			_work_site(near)
+	_update_tow(delta)
+
+func _work_site(s: Dictionary) -> void:
+	match s.type:
+		"wreck":
+			s.done = true
+			if s == _own_wreck:
+				_own_wreck = null
+			var loot = s.data.get("loot", {"metal": 2 + randi() % 5, "crystal": randi() % 3})
+			var bits = []
+			for k in loot:
+				if loot[k] <= 0:
+					continue
+				cargo[k] = cargo.get(k, 0) + loot[k]
+				bits.append("+%d %s" % [loot[k], k])
+			miner.fuel = minf(miner.stats.fuel, miner.fuel + miner.stats.fuel * 0.3)
+			miner.weapons.refill()
+			main.notify("SALVAGED  " + "  ".join(bits), SITE_COLORS.wreck)
+			if s.data.has("blueprint"):
+				main.unlock(s.data.blueprint)
+		"cache":
+			s.done = true
+			s.node.visible = false
+			miner.fuel = miner.stats.fuel
+			main.notify("FUEL  +%d" % int(miner.stats.fuel), SITE_COLORS.cache)
+		"hull":
+			if main.unlocks().has(Parts.FRAMES[s.data.frame].name):
+				s.done = true
+				return
+			tow = s
+			main.notify("TOWING  -  BRING IT TO AN OUTPOST", Color.WHITE)
+		"market":
+			_market_cool = true
+			open_market()
+
+# The hull hangs off a cable: a distance limit between ship and hull, split
+# by their masses, so a heavy hull drags a light ship around. The Tractor beam
+# makes hulls feel lighter. Space drops it. Any outpost (the station or a
+# depot) takes delivery.
+func _update_tow(delta: float) -> void:
+	if tow == null:
+		if rope != null:
+			rope.visible = false
+		return
+	if Input.is_action_just_pressed("hop"):
+		tow = null
+		return
+	var hm = (5.0 if tow.data.frame == "brick" else 3.0) / miner.stats.tow
+	tow.vel += gravity_at(tow.pos) * delta
+	tow.vel *= 1.0 - 0.2 * delta
+	tow.pos += tow.vel * delta
+	var d = tow.pos - miner.pos
+	var dist = d.length()
+	var L = 5.5
+	if dist > L:
+		var n = d / dist
+		var wm = 1.0 / miner.stats.mass
+		var wh = 1.0 / hm
+		var sum = wm + wh
+		miner.pos += n * (dist - L) * wm / sum
+		tow.pos -= n * (dist - L) * wh / sum
+		var rel = (tow.vel - miner.vel).dot(n)
+		if rel > 0.0:
+			miner.vel += n * rel * wm / sum
+			tow.vel -= n * rel * wh / sum
+		miner.position = Vector3(miner.pos.x, miner.pos.y, 0.0)
+	# Rock pushes the hull back out toward the surface.
+	for pl in planets_near(tow.pos, 2.0):
+		if pl.terrain.is_solid(pl.terrain.world_to_cell(pl.local(tow.pos))):
+			var out = (tow.pos - pl.centre).normalized()
+			tow.pos += out * 6.0 * delta
+			tow.vel = tow.vel.lerp(out * 2.0, minf(1.0, 4.0 * delta))
+	tow.node.position = Vector3(tow.pos.x, tow.pos.y, 0.3)
+	if rope == null:
+		rope = MeshInstance3D.new()
+		rope.mesh = MeshKit.box(Vector3(0.08, 0.08, 1.0))
+		rope.material_override = MeshKit.mat(Color(0.15, 0.15, 0.17))
+		add_child(rope)
+	rope.visible = true
+	var a = Vector3(miner.pos.x, miner.pos.y, 0.5)
+	var b = Vector3(tow.pos.x, tow.pos.y, 0.5)
+	if a.distance_to(b) > 0.1:
+		rope.global_transform = Transform3D(Basis.looking_at((b - a).normalized(), Vector3(0, 0, 1)) * Basis.from_scale(Vector3(1, 1, a.distance_to(b))), (a + b) * 0.5)
+	var drop = depots.duplicate()
+	for o in outposts:
+		drop.append(o.pad)
+	for o in drop:
+		if tow.pos.distance_to(o) < 10.0:
+			main.unlock(Parts.FRAMES[tow.data.frame].name)
+			tow.node.queue_free()
+			tow.done = true
+			tow = null
+			main.notify("HULL DELIVERED", Color.WHITE)
+			return
+
+func _price_text(price: Dictionary) -> String:
+	var bits = []
+	for k in price:
+		bits.append("%d %s" % [price[k], k])
+	return "  ".join(bits)
+
+func _can_pay(price: Dictionary) -> bool:
+	for k in price:
+		if cargo.get(k, 0) + main.inventory.get(k, 0) < price[k]:
+			return false
+	return true
+
+# Pays from the hold first, then from what's banked.
+func _pay(price: Dictionary) -> void:
+	for k in price:
+		var from_cargo = mini(cargo.get(k, 0), price[k])
+		cargo[k] = cargo.get(k, 0) - from_cargo
+		main.inventory[k] = main.inventory.get(k, 0) - (price[k] - from_cargo)
+
+func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void:
+	var rows = []
+	for offer in offers:
+		var o = offer
+		rows.append({"label": o.name,
+			"value": func(): return "OWNED" if main.unlocks().has(o.name) else _price_text(o.price),
+			"action": func(): _buy(o, offers, title)})
+	var back = open_menu if docked else main.menu.hide_menu
+	rows.append({"label": "Leave", "action": back})
+	main.menu.show_menu(title, rows, back, main.menu.title == title)
+
+func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS") -> void:
+	if main.unlocks().has(o.name):
+		return
+	if not _can_pay(o.price):
+		main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+		return
+	_pay(o.price)
+	main.unlock(o.name)
+	open_market(offers, title)
+
+# Hooks for the weapons adapter; enemies fill these in.
+func touch_enemies(_p: Vector2, _r: float) -> bool:
+	return false
+
+func nearest_enemy(_p: Vector2, _r: float):
+	return null
+
+func pull_enemies(_p: Vector2, _r: float, _k: float) -> void:
+	pass

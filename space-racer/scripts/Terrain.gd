@@ -7,11 +7,11 @@ const MeshKit = preload("res://scripts/MeshKit.gd")
 
 signal cell_destroyed(pos: Vector3, kind: int)
 
-enum { EMPTY, ROCK, HARD, ORE_A, ORE_B, BEDROCK, BARRIER, REINFORCED, DEEP, ORE_C, CORE, GAS, LAVA }
+enum { EMPTY, ROCK, HARD, ORE_A, ORE_B, BEDROCK, BARRIER, REINFORCED, DEEP, ORE_C, CORE, GAS, LAVA, FUEL }
 
 # What each block is worth when it breaks. Planets flavour the names but the
 # blueprint only cares about the class.
-const MATERIAL = {ROCK: "rock", HARD: "rock", ORE_A: "metal", ORE_B: "crystal", BARRIER: "rock", REINFORCED: "metal", DEEP: "rock", ORE_C: "core"}
+const MATERIAL = {ROCK: "rock", HARD: "rock", ORE_A: "metal", ORE_B: "crystal", BARRIER: "rock", REINFORCED: "metal", DEEP: "rock", ORE_C: "core", CORE: "core"}
 const WALL_MIN = 2.4      # walls are taller than any ship can hop
 const BARRIER_H = 1.0     # barriers are low enough to hop if you're light
 const REINFORCED_H = 1.6  # needs a ramp (or a tier-2 drill)
@@ -27,7 +27,8 @@ const KINDS = {
 	REINFORCED: {"hardness": 2, "hp": 3.0},
 	DEEP: {"hardness": 3, "hp": 2.6},
 	ORE_C: {"hardness": 3, "hp": 3.2},
-	CORE: {"hardness": 99, "hp": 1e9},
+	CORE: {"hardness": 4, "hp": 6.0},
+	FUEL: {"hardness": 1, "hp": 0.6},
 	GAS: {"hardness": 1, "hp": 0.4},
 	LAVA: {"hardness": 99, "hp": 1e9},
 }
@@ -53,6 +54,13 @@ const PLANETS = [
 		"ground": Color(0.24, 0.28, 0.2), "track": Color(0.16, 0.17, 0.15), "line": Color(1.0, 0.85, 0.2),
 		"sun": Color(1.0, 0.97, 0.85), "ambient": Color(0.38, 0.45, 0.38), "sky": Color(0.02, 0.04, 0.03),
 		"deep": Color(0.14, 0.12, 0.2), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(0.75, 1.0, 0.4), "gas": Color(0.65, 0.75, 0.2), "lava": Color(1.0, 0.4, 0.1), "back": Color(0.07, 0.09, 0.06),
+	},
+	{
+		"name": "Magma", "rock": Color(0.2, 0.17, 0.16), "hard": Color(0.12, 0.1, 0.1), "bedrock": Color(0.06, 0.05, 0.05),
+		"ore_a": Color(0.95, 0.75, 0.3), "ore_a_name": "brass", "ore_b": Color(1.0, 0.35, 0.2), "ore_b_name": "fire opal",
+		"ground": Color(0.16, 0.12, 0.11), "track": Color(0.12, 0.11, 0.11), "line": Color(1.0, 0.5, 0.15),
+		"sun": Color(1.0, 0.75, 0.55), "ambient": Color(0.55, 0.3, 0.22), "sky": Color(0.08, 0.02, 0.01),
+		"deep": Color(0.3, 0.08, 0.04), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.85, 0.3), "gas": Color(0.6, 0.55, 0.25), "lava": Color(1.0, 0.45, 0.08), "back": Color(0.1, 0.03, 0.02),
 	},
 ]
 
@@ -80,6 +88,13 @@ var grain_tex: Texture2D
 var ground: MeshInstance3D
 var _seed = 0
 var outside_solid = true    # off for planets floating in space
+var lazy = false            # planets: generate and mesh chunks on demand
+var focus = Vector3.ZERO    # where to stream around (local space)
+var view_r = 120.0
+var _pdef = {}
+var _pn = []
+var _ncx = 1
+var _gen = PackedByteArray()
 
 func _ready():
 	var tex = NoiseTexture2D.new()
@@ -156,6 +171,7 @@ func generate(sd: int, planet_index: int) -> void:
 func generate_planet(sd: int, def: Dictionary) -> void:
 	_seed = sd
 	outside_solid = false
+	lazy = true
 	planet = PLANETS[def.palette]
 	ground.visible = false
 	var n = w * h
@@ -163,58 +179,123 @@ func generate_planet(sd: int, def: Dictionary) -> void:
 	hp.resize(n)
 	height.resize(n)
 	tint.resize(n)
+	_pdef = def
+	_pn = [_noise(sd, 0.08), _noise(sd + 1, 0.07), _noise(sd + 2, 0.13), _noise(sd + 3, 0.16), _noise(sd + 4, 0.5)]
+	_ncx = ceili(w / float(CHUNK))
+	_gen.resize(_ncx * ceili(h / float(CHUNK)))
+	_gen.fill(0)
+	vh.resize((w + 1) * (h + 1))
+	vo.resize((w + 1) * (h + 1))
+	# Dark disc behind the rock so dug tunnels show the planet's insides (and
+	# so the planet has a shape from far away before its rock streams in).
 	var R = float(def.radius)
-	var rough = _noise(sd, 0.08)
-	var cave = _noise(sd + 1, 0.07)
-	var ore = _noise(sd + 2, 0.13)
-	var pocket = _noise(sd + 3, 0.16)
-	var grain = _noise(sd + 4, 0.5)
-	for j in h:
-		for i in w:
-			var idx = j * w + i
-			var c = cell_center(Vector2i(i, j))
-			var d = Vector2(c.x, c.z).length()
-			var edge = R + rough.get_noise_2d(i, j) * 2.5
-			var depth = (edge - d) / R
-			var k = EMPTY
-			if d < R * 0.16:
-				k = CORE
-			elif depth > 0.0:
-				var ov = ore.get_noise_2d(i, j)
-				var pv = pocket.get_noise_2d(i, j)
-				if depth < 0.28:
-					k = ROCK
-					if ov > 0.45:
-						k = ORE_A
-				elif depth < 0.55:
-					k = HARD
-					if ov < -0.45:
-						k = ORE_B
-					elif def.lava and pv > 0.55:
-						k = LAVA
-				else:
-					k = DEEP
-					if ov > 0.55:
-						k = ORE_C
-				if k in [ROCK, HARD] and pv < -1.0 + def.gas * 6.0:
-					k = GAS
-				if depth > 0.05 and depth < 0.75 and cave.get_noise_2d(i, j) > 0.42:
-					k = EMPTY
-			kind[idx] = k
-			hp[idx] = KINDS[k].hp if k != EMPTY else 0.0
-			var layer_h = {ROCK: 1.2, ORE_A: 1.3, HARD: 1.5, ORE_B: 1.6, GAS: 1.2, LAVA: 0.6, DEEP: 1.8, ORE_C: 1.9, CORE: 2.4}
-			height[idx] = layer_h.get(k, 1.0) * (0.85 + 0.3 * (grain.get_noise_2d(i + 300, j) * 0.5 + 0.5))
-			tint[idx] = Color.WHITE * (0.88 + 0.24 * grain.get_noise_2d(i, j))
-	# Dark disc behind the rock so dug tunnels show the planet's insides.
 	var back = MeshInstance3D.new()
-	back.mesh = MeshKit.cyl(R + 1.0, R + 1.0, 0.1, 48)
+	back.mesh = MeshKit.cyl(R + 1.0, R + 1.0, 0.1, 96)
 	back.position.y = -0.1
-	var bm = MeshKit.mat(planet.back, 0.0, 0.95)
-	back.material_override = bm
+	back.material_override = MeshKit.mat(planet.back, 0.0, 0.95)
 	add_child(back)
+	var rim = MeshInstance3D.new()
+	rim.mesh = MeshKit.torus(R - 2.0, R + 1.5, 96, 4)
+	rim.position.y = -0.3
+	rim.material_override = MeshKit.mat(planet.rock.darkened(0.2), 0.0, 0.95)
+	add_child(rim)
+
+# Planets fill themselves in a chunk at a time, the first time anything
+# looks at that chunk.
+func _ensure(i: int, j: int) -> void:
+	if not lazy or i < 0 or j < 0 or i >= w or j >= h:
+		return
+	var key = (j / CHUNK) * _ncx + (i / CHUNK)
+	if _gen[key] != 0:
+		return
+	_gen[key] = 1
+	var i0 = (i / CHUNK) * CHUNK
+	var j0 = (j / CHUNK) * CHUNK
+	for jj in range(j0, mini(j0 + CHUNK, h)):
+		for ii in range(i0, mini(i0 + CHUNK, w)):
+			_gen_cell(ii, jj)
+
+func _gen_cell(i: int, j: int) -> void:
+	var def = _pdef
+	var rough = _pn[0]
+	var cave = _pn[1]
+	var ore = _pn[2]
+	var pocket = _pn[3]
+	var grain = _pn[4]
+	var R = float(def.radius)
+	var idx = j * w + i
+	var c = cell_center(Vector2i(i, j))
+	var d = Vector2(c.x, c.z).length()
+	var edge = R + rough.get_noise_2d(i, j) * (2.5 + R * 0.03)
+	var depth = (edge - d) / R
+	var k = EMPTY
+	if d < R * 0.16:
+		k = CORE
+	elif depth > 0.0:
+		var ov = ore.get_noise_2d(i, j)
+		var pv = pocket.get_noise_2d(i, j)
+		if depth < 0.28:
+			k = ROCK
+			if ov > 0.45:
+				k = ORE_A
+			elif def.lava and def.get("lava_crust", false) and pv > 0.6:
+				k = LAVA
+		elif depth < 0.55:
+			k = HARD
+			if ov < -0.45:
+				k = ORE_B
+			elif def.lava and pv > 0.55:
+				k = LAVA
+		else:
+			k = DEEP
+			if ov > 0.55:
+				k = ORE_C
+		if k in [ROCK, HARD] and pv < -1.0 + def.gas * 6.0:
+			k = GAS
+		elif k == HARD and pv > 0.5 and not def.lava:
+			k = FUEL
+		elif k == ROCK and ov < -0.5:
+			k = FUEL
+		if depth > 0.05 and depth < 0.75 and cave.get_noise_2d(i, j) > 0.42:
+			k = EMPTY
+	kind[idx] = k
+	hp[idx] = KINDS[k].hp if k != EMPTY else 0.0
+	var layer_h = {ROCK: 1.2, ORE_A: 1.3, HARD: 1.5, ORE_B: 1.6, GAS: 1.2, LAVA: 0.6, DEEP: 1.8, ORE_C: 1.9, CORE: 2.4, FUEL: 1.1}
+	height[idx] = layer_h.get(k, 1.0) * (0.85 + 0.3 * (grain.get_noise_2d(i + 300, j) * 0.5 + 0.5))
+	tint[idx] = Color.WHITE * (0.88 + 0.24 * grain.get_noise_2d(i, j))
+
+# Streaming: build the nearest unbuilt chunks around `focus` (local space)
+# within `view_r`, a few milliseconds' worth per frame.
+func _stream() -> void:
+	var t0 = Time.get_ticks_usec()
+	var fx = focus.x / cell + w * 0.5
+	var fz = focus.z / cell + h * 0.5
+	var r_cells = view_r / cell + CHUNK
+	var todo = []
+	for cz in ceili(h / float(CHUNK)):
+		for cx in _ncx:
+			var key = Vector2i(cx, cz)
+			if chunks.has(key):
+				continue
+			var d = Vector2((cx + 0.5) * CHUNK - fx, (cz + 0.5) * CHUNK - fz).length()
+			if d < r_cells:
+				todo.append([d, key])
+	todo.sort_custom(func(a, b): return a[0] < b[0])
+	for item in todo:
+		var key = item[1]
+		var i0 = key.x * CHUNK
+		var j0 = key.y * CHUNK
+		for vj in range(j0, mini(j0 + CHUNK, h) + 1):
+			for vi in range(i0, mini(i0 + CHUNK, w) + 1):
+				_update_vertex(vi, vj)
+		_build_chunk(key)
+		if Time.get_ticks_usec() - t0 > 3000:
+			break
 
 # Full redraw. Called once the track has carved itself in.
 func rebuild() -> void:
+	if lazy:
+		return
 	vh.resize((w + 1) * (h + 1))
 	vo.resize((w + 1) * (h + 1))
 	for vj in h + 1:
@@ -229,6 +310,8 @@ func rebuild() -> void:
 			_build_chunk(Vector2i(cx, cz))
 
 func _process(_delta):
+	if lazy:
+		_stream()
 	var n = 0
 	for key in dirty.keys():
 		_build_chunk(key)
@@ -258,6 +341,7 @@ func kind_color(k: int) -> Color:
 		CORE: return planet.core
 		GAS: return planet.gas
 		LAVA: return planet.lava
+		FUEL: return Color(0.25, 0.95, 0.75)
 	return Color.BLACK
 
 func kind_glow(k: int) -> float:
@@ -288,6 +372,7 @@ func _vis_top(idx: int) -> float:
 func _solid_vis(i: int, j: int) -> bool:
 	if i < 0 or j < 0 or i >= w or j >= h:
 		return false
+	_ensure(i, j)
 	return kind[j * w + i] != EMPTY
 
 func _update_vertex(vi: int, vj: int) -> void:
@@ -326,6 +411,7 @@ func _build_chunk(key: Vector2i) -> void:
 	var cols = PackedColorArray()
 	var i0 = key.x * CHUNK
 	var j0 = key.y * CHUNK
+	_ensure(i0, j0)
 	for j in range(j0, mini(j0 + CHUNK, h)):
 		for i in range(i0, mini(i0 + CHUNK, w)):
 			var idx = j * w + i
@@ -334,7 +420,7 @@ func _build_chunk(key: Vector2i) -> void:
 				continue
 			var col = kind_color(k) * tint[idx]
 			# Alpha below 1 makes the rock shader glow (lava, cores).
-			col.a = 0.35 if k == LAVA or k == CORE else 1.0
+			col.a = 0.35 if k == LAVA or k == CORE or k == FUEL else 1.0
 			var a = _corner(i, j, 1.0)
 			var b = _corner(i + 1, j, 1.0)
 			var c = _corner(i + 1, j + 1, 1.0)
@@ -418,7 +504,9 @@ func _touch(c: Vector2i) -> void:
 		for di in range(-1, 2):
 			var n = c + Vector2i(di, dj)
 			if in_bounds(n):
-				dirty[Vector2i(n.x / CHUNK, n.y / CHUNK)] = true
+				var key = Vector2i(n.x / CHUNK, n.y / CHUNK)
+				if not lazy or chunks.has(key):
+					dirty[key] = true
 
 # Damaged blocks sink, so you can see your drill making progress (and a
 # half-drilled wall becomes hoppable).
@@ -432,6 +520,7 @@ func _top(idx: int) -> float:
 func top_of(c: Vector2i) -> float:
 	if not in_bounds(c):
 		return 99.0
+	_ensure(c.x, c.y)
 	return _top(c.y * w + c.x)
 
 func world_to_cell(p: Vector3) -> Vector2i:
@@ -446,16 +535,19 @@ func in_bounds(c: Vector2i) -> bool:
 func is_solid(c: Vector2i) -> bool:
 	if not in_bounds(c):
 		return outside_solid
+	_ensure(c.x, c.y)
 	return kind[c.y * w + c.x] != EMPTY
 
 func get_kind(c: Vector2i) -> int:
 	if not in_bounds(c):
 		return BEDROCK if outside_solid else EMPTY
+	_ensure(c.x, c.y)
 	return kind[c.y * w + c.x]
 
 func set_kind(c: Vector2i, k: int) -> void:
 	if not in_bounds(c):
 		return
+	_ensure(c.x, c.y)
 	var idx = c.y * w + c.x
 	if kind[idx] == BEDROCK:
 		return
@@ -474,6 +566,7 @@ func set_kind(c: Vector2i, k: int) -> void:
 func damage(c: Vector2i, amount: float, tier: int) -> int:
 	if not in_bounds(c):
 		return -1
+	_ensure(c.x, c.y)
 	var idx = c.y * w + c.x
 	var k = kind[idx]
 	if k == EMPTY:

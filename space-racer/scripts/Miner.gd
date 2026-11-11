@@ -12,6 +12,8 @@ const Parts = preload("res://scripts/Parts.gd")
 const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
 const TrailScript = preload("res://scripts/Trail.gd")
 const MeshKit = preload("res://scripts/MeshKit.gd")
+const WeaponsScript = preload("res://scripts/Weapons.gd")
+const Worlds = preload("res://scripts/Worlds.gd")
 
 var mining
 var stats = {}
@@ -33,11 +35,7 @@ var _throttle = 0.0
 var _boosting = false
 var _retro = false
 var _fx_cd = 0.0
-var ammo = 0
-var beams = []
-var rockets = []
-var _rocket_prev = false
-var _next_launcher = 0
+var weapons
 
 func equip(lo: Dictionary) -> void:
 	stats = Parts.stats(lo)
@@ -55,21 +53,15 @@ func equip(lo: Dictionary) -> void:
 		tr.plane_normal = Vector3(0, 0, 1)
 		add_child(tr)
 		trails.append(tr)
-	for b in beams:
-		b.queue_free()
-	beams.clear()
-	for l in stats.lasers:
-		var bm = MeshInstance3D.new()
-		bm.mesh = MeshKit.box(Vector3(0.2, 0.2, 1.0))
-		bm.material_override = MeshKit.add_mat(Color(0.5, 1.0, 0.5, 0.9))
-		bm.top_level = true
-		bm.visible = false
-		add_child(bm)
-		beams.append(bm)
+	if weapons == null:
+		weapons = WeaponsScript.new()
+		add_child(weapons)
+	weapons.setup(self, Worlds.MineWorld.new(mining), stats)
 	refill()
 
 func refill() -> void:
-	ammo = stats.ammo
+	if weapons != null:
+		weapons.refill()
 	fuel = stats.fuel
 	shield = stats.shield
 	hull = 100.0
@@ -108,6 +100,8 @@ func step(delta: float, active: bool) -> void:
 		inp.boost = Input.is_action_pressed("boost")
 		inp.laser = Input.is_action_pressed("laser")
 		inp.rocket = Input.is_action_pressed("rocket")
+		inp.drop = Input.is_action_pressed("drop")
+		inp.warp = Input.is_action_pressed("warp")
 	if mining.has_meta("auto_input"):
 		inp = mining.get_meta("auto_input")
 	if fuel <= 0.0:
@@ -130,9 +124,11 @@ func step(delta: float, active: bool) -> void:
 	var burn = stats.fuel_burn * _throttle * (1.6 if _boosting else 1.0)
 	burn += stats.fuel_burn * 0.5 * absf(inp.strafe) * (1.0 if stats.strafe > 0.0 else 0.0)
 	burn += stats.retro * 0.02 * (1.0 if inp.retro else 0.0)
-	burn += 1.5 * stats.lasers.size() * (1.0 if inp.get("laser", false) else 0.0)
 	burn += 0.4 * stats.drills.size() * (1.0 if drilling else 0.0)
 	fuel = maxf(0.0, fuel - burn * delta)
+	# Fuel scoop: tops up while cruising through open space.
+	if stats.scoop > 0.0 and vel.length() > 8.0 and mining.planets_near(pos, 8.0).is_empty():
+		fuel = minf(stats.fuel, fuel + stats.scoop * delta)
 	if inp.strafe != 0.0 and stats.strafe > 0.0:
 		vel += Vector2(-f.y, f.x) * inp.strafe * (stats.strafe / stats.mass) * 0.6 * delta
 	_retro = inp.retro
@@ -140,12 +136,16 @@ func step(delta: float, active: bool) -> void:
 		var k = (5.0 + 4.0 * stats.brake + stats.retro / stats.mass) * delta
 		vel -= vel.normalized() * minf(vel.length(), k)
 	vel += mining.gravity_at(pos) * delta
-	vel *= 1.0 - 0.15 * delta
-	if vel.length() > 32.0:
-		vel = vel.normalized() * 32.0
+	# Near a planet there's air: drag and a lower cap. Out in space you coast.
+	var near_planet = not mining.planets_near(pos, 40.0).is_empty()
+	if near_planet:
+		vel *= 1.0 - 0.15 * delta
+	var cap = mining.AIR_TOP if near_planet else mining.SPACE_TOP
+	if vel.length() > cap:
+		vel = vel.lerp(vel.normalized() * cap, minf(1.0, 2.0 * delta))
 	pos += vel * delta
 	_drill(delta)
-	_weapons(delta, inp)
+	weapons.update(delta, inp)
 	_collide()
 	_hazards(delta)
 	_animate(delta)
@@ -153,6 +153,8 @@ func step(delta: float, active: bool) -> void:
 func _drill(delta: float) -> void:
 	drilling = false
 	for d in stats.drills:
+		if d.prog.get("orbit", false):
+			continue
 		var tip = to_world2(d.pos)
 		var dir = (to_world2(d.pos + d.dir) - tip).normalized()
 		for pl in mining.planets_near(tip, d.radius + 2.0):
@@ -176,69 +178,6 @@ func _drill(delta: float) -> void:
 								t.kind_color(t.get_kind(c)), 0.0, 0.14, 0.5, 0.0)
 	if drilling:
 		vel *= 1.0 - minf(1.0, stats.drill_drag * 0.6 * delta)
-
-func _solid_at(p: Vector2) -> Array:
-	for pl in mining.planets_near(p, 1.0):
-		var c = pl.terrain.world_to_cell(pl.local(p))
-		if pl.terrain.is_solid(c):
-			return [pl, c]
-	return []
-
-func _weapons(delta: float, inp: Dictionary) -> void:
-	var firing = inp.get("laser", false) and fuel > 0.0 and not stats.lasers.is_empty()
-	for i in stats.lasers.size():
-		var l = stats.lasers[i]
-		beams[i].visible = firing
-		if not firing:
-			continue
-		var tip = to_world2(l.pos)
-		var dir = (to_world2(l.pos + l.dir) - tip).normalized()
-		var end = tip + dir * l.range
-		var t = 0.0
-		while t < l.range:
-			var p = tip + dir * t
-			var hit = _solid_at(p)
-			if not hit.is_empty():
-				var res = hit[0].terrain.damage(hit[1], l.dps * delta, l.tier)
-				if randf() < 25.0 * delta:
-					mining.main.fx.spawn(Vector3(p.x, p.y, 1.0), Vector3(randf_range(-3, 3), randf_range(-3, 3), 3.0), Color(0.7, 1.0, 0.5) if res >= 0 else Color(1, 0.8, 0.4), 1.2, 0.08, 0.3, 0.0)
-				end = p
-				break
-			t += 0.4
-		var a = Vector3(tip.x, tip.y, 0.5)
-		var b = Vector3(end.x, end.y, 0.5)
-		beams[i].global_transform = Transform3D(Basis.looking_at((b - a).normalized(), Vector3(0, 0, 1)) * Basis.from_scale(Vector3(1, 1, maxf(a.distance_to(b), 0.05))), (a + b) * 0.5)
-	var fire = inp.get("rocket", false)
-	if fire and not _rocket_prev and ammo > 0 and not stats.launchers.is_empty():
-		var l = stats.launchers[_next_launcher % stats.launchers.size()]
-		_next_launcher += 1
-		ammo -= 1
-		var node = Node3D.new()
-		node.top_level = true
-		MeshKit.part(node, MeshKit.cyl(0.08, 0.08, 0.6, 6), MeshKit.mat(Color(0.85, 0.85, 0.8)), Vector3.ZERO, Vector3(90, 0, 0))
-		MeshKit.part(node, MeshKit.cyl(0.07, 0.0, 0.5, 6), MeshKit.add_mat(Color(1.0, 0.6, 0.2, 0.9)), Vector3(0, 0, -0.5), Vector3(90, 0, 0), Vector3.ONE, false)
-		add_child(node)
-		var tip = to_world2(l.pos)
-		var d = (to_world2(l.pos + l.dir) - tip).normalized()
-		rockets.append({"pos": tip, "vel": d * 34.0 + vel * 0.6, "life": 2.5, "node": node})
-	_rocket_prev = fire
-	var keep = []
-	for r in rockets:
-		r.life -= delta
-		r.pos += r.vel * delta
-		r.node.global_transform = Transform3D(Basis.looking_at(-Vector3(r.vel.x, r.vel.y, 0).normalized(), Vector3(0, 0, 1)), Vector3(r.pos.x, r.pos.y, 0.5))
-		if randf() < 30.0 * delta:
-			mining.main.fx.spawn(Vector3(r.pos.x, r.pos.y, 0.6), Vector3(0, 0, 1.0), Color(0.35, 0.35, 0.35), 0.0, 0.18, 0.5, 0.0)
-		if r.life <= 0.0 or not _solid_at(r.pos).is_empty():
-			for pl in mining.planets_near(r.pos, 3.0):
-				pl.terrain.blast(pl.local(r.pos), 2.8, 2)
-			mining.main.fx.burst(Vector3(r.pos.x, r.pos.y, 1.0), Color(1.0, 0.55, 0.15), 30, 10.0, 1.2, 0.18, 0.5, 0.0)
-			if pos.distance_to(r.pos) < 3.2:
-				take_hit(12.0)
-			r.node.queue_free()
-		else:
-			keep.append(r)
-	rockets = keep
 
 # Circle vs. planet cells, in each nearby planet's grid.
 func _collide() -> void:
@@ -308,3 +247,36 @@ func _animate(delta: float) -> void:
 		if _fx_cd <= 0.0:
 			_fx_cd = 0.08
 			mining.main.fx.spawn(Vector3(pos.x, pos.y, 1.0), Vector3(randf_range(-0.5, 0.5), randf_range(-0.5, 0.5), 2.0), Color(0.15, 0.15, 0.15), 0.0, 0.3, 0.8, 0.0)
+
+# ---------------------------------------------------------------- weapons host
+
+func pos2() -> Vector2:
+	return pos
+
+func vel2() -> Vector2:
+	return vel
+
+func l2w(local: Vector3) -> Vector2:
+	return to_world2(local)
+
+func d2w(d: Vector3) -> Vector2:
+	return (to_world2(d) - to_world2(Vector3.ZERO)).normalized()
+
+# In the field, tools run on fuel.
+func spend(amount: float) -> bool:
+	var cost = amount * 0.08
+	if fuel < cost:
+		return false
+	fuel -= cost
+	return true
+
+func add_vel2(v: Vector2) -> void:
+	vel += v
+
+func teleport2(p: Vector2) -> void:
+	pos = p
+	for tr in trails:
+		tr.clear_points()
+
+func fx_height() -> float:
+	return 0.5

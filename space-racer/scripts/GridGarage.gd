@@ -16,6 +16,7 @@ const Parts = preload("res://scripts/Parts.gd")
 const Ui = preload("res://scripts/Ui.gd")
 const Save = preload("res://scripts/Save.gd")
 const PartDemo = preload("res://scripts/PartDemo.gd")
+const SubGridEditorScript = preload("res://scripts/SubGridEditor.gd")
 
 const BAND = Rect2(390, 12, 780, 104)
 const STAT_LABELS = [["power", "Power"], ["thrust", "Thrust"], ["tier", "Tier"], ["shield", "Shield +"],
@@ -33,6 +34,9 @@ var _ids = []
 var hover_list = -1
 var hover_slot = -1
 var name_edit: LineEdit
+var section = "power"
+var inspected = -1      # placed part being looked at
+var editor              # the open component's sub-grid
 var demo: SubViewport
 var demo_rect: TextureRect
 
@@ -66,11 +70,14 @@ func _ready():
 	demo_rect.size = Vector2(144, 88)
 	demo_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(demo_rect)
+	editor = SubGridEditorScript.new()
+	add_child(editor)
 
 func open(m) -> void:
 	main = m
 	lo = main.loadout.duplicate(true)
 	selected = ""
+	inspected = -1
 	t = 0.0
 	visible = true
 	name_edit.text = lo.name
@@ -83,10 +90,25 @@ func close() -> void:
 func _commit() -> void:
 	main.equip(lo.duplicate(true), false)
 
+var preview = {}   # stats if the selected part went where the cursor is
+var _preview_key = ""
+
 func _process(delta):
 	if not visible:
 		return
 	t += delta
+	var key = ""
+	if selected != "" and not editor.visible and _part_at(hover) < 0:
+		var g = _ghost()
+		if Parts.can_place(lo.frame, lo.parts, g):
+			key = var_to_str(g)
+	if key != _preview_key:
+		_preview_key = key
+		preview = {}
+		if key != "":
+			var trial = lo.duplicate(true)
+			trial.parts.append(_ghost())
+			preview = Parts.stats(trial)
 	var id = _info_id()
 	demo.show_part(id)
 	demo_rect.visible = id != ""
@@ -112,9 +134,16 @@ func _cell_rect(c: Vector2i) -> Rect2:
 	var cp = _cell_px()
 	return Rect2(_grid_origin() + Vector2(c) * cp, Vector2(cp, cp))
 
+# Parts in the current section tab.
+func _list() -> Array:
+	return _ids.filter(func(id): return Parts.SECTION_OF.get(Parts.PARTS[id].kind, "utility") == section)
+
+func _tab_rect(i: int) -> Rect2:
+	return Rect2(22 + i * 62, 84, 58, 26)
+
 func _list_rect(i: int) -> Rect2:
-	var appear = Ui.ease_out((t - i * 0.02) / 0.25)
-	return Rect2(30 - (1.0 - appear) * 400.0, 92 + i * 30, 300, 26)
+	var appear = Ui.ease_out((t - i * 0.03) / 0.25)
+	return Rect2(30 - (1.0 - appear) * 400.0, 122 + i * 30, 300, 26)
 
 func _frame_rect() -> Rect2:
 	return Rect2(430, 132, 500, 38)
@@ -159,12 +188,13 @@ func _gui_input(event):
 		hover = _cell_at(event.position)
 		hover_list = -1
 		hover_slot = -1
-		for i in _ids.size():
-			if _list_rect(i).has_point(event.position):
-				hover_list = i
 		for i in Save.SLOTS:
 			if _slot_rect(i).has_point(event.position):
 				hover_slot = i
+		var lst = _list()
+		for i in lst.size():
+			if _list_rect(i).has_point(event.position):
+				hover_list = _ids.find(lst[i])
 	elif event is InputEventMouseButton and event.pressed:
 		var pos = event.position
 		var c = _cell_at(pos)
@@ -190,29 +220,39 @@ func _gui_input(event):
 				_cycle_frame(-1 if pos.x < _frame_rect().get_center().x else 1)
 				return
 		if left:
-			for i in _ids.size():
-				if _list_rect(i).has_point(pos):
-					# Clicking the selected part again puts it down.
-					selected = "" if selected == _ids[i] else _ids[i]
+			for i in Parts.SECTIONS.size():
+				if _tab_rect(i).has_point(pos):
+					section = Parts.SECTIONS[i]
+					t = 0.0
 					return
-			if selected != "":
+			var lst = _list()
+			for i in lst.size():
+				if _list_rect(i).has_point(pos):
+					if Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()):
+						return
+					# Clicking the selected part again puts it down.
+					selected = "" if selected == lst[i] else lst[i]
+					return
+			# Clicking a placed part opens its sub-grid, selection or not.
+			var at = _part_at(c)
+			if at >= 0:
+				inspected = at
+				if Parts.sub_size(lo.parts[at].id) != Vector2i.ZERO:
+					editor.open(self, at)
+			elif selected != "":
 				var g = _ghost()
 				if Parts.can_place(lo.frame, lo.parts, g):
 					lo.parts.append(g)
-					_commit()
-			else:
-				var idx = _part_at(c)
-				if idx >= 0:
-					selected = lo.parts[idx].id
-					rot = lo.parts[idx].get("rot", 0)
-					lo.parts.remove_at(idx)
 					_commit()
 		elif right:
 			# Scrap whatever is under the cursor; the selection stays put.
 			var idx = _part_at(c)
 			if idx >= 0:
 				lo.parts.remove_at(idx)
+				inspected = -1
 				_commit()
+			elif Rect2(Vector2.ZERO, Vector2(Parts.frame_size(lo.frame))).has_point(Vector2(c)):
+				selected = ""
 		elif event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			var idx = _part_at(c)
 			if idx >= 0:
@@ -226,7 +266,7 @@ func _gui_input(event):
 		accept_event()
 
 func _unhandled_key_input(event):
-	if not visible or not event.pressed or event.echo:
+	if not visible or not event.pressed or event.echo or editor.visible:
 		return
 	match event.physical_keycode:
 		KEY_R:
@@ -240,7 +280,7 @@ func _unhandled_key_input(event):
 			name_edit.text = lo.name
 			main.equip(lo.duplicate(true), false)
 		KEY_0:
-			lo = Parts.random_loadout(main.rng)
+			lo = Parts.random_loadout(main.rng, main.unlocks())
 			name_edit.text = lo.name
 			main.equip(lo.duplicate(true), false)
 		KEY_DELETE:
@@ -250,14 +290,19 @@ func _unhandled_key_input(event):
 				slots[hover_slot] = null
 				main.save_data.slots = slots
 				main.save_game()
-		KEY_ESCAPE, KEY_G:
+		KEY_ESCAPE:
+			if selected != "":
+				selected = ""
+			else:
+				close()
+		KEY_G:
 			close()
 		_:
 			return
 	get_viewport().set_input_as_handled()
 
 func _cycle_frame(dir: int) -> void:
-	var keys = Parts.FRAMES.keys().filter(func(f): return not Parts.FRAMES[f].get("hidden", false))
+	var keys = Parts.FRAMES.keys().filter(func(f): return not Parts.FRAMES[f].get("hidden", false) and not Parts.is_locked(Parts.FRAMES[f], main.unlocks()))
 	lo.frame = keys[(keys.find(lo.frame) + dir + keys.size()) % keys.size()]
 	var kept = []
 	for p in lo.parts:
@@ -356,12 +401,19 @@ func _draw_part(p: Dictionary, fill: Color, edge: Color) -> void:
 	var kind = Parts.PARTS[p.id].kind
 	for c in cells:
 		_glyph(_cell_rect(c), kind, _facing(p), Color(0, 0, 0, 0.55))
+	# Wired: a little node-and-wire mark in the corner.
+	if p.has("id") and Parts.sub_size(p.id) != Vector2i.ZERO and not Parts.live_nodes(Parts.sub_of(p)).is_empty():
+		var r = _cell_rect(cells[0])
+		var a = r.position + Vector2(7, 7)
+		draw_line(a, a + Vector2(10, 0), Color.WHITE, 2.0)
+		draw_circle(a, 3.5, Color.WHITE)
+		draw_circle(a + Vector2(12, 0), 3.5, Color(0.3, 0.55, 1.0))
 
 func _info_id() -> String:
 	if hover_list >= 0:
-		return _ids[hover_list]
+		return "" if Parts.is_locked(Parts.PARTS[_ids[hover_list]], main.unlocks()) else _ids[hover_list]
 	var idx = _part_at(hover)
-	if idx >= 0 and selected == "":
+	if idx >= 0:
 		return lo.parts[idx].id
 	return selected
 
@@ -405,19 +457,40 @@ func _draw():
 	for p in lo.parts:
 		var col = _part_color(p)
 		_draw_part(p, col, col.darkened(0.5))
+	if inspected >= 0 and inspected < lo.parts.size():
+		for c in Parts.cells_of(lo.parts[inspected]):
+			draw_rect(_cell_rect(c).grow(-1), Color.WHITE, false, 3.0)
 	var err = ""
-	if selected != "" and Rect2(Vector2.ZERO, Vector2(sz)).has_point(Vector2(hover)):
+	var over = _part_at(hover)
+	if over >= 0:
+		for c in Parts.cells_of(lo.parts[over]):
+			draw_rect(_cell_rect(c).grow(-1), Color(0.3, 0.55, 1.0), false, 3.0)
+	elif selected != "" and Rect2(Vector2.ZERO, Vector2(sz)).has_point(Vector2(hover)):
 		var g = _ghost()
 		err = Parts.placement_error(lo.frame, lo.parts, g)
 		var ok = err == ""
 		_draw_part(g, Color(1, 1, 1, 0.5) if ok else Color(1, 0.2, 0.15, 0.45), Color.WHITE if ok else Color(1, 0.3, 0.2))
-	_draw_status(err)
-	for i in _ids.size():
-		var id = _ids[i]
+	_draw_status(err, over)
+	for i in Parts.SECTIONS.size():
+		var tr = _tab_rect(i)
+		var on = Parts.SECTIONS[i] == section
+		Ui.segment(self, tr, Ui.HILITE if on else Color(0.2, 0.22, 0.25, 0.95), 6.0)
+		Ui.text(self, tr.position + Vector2(0, 18), Parts.SECTION_NAMES[Parts.SECTIONS[i]], 12, Color.WHITE if on else Color(0.7, 0.72, 0.76), true, HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
+	var lst = _list()
+	for i in lst.size():
+		var id = lst[i]
 		var def = Parts.PARTS[id]
 		var r = _list_rect(i)
 		var sel = id == selected
-		Ui.segment(self, r, Ui.HILITE if sel else (Color.WHITE if i == hover_list else Ui.PAPER), 8.0)
+		if Parts.is_locked(def, main.unlocks()):
+			# Not found yet: a dark slab, a lock, no name.
+			Ui.segment(self, r, Color(0.14, 0.15, 0.17, 0.95), 8.0)
+			Ui.text(self, r.position + Vector2(14, 19), "? ? ?", 15, Color(0.4, 0.42, 0.46), true)
+			var lc = Vector2(r.end.x - 60, r.position.y + 14)
+			draw_rect(Rect2(lc - Vector2(6, 2), Vector2(12, 9)), Color(0.4, 0.42, 0.46))
+			draw_arc(lc - Vector2(0, 3), 4, PI, TAU, 8, Color(0.4, 0.42, 0.46), 2.0)
+			continue
+		Ui.segment(self, r, Ui.HILITE if sel else (Color.WHITE if _ids.find(id) == hover_list else Ui.PAPER), 8.0)
 		draw_rect(Rect2(r.position.x + 2, r.position.y + 4, 4, r.size.y - 8), Parts.MECHANICS[def.mech].accent)
 		Ui.text(self, r.position + Vector2(14, 19), def.name, 15, Color.WHITE if sel else Ui.INK, sel)
 		var minc = Vector2i(99, 99)
@@ -438,7 +511,7 @@ func _draw():
 			draw_rect(Rect2(prs[i].end.x - 34, prs[i].position.y + 8, 18, 18), swatches[i])
 
 # Rotation control + the one line that says what's wrong.
-func _draw_status(err: String) -> void:
+func _draw_status(err: String, over: int = -1) -> void:
 	var rr = _rot_rects()
 	for i in 2:
 		Ui.segment(self, rr[i], Ui.PAPER, 8.0)
@@ -456,7 +529,10 @@ func _draw_status(err: String) -> void:
 	Ui.text(self, Vector2(rr[1].end.x + 6, rr[1].position.y + 26), "R", 13, Ui.DIM, true)
 	var sr = _status_rect()
 	var st = main.ship.stats
-	if err != "":
+	if over >= 0 and Parts.sub_size(lo.parts[over].id) != Vector2i.ZERO:
+		Ui.segment(self, sr, Ui.HILITE, 8.0)
+		Ui.text(self, sr.position + Vector2(18, 27), "CLICK TO WIRE " + Parts.PARTS[lo.parts[over].id].name.to_upper(), 18, Color.WHITE, true)
+	elif err != "":
 		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
 		Ui.text(self, sr.position + Vector2(18, 27), err.to_upper(), 18, Color.WHITE, true)
 	elif not st.can_move:
@@ -520,3 +596,4 @@ func _draw_slots() -> void:
 			Ui.text(self, r.position + Vector2(40, 22), Parts.FRAMES.get(lo_i.get("frame", ""), {"name": ""}).name, 13, Ui.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 56)
 		else:
 			Ui.text(self, r.position + Vector2(40, 22), "+ SAVE", 15, Color(0.6, 0.63, 0.68), true)
+

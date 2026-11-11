@@ -52,7 +52,13 @@ func _draw():
 
 	# Lap block, top left.
 	Ui.segment(self, Rect2(-20, 18, 330, 74), PANEL)
-	Ui.text(self, Vector2(28, 44), "LAP %d" % main.lap, 16, Ui.DIM, true)
+	if main.race_laps > 0:
+		Ui.text(self, Vector2(28, 44), "LAP %d / %d" % [mini(main.lap, main.race_laps), main.race_laps], 16, Ui.DIM, true)
+		Ui.segment(self, Rect2(320, 18, 120, 74), PANEL)
+		Ui.text(self, Vector2(320, 80), "P%d" % main.place_of(ship), 44, Color(1.0, 0.85, 0.3), true, HORIZONTAL_ALIGNMENT_CENTER, 110)
+		Ui.text(self, Vector2(320, 40), "/ %d" % (main.rivals.size() + 1), 14, Ui.DIM, true, HORIZONTAL_ALIGNMENT_CENTER, 110)
+	else:
+		Ui.text(self, Vector2(28, 44), "LAP %d" % main.lap, 16, Ui.DIM, true)
 	Ui.text(self, Vector2(28, 80), laptime(main.lap_time), 38, Color.WHITE, true)
 	Ui.segment(self, Rect2(-20, 96, 250, 28), PANEL)
 	Ui.text(self, Vector2(28, 116), "BEST  " + laptime(main.best_lap), 15, Color(0.95, 0.85, 0.4))
@@ -91,7 +97,9 @@ func _draw():
 		Ui.segment(self, Rect2(bx + 270 + i * 18, by + 12, 12, 10), Color(0.9, 0.2, 0.15) if i < ship.charges else Color(1, 1, 1, 0.15), 3.0)
 
 	for i in st.ammo:
-		Ui.segment(self, Rect2(bx + 40 + i * 14, by + 121, 9, 6), Color(0.45, 1.0, 0.45) if i < ship.ammo else Color(1, 1, 1, 0.15), 2.0)
+		Ui.segment(self, Rect2(bx + 40 + i * 14, by + 121, 9, 6), Color(0.45, 1.0, 0.45) if i < ship.weapons.ammo else Color(1, 1, 1, 0.15), 2.0)
+	for i in st.bombs:
+		Ui.segment(self, Rect2(bx + 230 + i * 14, by + 121, 9, 6), Color(1.0, 0.35, 0.2) if i < ship.weapons.bombs else Color(1, 1, 1, 0.15), 2.0)
 	_minimap(Rect2(16, vp.y - 246, 230, 230))
 
 	# Cargo, top right: colour chip + count.
@@ -154,20 +162,34 @@ func _minimap(r: Rect2) -> void:
 func _garage_stats() -> void:
 	var st = main.ship.stats
 	var lo = main.loadout
+	var pv = main.grid_garage.preview if main.grid_garage.visible else {}
 	var vp = size
 	var x = vp.x - 420
 	var y = 70.0
 	Ui.segment(self, Rect2(x, y, 440, 50), Ui.INK)
 	Ui.text(self, Vector2(x + 26, y + 35), lo.name.to_upper(), 26, Color.WHITE, true)
 	y += 62
+	# [label, key, scale for the bar, format, lower is better]
 	var rows = [
-		["TOP SPEED", st.top / 40.0], ["ACCEL", st.accel / 40.0], ["GRIP", st.grip / 14.0],
-		["BRAKES", st.get("brake", 1.0) / 2.5], ["DRILL", st.drill_tier / 3.0], ["MAGNET", st.magnet / 10.0],
-		["SHIELD", st.shield / 260.0], ["HOP", st.jump / 12.0], ["FUEL", st.fuel / 300.0], ["ECONOMY", st.economy],
+		["TOP SPEED", "top", 40.0, "%.0f", false], ["ACCEL", "accel", 40.0, "%.0f", false], ["GRIP", "grip", 14.0, "%.1f", false],
+		["BRAKES", "brake", 2.5, "%.1f", false], ["DRILL", "drill_tier", 4.0, "%d", false], ["MAGNET", "magnet", 12.0, "%.0f", false],
+		["SHIELD", "shield", 300.0, "%.0f", false], ["HOP", "jump", 12.0, "%.1f", false], ["FUEL", "fuel", 300.0, "%.0f", false],
+		["FUEL / S", "fuel_burn", 8.0, "%.1f", true],
 	]
 	Ui.segment(self, Rect2(x, y, 440, rows.size() * 28 + 20), Color(0.03, 0.035, 0.045, 0.85))
 	y += 32
 	for r in rows:
+		var a = float(st.get(r[1], 0.0))
 		Ui.text(self, Vector2(x + 26, y), r[0], 14, Ui.DIM, true)
-		_gauge(Rect2(x + 140, y - 11, 250, 10), r[1], Color(0.85, 0.87, 0.9), 20)
+		_gauge(Rect2(x + 120, y - 11, 160, 10), a / r[2], Color(0.85, 0.87, 0.9), 14)
+		var txt = r[3] % (int(a) if r[3] == "%d" else a)
+		var col = Color.WHITE
+		if not pv.is_empty():
+			var b = float(pv.get(r[1], 0.0))
+			if absf(b - a) > 0.001:
+				var better = (b < a) if r[4] else (b > a)
+				col = Color(0.45, 1.0, 0.5) if better else Color(1.0, 0.45, 0.35)
+				txt = (r[3] % (int(a) if r[3] == "%d" else a)) + " > " + (r[3] % (int(b) if r[3] == "%d" else b))
+				_gauge(Rect2(x + 120, y + 1, 160, 3), b / r[2], col, 14)
+		Ui.text(self, Vector2(x + 300, y), txt, 15, col, true, HORIZONTAL_ALIGNMENT_RIGHT, 110)
 		y += 28

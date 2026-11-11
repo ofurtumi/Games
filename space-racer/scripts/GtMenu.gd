@@ -123,6 +123,12 @@ func _step(dir: int, alt: bool) -> void:
 		pass
 
 func _gui_input(event):
+	if capture.is_valid() and event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
+		var cb = capture
+		capture = Callable()
+		cb.call(1000 + event.button_index)
+		accept_event()
+		return
 	if event is InputEventMouseMotion:
 		for i in rows.size():
 			if _row_rect(i).grow(4).has_point(event.position):
