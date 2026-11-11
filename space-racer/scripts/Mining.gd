@@ -883,6 +883,7 @@ func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void
 	var back = open_menu if docked else main.menu.hide_menu
 	rows.append({"label": "Leave", "action": back})
 	main.menu.show_menu(title, rows, back, main.menu.title == title)
+	main.menu.wallet = wallet
 
 func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS") -> void:
 	if main.unlocks().has(o.name):
@@ -953,6 +954,11 @@ func open_shop(mech: String, title: String) -> void:
 		"action": func(): open_sell(mech, title)})
 	rows.append({"label": "Leave", "action": back})
 	main.menu.show_menu(title, rows, back, main.menu.title == title)
+	main.menu.wallet = wallet
+
+# Hold and bank, for the shop menus' wallet panel.
+func wallet() -> Dictionary:
+	return {"hold": cargo, "bank": main.inventory}
 
 # Parts you own that the current build isn't using.
 func _spares() -> Dictionary:
@@ -983,6 +989,7 @@ func open_sell(mech: String, title: String) -> void:
 	var back = func(): open_shop(mech, title)
 	rows.append({"label": "Back", "action": back})
 	main.menu.show_menu("SELL", rows, back, main.menu.title == "SELL")
+	main.menu.wallet = wallet
 
 func _sell_part(id: String, mech: String, title: String) -> void:
 	if _spares().get(id, 0) <= 0:

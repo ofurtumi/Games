@@ -100,6 +100,7 @@ func open_deals(t: Dictionary) -> void:
 		"action": func(): _buy(t, part_price)})
 	rows.append({"label": "Leave", "action": func(): close(t)})
 	main.menu.show_menu("TRADER  " + t.name, rows, func(): close(t), main.menu.title == "TRADER  " + t.name)
+	main.menu.wallet = mining.wallet
 
 func _swap(t: Dictionary, give: Dictionary, take: Dictionary) -> void:
 	if not mining._can_pay(give):

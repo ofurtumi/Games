@@ -28,6 +28,9 @@ var origin = Vector2(70, 150)
 var backdrop: ColorRect
 var dim_backdrop = true
 var capture: Callable   # when set, the next key press goes here (rebinding)
+var wallet: Callable    # shops set this: returns {hold: {...}, bank: {...}}; cleared by show_menu
+
+const MATS = [["rock", Color(0.7, 0.6, 0.5)], ["metal", Color(1.0, 0.6, 0.25)], ["crystal", Color(0.5, 0.9, 1.0)], ["core", Color(1.0, 0.35, 0.85)]]
 
 func _ready():
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -46,6 +49,7 @@ func show_menu(menu_title: String, menu_rows: Array, back: Callable, keep_select
 	var animate = not visible or menu_title != title
 	title = menu_title
 	rows = menu_rows
+	wallet = Callable()
 	on_back = back
 	if not keep_selection:
 		selected = 0
@@ -106,6 +110,25 @@ func _draw():
 				sq.position.x = rr.position.x + 150 - 4
 			draw_rect(sq, sw)
 			draw_rect(sq, ink, false, 1.5)
+	if wallet.is_valid():
+		_draw_wallet(wallet.call(), ta)
+
+# What you can spend, top right: hold and bank, a chip and a count per ore.
+func _draw_wallet(w: Dictionary, ta: float) -> void:
+	var x0 = size.x - 470 + (1.0 - ta) * 500.0
+	var y = origin.y - 92
+	Ui.segment(self, Rect2(x0, y, 520, 104), Ui.INK)
+	Ui.segment(self, Rect2(x0, y + 100, 520, 4), Ui.HILITE, 0)
+	var line = 0
+	for part in [["HOLD", w.get("hold", {})], ["BANK", w.get("bank", {})]]:
+		var ly = y + 40 + line * 40
+		Ui.text(self, Vector2(x0 + 30, ly), part[0], 16, Ui.DIM, true)
+		var cx = x0 + 100
+		for m in MATS:
+			draw_rect(Rect2(cx, ly - 13, 12, 12), m[1])
+			Ui.text(self, Vector2(cx + 18, ly), str(part[1].get(m[0], 0)), 20, Color.WHITE, true)
+			cx += 82
+		line += 1
 
 func _activate(i: int) -> void:
 	if i < 0 or i >= rows.size():
