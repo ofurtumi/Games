@@ -366,6 +366,16 @@ func missing_parts(lo: Dictionary) -> Dictionary:
 			miss[id] = need[id] - o.get(id, 0)
 	return miss
 
+# Parts you own that the current build isn't using.
+func spare_parts() -> Dictionary:
+	var used = Parts.count_parts(loadout)
+	var out = {}
+	for id in owned():
+		var n = owned()[id] - used.get(id, 0)
+		if n > 0 and Parts.PARTS.has(id):
+			out[id] = n
+	return out
+
 func can_afford(price: Dictionary, extra: Dictionary = {}) -> bool:
 	for k in price:
 		if inventory.get(k, 0) + extra.get(k, 0) < price[k]:
@@ -526,6 +536,7 @@ func open_menu() -> void:
 	menu.show_menu("PAUSE", [
 		{"label": "Resume", "action": close_menu},
 		{"label": "Garage", "action": func(): close_menu(); open_garage()},
+		{"label": "Pit shop", "action": func(): open_pit(open_menu)},
 		{"label": "Track Builder", "action": func(): close_menu(); open_editor()},
 		{"label": "Expedition", "action": func(): close_menu(); enter_mining()},
 		{"label": "New Planet", "action": func(): close_menu(); _next_planet()},
@@ -540,6 +551,72 @@ func open_menu() -> void:
 		{"label": "Main menu", "action": func(): close_menu(); show_title()},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], close_menu)
+
+# ---------------------------------------------------------------- pit shop
+
+# The track's pit lane sells stock parts (no mechanics' specials, those are
+# at the outposts) and buys spares back, all through the bank.
+func open_pit(back: Callable) -> void:
+	var rows = []
+	for id in Parts.shop_stock(""):
+		if Parts.is_locked(Parts.PARTS[id], unlocks()):
+			continue
+		var pid = id
+		var pr = Parts.price(pid)
+		rows.append({"label": Parts.PARTS[pid].name,
+			"value": func(): return "%d owned   %s" % [owned().get(pid, 0), _price_text(pr)],
+			"action": func(): _pit_buy(pid, back)})
+	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % spare_parts().values().reduce(func(a, b): return a + b, 0),
+		"action": func(): _pit_sell_menu(back)})
+	rows.append({"label": "Back", "action": back})
+	menu.show_menu("PIT SHOP", rows, back, menu.title == "PIT SHOP")
+	menu.wallet = func(): return {"bank": inventory}
+
+func _price_text(price: Dictionary) -> String:
+	var bits = []
+	for k in price:
+		bits.append("%d %s" % [price[k], k])
+	return "  ".join(bits)
+
+func _pit_buy(id: String, back: Callable) -> void:
+	var pr = Parts.price(id)
+	if not can_afford(pr):
+		notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+		return
+	for k in pr:
+		inventory[k] -= pr[k]
+	owned()[id] = owned().get(id, 0) + 1
+	notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
+	Sfx.play("coins")
+	save_game()
+	open_pit(back)
+
+func _pit_sell_menu(back: Callable) -> void:
+	var rows = []
+	var spares = spare_parts()
+	for id in spares:
+		var pid = id
+		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(MiningScript.sell_price(pid))],
+			"action": func(): _pit_sell(pid, back)})
+	var up = func(): open_pit(back)
+	rows.append({"label": "Back", "action": up})
+	menu.show_menu("SELL", rows, up, menu.title == "SELL")
+	menu.wallet = func(): return {"bank": inventory}
+
+func _pit_sell(id: String, back: Callable) -> void:
+	if spare_parts().get(id, 0) <= 0:
+		return
+	var o = owned()
+	o[id] -= 1
+	if o[id] <= 0:
+		o.erase(id)
+	var pay = MiningScript.sell_price(id)
+	for k in pay:
+		inventory[k] = inventory.get(k, 0) + pay[k]
+	notify("SOLD  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
+	Sfx.play("coins")
+	save_game()
+	_pit_sell_menu(back)
 
 # ---------------------------------------------------------------- sound
 

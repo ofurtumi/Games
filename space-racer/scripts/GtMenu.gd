@@ -116,11 +116,13 @@ func _draw():
 # What you can spend, top right: hold and bank, a chip and a count per ore.
 func _draw_wallet(w: Dictionary, ta: float) -> void:
 	var x0 = size.x - 470 + (1.0 - ta) * 500.0
-	var y = origin.y - 92
-	Ui.segment(self, Rect2(x0, y, 520, 104), Ui.INK)
-	Ui.segment(self, Rect2(x0, y + 100, 520, 4), Ui.HILITE, 0)
+	var parts = [["HOLD", w.get("hold")], ["BANK", w.get("bank")]].filter(func(p): return p[1] != null)
+	var h = 24 + parts.size() * 40
+	var y = origin.y + 12 - h
+	Ui.segment(self, Rect2(x0, y, 520, h), Ui.INK)
+	Ui.segment(self, Rect2(x0, y + h - 4, 520, 4), Ui.HILITE, 0)
 	var line = 0
-	for part in [["HOLD", w.get("hold", {})], ["BANK", w.get("bank", {})]]:
+	for part in parts:
 		var ly = y + 40 + line * 40
 		Ui.text(self, Vector2(x0 + 30, ly), part[0], 16, Ui.DIM, true)
 		var cx = x0 + 100

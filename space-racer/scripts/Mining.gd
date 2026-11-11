@@ -1020,13 +1020,7 @@ func wallet() -> Dictionary:
 
 # Parts you own that the current build isn't using.
 func _spares() -> Dictionary:
-	var used = Parts.count_parts(main.loadout)
-	var out = {}
-	for id in main.owned():
-		var n = main.owned()[id] - used.get(id, 0)
-		if n > 0 and Parts.PARTS.has(id):
-			out[id] = n
-	return out
+	return main.spare_parts()
 
 # Half the shop price, into the bank.
 static func sell_price(id: String) -> Dictionary:

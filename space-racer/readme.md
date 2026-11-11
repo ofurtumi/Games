@@ -168,6 +168,8 @@ you don't own the parts for is refused and tells you what's missing.
 Shops, the black market and traders show your hold and bank top right.
 **Sell parts** (bottom of every shop) sells spares, the parts your current
 build isn't using, for half the shop price into the bank.
+Between races, **Pit shop** on the pause menu sells the stock parts (no
+mechanics' specials) and buys spares, paid from and into the bank.
 
 ## Garage (grid builder)
 
