@@ -98,6 +98,19 @@ Amplifier (magnets, tanks, scoops). Movement also has warp parts: Dash jet
 and Blink drive. Many nodes are locked: find them in wrecks or buy them at
 outposts and from Nine Fingers.
 
+## Owning parts
+
+You own parts in quantities and a build can only use what you own. New
+pilots start with a small kit (one Core engine, three Thrusters, a Pilot
+drill, two Air brakes, two Shield plates, two Razor fins, a Hop jet). The
+garage list shows free / owned for each part; parts you have none of are
+greyed out. Buy more at an outpost's **Shop**: every outpost sells stock
+parts, plus its mechanics' own (Cinder: Grindhaus + Aegis, Rime: Vex, Moss:
+Lodestone + Aegis, Magma: Arclight + Grindhaus, Nine Fingers: its own).
+Prices are in materials and scale with size, tier and maker. Locked parts
+need their blueprint before they show up. Loading a preset or saved build
+you don't own the parts for is refused and tells you what's missing.
+
 ## Garage (grid builder)
 
 A ship is a frame (a grid shape) with shaped components on it. Left click a

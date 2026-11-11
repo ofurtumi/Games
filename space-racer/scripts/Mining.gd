@@ -405,7 +405,8 @@ func open_menu() -> void:
 		var mech = Parts.MECHANICS[def.mech].name
 		main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
 			{"label": "Launch", "action": launch},
-			{"label": "Market", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
+			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
+			{"label": "Blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
 			{"label": "Race here", "value": def.name, "action": func(): main.menu.hide_menu(); main.race_on(def.palette)},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
@@ -737,7 +738,11 @@ func _work_site(s: Dictionary) -> void:
 			main.notify("TOWING  -  BRING IT TO AN OUTPOST", Color.WHITE)
 		"market":
 			_market_cool = true
-			open_market()
+			main.menu.show_menu("NINE FINGERS", [
+				{"label": "Blueprints", "action": func(): open_market()},
+				{"label": "Parts", "action": func(): open_shop("nine", "NINE FINGERS PARTS")},
+				{"label": "Leave", "action": main.menu.hide_menu},
+			], main.menu.hide_menu)
 
 # The hull hangs off a cable: a distance limit between ship and hull, split
 # by their masses, so a heavy hull drags a light ship around. The Tractor beam
@@ -848,3 +853,33 @@ func nearest_enemy(_p: Vector2, _r: float):
 
 func pull_enemies(_p: Vector2, _r: float, _k: float) -> void:
 	pass
+
+# ---------------------------------------------------------------- parts shop
+
+# Stock parts everywhere, plus this outpost's mechanics. Locked parts need
+# their blueprint first. Paid from the hold first, then the bank.
+func open_shop(mech: String, title: String) -> void:
+	var rows = []
+	for id in Parts.shop_stock(mech):
+		if Parts.is_locked(Parts.PARTS[id], main.unlocks()):
+			continue
+		var pid = id
+		var pr = Parts.price(pid)
+		rows.append({"label": Parts.PARTS[pid].name,
+			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)],
+			"action": func(): _buy_part(pid, mech, title)})
+	var back = open_menu if docked else main.menu.hide_menu
+	rows.append({"label": "Leave", "action": back})
+	main.menu.show_menu(title, rows, back, main.menu.title == title)
+
+func _buy_part(id: String, mech: String, title: String) -> void:
+	var pr = Parts.price(id)
+	if not _can_pay(pr):
+		main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+		return
+	_pay(pr)
+	var o = main.owned()
+	o[id] = o.get(id, 0) + 1
+	main.notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
+	main.save_game()
+	open_shop(mech, title)

@@ -682,3 +682,51 @@ static func demo_loadout(id: String) -> Dictionary:
 		want.x = 6 - size.x
 	return {"name": def.name, "frame": DEMO_FRAME, "parts": [{"id": id, "cell": want - lo_c, "rot": 0}],
 		"paint": {"primary": Color(0.2, 0.21, 0.24), "secondary": Color(0.2, 0.21, 0.24), "pattern": "none"}}
+
+# ---------------------------------------------------------------- shop
+
+# What a new pilot owns: enough for the Stock build and a little to play with.
+const STARTER_KIT = {"engine_1": 1, "thruster": 3, "drill_1": 1, "brake": 2, "shield": 2, "fin": 2, "hopjet": 1}
+
+# Which mechanics' parts each planet's outpost stocks (plus stock parts).
+const SHOP_MECHS = {"grind": ["grind", "aegis"], "vex": ["vex"], "lode": ["lode", "aegis"], "arc": ["arc", "grind"], "nine": ["nine"]}
+
+# Price in materials: bigger, higher-tier and specialist parts cost more.
+static func price(id: String) -> Dictionary:
+	var d = PARTS[id]
+	var cells = d.shape.size()
+	var p = {"rock": cells * 3, "metal": 4 + cells * 3}
+	if d.mech == "":
+		p.metal = int(p.metal * 0.6)
+	if d.kind == "engine":
+		p.metal += int(d.power / 5.0)
+	if d.has("tier"):
+		p.metal += d.tier * 4
+		if d.tier >= 2:
+			p["crystal"] = d.tier * 2
+	match d.mech:
+		"vex", "aegis":
+			p["crystal"] = p.get("crystal", 0) + 2 + cells
+		"lode":
+			p["crystal"] = p.get("crystal", 0) + cells
+		"arc":
+			p["crystal"] = p.get("crystal", 0) + 3
+			p.metal += 4
+		"nine":
+			p["core"] = 2 + cells / 2
+	return p
+
+static func shop_stock(mech: String) -> Array:
+	var mechs = SHOP_MECHS.get(mech, [mech])
+	var out = []
+	for id in PARTS:
+		var m = PARTS[id].mech
+		if (m == "" and mech != "nine") or mechs.has(m):
+			out.append(id)
+	return out
+
+static func count_parts(lo: Dictionary) -> Dictionary:
+	var n = {}
+	for p in lo.get("parts", []):
+		n[p.id] = n.get(p.id, 0) + 1
+	return n

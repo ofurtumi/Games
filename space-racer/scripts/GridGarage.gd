@@ -163,6 +163,23 @@ func _slot_rect(i: int) -> Rect2:
 
 # ---------------------------------------------------------------- input
 
+# Copies of a part not already used in this build.
+func _free(id: String) -> int:
+	return main.owned().get(id, 0) - Parts.count_parts(lo).get(id, 0)
+
+# Swap to another whole build, if you own the parts for it.
+func _try_load(other: Dictionary) -> void:
+	var miss = main.missing_parts(other)
+	if not miss.is_empty():
+		var names = []
+		for id in miss:
+			names.append("%d %s" % [miss[id], Parts.PARTS[id].name])
+		main.notify("MISSING  " + ", ".join(names).to_upper(), Color(1.0, 0.4, 0.3))
+		return
+	lo = other.duplicate(true)
+	name_edit.text = lo.name
+	main.equip(lo.duplicate(true), false)
+
 func _part_at(c: Vector2i) -> int:
 	return Parts.occupancy(lo.parts).get(c, -1)
 
@@ -174,9 +191,7 @@ func _slot_click(i: int, button: int) -> void:
 	slots.resize(Save.SLOTS)
 	var full = slots[i] != null
 	if button == MOUSE_BUTTON_LEFT and full:
-		lo = Save.clean_loadout(slots[i])
-		name_edit.text = lo.name
-		main.equip(lo.duplicate(true), false)
+		_try_load(Save.clean_loadout(slots[i]))
 	elif button == MOUSE_BUTTON_LEFT or (button == MOUSE_BUTTON_RIGHT and full):
 		slots[i] = lo.duplicate(true)
 		main.save_data.slots = slots
@@ -228,7 +243,7 @@ func _gui_input(event):
 			var lst = _list()
 			for i in lst.size():
 				if _list_rect(i).has_point(pos):
-					if Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()):
+					if Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()) or (_free(lst[i]) <= 0 and selected != lst[i]):
 						return
 					# Clicking the selected part again puts it down.
 					selected = "" if selected == lst[i] else lst[i]
@@ -241,7 +256,7 @@ func _gui_input(event):
 					editor.open(self, at)
 			elif selected != "":
 				var g = _ghost()
-				if Parts.can_place(lo.frame, lo.parts, g):
+				if Parts.can_place(lo.frame, lo.parts, g) and _free(selected) > 0:
 					lo.parts.append(g)
 					_commit()
 		elif right:
@@ -276,13 +291,9 @@ func _unhandled_key_input(event):
 		KEY_E:
 			_cycle_frame(1)
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-			lo = Parts.presets()[event.physical_keycode - KEY_1]
-			name_edit.text = lo.name
-			main.equip(lo.duplicate(true), false)
+			_try_load(Parts.presets()[event.physical_keycode - KEY_1])
 		KEY_0:
-			lo = Parts.random_loadout(main.rng, main.unlocks())
-			name_edit.text = lo.name
-			main.equip(lo.duplicate(true), false)
+			_try_load(Parts.random_loadout(main.rng, main.unlocks()))
 		KEY_DELETE:
 			if hover_slot >= 0:
 				var slots = main.save_data.get("slots", [])
@@ -490,7 +501,13 @@ func _draw():
 			draw_rect(Rect2(lc - Vector2(6, 2), Vector2(12, 9)), Color(0.4, 0.42, 0.46))
 			draw_arc(lc - Vector2(0, 3), 4, PI, TAU, 8, Color(0.4, 0.42, 0.46), 2.0)
 			continue
-		Ui.segment(self, r, Ui.HILITE if sel else (Color.WHITE if _ids.find(id) == hover_list else Ui.PAPER), 8.0)
+		var free = _free(id)
+		if free <= 0 and not sel:
+			Ui.segment(self, r, Color(0.32, 0.34, 0.38, 0.95), 8.0)
+		else:
+			Ui.segment(self, r, Ui.HILITE if sel else (Color.WHITE if _ids.find(id) == hover_list else Ui.PAPER), 8.0)
+		var cnt = "%d / %d" % [maxi(free, 0), main.owned().get(id, 0)]
+		Ui.text(self, r.position + Vector2(0, 19), cnt, 13, Color.WHITE if sel else (Color(0.62, 0.64, 0.68) if free <= 0 else Ui.INK), true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 86)
 		draw_rect(Rect2(r.position.x + 2, r.position.y + 4, 4, r.size.y - 8), Parts.MECHANICS[def.mech].accent)
 		Ui.text(self, r.position + Vector2(14, 19), def.name, 15, Color.WHITE if sel else Ui.INK, sel)
 		var minc = Vector2i(99, 99)
@@ -529,7 +546,10 @@ func _draw_status(err: String, over: int = -1) -> void:
 	Ui.text(self, Vector2(rr[1].end.x + 6, rr[1].position.y + 26), "R", 13, Ui.DIM, true)
 	var sr = _status_rect()
 	var st = main.ship.stats
-	if over >= 0 and Parts.sub_size(lo.parts[over].id) != Vector2i.ZERO:
+	if selected != "" and _free(selected) <= 0 and over < 0:
+		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
+		Ui.text(self, sr.position + Vector2(18, 27), "NONE LEFT  -  BUY MORE AT AN OUTPOST", 18, Color.WHITE, true)
+	elif over >= 0 and Parts.sub_size(lo.parts[over].id) != Vector2i.ZERO:
 		Ui.segment(self, sr, Ui.HILITE, 8.0)
 		Ui.text(self, sr.position + Vector2(18, 27), "CLICK TO WIRE " + Parts.PARTS[lo.parts[over].id].name.to_upper(), 18, Color.WHITE, true)
 	elif err != "":

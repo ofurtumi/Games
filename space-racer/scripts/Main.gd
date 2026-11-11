@@ -109,6 +109,9 @@ func _ready():
 		inventory = save_data.get("inventory", {})
 		if loadout.is_empty() and not has_meta("preset"):
 			loadout = Save.clean_loadout(save_data.get("loadout", null))
+		if loadout.is_empty():
+			loadout = Parts.presets()[0]
+		_migrate_owned()
 	Controls.apply(save_data.get("keys", {}))
 	_build_world()
 	terrain = TerrainScript.new()
@@ -309,6 +312,42 @@ func save_game() -> void:
 func _notification(what):
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		save_game()
+
+# ---------------------------------------------------------------- owned parts
+
+# How many of each part you own. A build can only use what you own.
+func owned() -> Dictionary:
+	if not save_data.has("owned"):
+		save_data.owned = Parts.STARTER_KIT.duplicate()
+	return save_data.owned
+
+# First run with the parts economy: keep everything already built.
+func _migrate_owned() -> void:
+	if save_data.has("owned"):
+		return
+	var o = Parts.STARTER_KIT.duplicate()
+	var builds = [loadout] + save_data.get("slots", []).filter(func(x): return x != null)
+	for b in builds:
+		var n = Parts.count_parts(b)
+		for id in n:
+			o[id] = maxi(o.get(id, 0), n[id])
+	save_data.owned = o
+
+# Parts this build needs beyond what you own.
+func missing_parts(lo: Dictionary) -> Dictionary:
+	var need = Parts.count_parts(lo)
+	var o = owned()
+	var miss = {}
+	for id in need:
+		if need[id] > o.get(id, 0):
+			miss[id] = need[id] - o.get(id, 0)
+	return miss
+
+func can_afford(price: Dictionary, extra: Dictionary = {}) -> bool:
+	for k in price:
+		if inventory.get(k, 0) + extra.get(k, 0) < price[k]:
+			return false
+	return true
 
 # Blueprints and salvaged frames, by display name.
 func unlocks() -> Array:
