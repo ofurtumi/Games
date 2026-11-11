@@ -14,6 +14,8 @@ const TrailScript = preload("res://scripts/Trail.gd")
 const MeshKit = preload("res://scripts/MeshKit.gd")
 const WeaponsScript = preload("res://scripts/Weapons.gd")
 const Worlds = preload("res://scripts/Worlds.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
+var sfx_on = true
 
 var mining
 var stats = {}
@@ -79,12 +81,15 @@ func to_world2(local: Vector3) -> Vector2:
 
 func take_hit(amount: float) -> void:
 	hit_flash = 1.0
+	if amount > 1.0:
+		Sfx.play("hit", clampf(-10.0 + amount * 0.5, -10.0, 4.0))
 	if not exposed:
 		shield -= amount
 		if shield <= 0.0:
 			shield = 0.0
 			exposed = true
 			mining.main.notify("SHIELD DOWN", Color(1.0, 0.3, 0.3))
+			Sfx.play("shield_down")
 		return
 	hull -= amount
 	if hull <= 0.0:
@@ -226,6 +231,11 @@ func _hazards(delta: float) -> void:
 		shield = minf(stats.shield, shield + stats.regen * delta)
 
 func _animate(delta: float) -> void:
+	if delta > 0.0:
+		var sp = clampf(vel.length() / 40.0, 0.0, 1.5)
+		Sfx.loop("engine", true, -12.0 + _throttle * 6.0, 0.6 + sp * 0.8)
+		Sfx.loop("boost", _boosting, -4.0)
+		Sfx.loop("drill", drilling, -4.0)
 	position = Vector3(pos.x, pos.y, 0.0)
 	var f3 = Vector3(cos(heading), sin(heading), 0.0)
 	var up = Vector3(0, 0, 1)

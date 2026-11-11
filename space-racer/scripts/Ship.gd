@@ -13,6 +13,7 @@ const TrailScript = preload("res://scripts/Trail.gd")
 const MeshKit = preload("res://scripts/MeshKit.gd")
 const WeaponsScript = preload("res://scripts/Weapons.gd")
 const Worlds = preload("res://scripts/Worlds.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
 
 const HOVER = 0.55
 const IMPACT_SAFE = 5.0        # m/s into a wall before the shield takes damage
@@ -48,6 +49,9 @@ var autopilot = false
 var rival = false          # AI racer: no input, no notifications
 var distance = 0.0         # centreline samples travelled this race (for standings)
 var down_left = 0.0        # rivals: seconds until back on track after a wreck
+var sfx_on: bool:
+	get:
+		return not rival
 var progress_idx = 0
 
 var _t = 0.0
@@ -169,6 +173,8 @@ func _hop(delta: float, inp: Dictionary) -> void:
 	_jump_prev = inp.jump
 	if pressed and not airborne() and stall <= 0.0:
 		vy = stats.jump
+		if sfx_on:
+			Sfx.play("hop")
 		alt = 0.06
 		fx.burst(position + Vector3(0, 0.2, 0), terrain.planet.ground.lightened(0.3), 10, 4.0, 0.0, 0.2, 0.4, 6.0)
 	if airborne() or vy > 0.0:
@@ -328,6 +334,8 @@ func _collide() -> void:
 
 func take_hit(amount: float) -> void:
 	hit_flash = 1.0
+	if sfx_on:
+		Sfx.play("hit", clampf(-10.0 + amount * 0.5, -10.0, 4.0))
 	if exposed:
 		# No shield left: a real hit ends you.
 		if amount >= 6.0:
@@ -344,6 +352,7 @@ func take_hit(amount: float) -> void:
 		exposed = true
 		if not rival:
 			main.notify("SHIELD DOWN", Color(1.0, 0.3, 0.3))
+			Sfx.play("shield_down")
 		fx.burst(position + Vector3(0, 1, 0), Color(0.5, 0.7, 1.0), 30, 8.0, 3.0, 0.1, 0.6, 4.0)
 
 # Checkpoint nanobots: full shield, back in the race.
@@ -366,6 +375,12 @@ func _animate(delta: float, inp: Dictionary) -> void:
 		shield = minf(stats.shield, shield + stats.regen * delta)
 	_steer_vis = lerpf(_steer_vis, inp.steer, minf(1.0, 8.0 * delta))
 	var speed = vel.length()
+	if sfx_on:
+		var sp = clampf(speed / maxf(stats.top, 1.0), 0.0, 1.5)
+		Sfx.loop("engine", true, -10.0 + _throttle * 5.0 + sp * 3.0, 0.6 + sp * 1.0)
+		Sfx.loop("boost", boosting, -4.0)
+		Sfx.loop("skid", drifting, -6.0, 0.8 + sp * 0.4)
+		Sfx.loop("drill", drilling, -4.0)
 	model.position.y = HOVER + alt + sin(_t * 2.6) * 0.05
 	model.rotation.z = -_steer_vis * 0.3 * clampf(speed / 15.0, 0.0, 1.0)
 	model.rotation.x = -_throttle * 0.04 - clampf(vy * 0.03, -0.25, 0.25)

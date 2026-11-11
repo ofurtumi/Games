@@ -25,6 +25,7 @@ const Ui = preload("res://scripts/Ui.gd")
 const TerrainScript = preload("res://scripts/Terrain.gd")
 const MinerScript = preload("res://scripts/Miner.gd")
 const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
 
 # Each planet has an outpost above its north pole run by one mechanic, who
 # sells program cards and parts for materials.
@@ -224,6 +225,7 @@ func _service_depots() -> void:
 			miner.hull = 100.0
 			miner.exposed = false
 			main.notify("DEPOT  -  REFUELLED", Color(0.3, 1.0, 0.4))
+			Sfx.play("gate")
 
 func _unhandled_input(event):
 	if main.mode != "mining" or main.menu_open():
@@ -362,6 +364,8 @@ func _dock(i: int = -1) -> void:
 	cam.position = Vector3(miner.pos.x, miner.pos.y - 4.0, 30.0)
 	if gained.size() > 0:
 		main.notify("UNLOADED  " + "  ".join(gained), Color(0.5, 0.9, 1.0))
+		Sfx.play("coins")
+	Sfx.play("gate")
 	main.save_game()
 	open_menu()
 
@@ -480,6 +484,7 @@ func _update_pickups(delta: float) -> void:
 		pk.node.rotation = Vector3(pk.age * 2.0, pk.age * 3.0, 0)
 		if room and d < miner.stats.radius + 0.5:
 			cargo[pk.mat] = cargo.get(pk.mat, 0) + 1
+			Sfx.play("pickup", -4.0)
 			pk.node.queue_free()
 			continue
 		if pk.age > 60.0:
@@ -723,6 +728,7 @@ func _work_site(s: Dictionary) -> void:
 			miner.fuel = minf(miner.stats.fuel, miner.fuel + miner.stats.fuel * 0.3)
 			miner.weapons.refill()
 			main.notify("SALVAGED  " + "  ".join(bits), SITE_COLORS.wreck)
+			Sfx.play("coins")
 			if s.data.has("blueprint"):
 				main.unlock(s.data.blueprint)
 		"cache":
@@ -842,6 +848,7 @@ func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS")
 		return
 	_pay(o.price)
 	main.unlock(o.name)
+	Sfx.play("coins")
 	open_market(offers, title)
 
 # Hooks for the weapons adapter; enemies fill these in.
@@ -881,5 +888,6 @@ func _buy_part(id: String, mech: String, title: String) -> void:
 	var o = main.owned()
 	o[id] = o.get(id, 0) + 1
 	main.notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
+	Sfx.play("coins")
 	main.save_game()
 	open_shop(mech, title)

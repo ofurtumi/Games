@@ -12,6 +12,11 @@ extends Node3D
 
 const Parts = preload("res://scripts/Parts.gd")
 const MeshKit = preload("res://scripts/MeshKit.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
+
+# Only the player's ship makes noise (not rivals, not the garage test range).
+func _loud() -> bool:
+	return host != null and "sfx_on" in host and host.sfx_on
 
 var host
 var world
@@ -123,16 +128,22 @@ func update(delta: float, inp: Dictionary) -> void:
 	if _edge("rocket", inp.get("rocket", false)) and ammo > 0 and not stats.launchers.is_empty():
 		var l = stats.launchers[ammo % stats.launchers.size()]
 		ammo -= 1
+		if _loud():
+			Sfx.play("launch")
 		_fire(l.prog, host.l2w(l.pos), host.d2w(l.dir), host.vel2() * 0.6, "missile", 2.5, 0)
 	if _edge("drop", inp.get("drop", false)) and bombs > 0 and not stats.droppers.is_empty():
 		var d = stats.droppers[bombs % stats.droppers.size()]
 		bombs -= 1
+		if _loud():
+			Sfx.play("drop")
 		var prog = d.prog.duplicate(true)
 		prog.timer = true
 		_fire(prog, host.l2w(d.pos), host.vel2().normalized() if host.vel2().length() > 0.1 else Vector2.RIGHT, host.vel2() * 0.3, "bomb", 0.25, 0, 0.0)
 	warp_cd = maxf(0.0, warp_cd - delta)
 	if _edge("warp", inp.get("warp", false)) and not stats.warp.is_empty() and warp_cd <= 0.0 and host.spend(18.0):
 		warp_cd = stats.warp.cooldown
+		if _loud():
+			Sfx.play("warp")
 		var fwd = host.d2w(Vector3(0, 0, 1))
 		var from = host.pos2()
 		world.burst(from, Color(0.75, 0.4, 1.0) if stats.warp.type == "blink" else Color(0.3, 0.85, 1.0), 20, 6.0, h)
@@ -152,6 +163,8 @@ func update(delta: float, inp: Dictionary) -> void:
 
 func _lasers(delta: float, held: bool, h: float) -> void:
 	var on = held and not stats.lasers.is_empty() and host.spend(22.0 * delta)
+	if _loud():
+		Sfx.loop("laser", on, -6.0, 1.0 + 0.15 * (beams.size() - 1))
 	for b in beams:
 		b.mesh.visible = on
 		b.tip.visible = on
@@ -248,8 +261,11 @@ func _update_shots(delta: float, h: float) -> void:
 	for s in shots:
 		var boom = false
 		if s.stuck:
+			var before = s.wait
 			s.wait -= delta
 			boom = s.wait <= 0.0
+			if _loud() and floorf(before * 3.0) != floorf(s.wait * 3.0):
+				Sfx.play("tick", -8.0)
 			if randf() < 6.0 * delta:
 				world.spark(s.pos, Color(1.0, 0.25, 0.1), h)
 		elif s.prog.get("orbit", false):

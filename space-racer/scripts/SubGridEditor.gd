@@ -13,6 +13,7 @@ extends Control
 const Parts = preload("res://scripts/Parts.gd")
 const Ui = preload("res://scripts/Ui.gd")
 const ToolDemo = preload("res://scripts/ToolDemo.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
 
 # Which numbers to compare live for each kind of component.
 const STAT_ROWS = {
@@ -258,17 +259,20 @@ func _gui_input(event):
 			var c = Vector2i(((pos - _origin()) / CELL).floor())
 			if placing != "" and Rect2i(Vector2i.ZERO, gsize).has_point(c) and _node_at(c) == -2:
 				sub.nodes.append({"id": placing, "cell": c})
+				Sfx.play("clunk", -4.0, 1.4)
 		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and drag_from != -2:
 			var c = Vector2i(((pos - _origin()) / CELL).floor())
 			var target = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
 			if target >= 0 and target != drag_from and not _has_input(target) and not _reaches(target, drag_from):
 				sub.wires.append([drag_from, target])
+				Sfx.play("wire")
 			drag_from = -2
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			var c = Vector2i(((pos - _origin()) / CELL).floor())
 			var n = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
 			if n >= 0 and _node_rect(n).has_point(pos):
 				_remove_node(n)
+				Sfx.play("scrap", -4.0, 1.3)
 			else:
 				var w = _wire_near(pos)
 				if w >= 0:

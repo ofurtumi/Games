@@ -10,6 +10,7 @@ extends Control
 
 const Ui = preload("res://scripts/Ui.gd")
 const BACKDROP = preload("res://assets/shaders/menu_backdrop.gdshader")
+const Sfx = preload("res://scripts/Sfx.gd")
 
 const ROW_H = 40.0
 const ROW_GAP = 6.0
@@ -110,6 +111,7 @@ func _activate(i: int) -> void:
 		return
 	var r = rows[i]
 	if r.has("action"):
+		Sfx.play("ui_select")
 		r.action.call()
 
 func _step(dir: int, alt: bool) -> void:
@@ -118,6 +120,7 @@ func _step(dir: int, alt: bool) -> void:
 	var r = rows[selected]
 	var key = ("alt_" if alt else "") + ("left" if dir < 0 else "right")
 	if r.has(key):
+		Sfx.play("ui_move")
 		r[key].call()
 	elif not alt and r.has("action") and dir > 0 and not r.has("left"):
 		pass
@@ -132,6 +135,8 @@ func _gui_input(event):
 	if event is InputEventMouseMotion:
 		for i in rows.size():
 			if _row_rect(i).grow(4).has_point(event.position):
+				if selected != i:
+					Sfx.play("ui_move", -6.0)
 				selected = i
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -162,8 +167,10 @@ func _unhandled_key_input(event):
 	match event.physical_keycode:
 		KEY_UP, KEY_W:
 			selected = (selected - 1 + rows.size()) % maxi(rows.size(), 1)
+			Sfx.play("ui_move")
 		KEY_DOWN, KEY_S:
 			selected = (selected + 1) % maxi(rows.size(), 1)
+			Sfx.play("ui_move")
 		KEY_LEFT, KEY_A:
 			_step(-1, event.shift_pressed)
 		KEY_RIGHT, KEY_D:
@@ -173,6 +180,7 @@ func _unhandled_key_input(event):
 				_activate(selected)
 		KEY_ESCAPE, KEY_BACKSPACE:
 			if not event.echo and on_back.is_valid():
+				Sfx.play("ui_back")
 				on_back.call()
 		_:
 			return

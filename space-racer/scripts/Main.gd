@@ -21,6 +21,7 @@ const Save = preload("res://scripts/Save.gd")
 const MiningScript = preload("res://scripts/Mining.gd")
 const Controls = preload("res://scripts/Controls.gd")
 const OverlayScript = preload("res://scripts/Overlay.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
 
 # Lap times that earn materials, as average speed over the lap (m/s). Each
 # medal pays out once per track.
@@ -113,6 +114,7 @@ func _ready():
 			loadout = Parts.presets()[0]
 		_migrate_owned()
 	Controls.apply(save_data.get("keys", {}))
+	add_child(Sfx.new())
 	_build_world()
 	terrain = TerrainScript.new()
 	terrain.name = "Terrain"
@@ -382,6 +384,7 @@ func _award_medals(t: float) -> void:
 				inventory[k] = inventory.get(k, 0) + m.reward[k]
 				bits.append("+%d %s" % [m.reward[k], k])
 			notify("%s  %s" % [m.name.to_upper(), "  ".join(bits)], m.color)
+			Sfx.play("coins")
 	all[track_key()] = won
 	save_data.medals = all
 	save_game()
@@ -716,6 +719,7 @@ func shatter(model: Node3D, up: Vector3, base_vel: Vector3, gravity: float) -> v
 	fx.burst(c, Color(1.0, 0.9, 0.6), 30, 10.0, 2.0, 0.15, 0.5, 0.0)
 	fx.burst(c, Color(0.15, 0.15, 0.15), 30, 5.0, 0.0, 0.7, 1.6, -gravity * 0.1)
 	shake = 1.0
+	Sfx.play("big_boom", 2.0)
 	_slowmo_left = 0.9
 	Engine.time_scale = 0.25
 
@@ -833,6 +837,7 @@ func _race(delta: float) -> void:
 	if ship.position.distance_to(cp.pos) < track.hw[cp.idx] + 1.5:
 		last_cp = next_cp
 		ship.restore()
+		Sfx.play("lap" if next_cp == 0 else "gate")
 		if next_cp == 0:
 			last_lap = lap_time
 			if best_lap < 0.0 or lap_time < best_lap:
@@ -855,6 +860,7 @@ func _race(delta: float) -> void:
 			var dir = p.dir if ship.vel.dot(p.dir) >= 0.0 else -p.dir
 			ship.vel += dir * 16.0
 			pad_cd = 0.6
+			Sfx.play("warp", -6.0, 1.4)
 			fx.burst(ship.position + Vector3(0, 0.3, 0), Color(0.3, 1.0, 0.6), 14, 6.0, 1.0, 0.08, 0.4, 2.0)
 	# Ramps: hit the lip on the ground and you're thrown up; how far depends
 	# on how fast you hit it.
@@ -898,6 +904,7 @@ func detonate_mine(m: Dictionary) -> void:
 		ship.take_hit(20.0)
 
 func _explode(p: Vector3, radius: float, tier: int) -> void:
+	Sfx.play("small_boom" if radius < 2.0 else "boom", -2.0 if mode == "race" and p.distance_to(ship.position) > 25.0 else 0.0)
 	terrain.blast(p, radius, tier)
 	fx.burst(p + Vector3(0, 0.6, 0), Color(1.0, 0.55, 0.15), 40, 14.0, 1.2, 0.18, 0.6, 6.0)
 	fx.burst(p + Vector3(0, 0.6, 0), Color(1.0, 0.9, 0.6), 20, 9.0, 1.5, 0.1, 0.35, 0.0)
@@ -964,6 +971,7 @@ func _update_pickups(delta: float) -> void:
 		if d < ship.stats.radius + 0.5:
 			inventory[pk.name] = inventory.get(pk.name, 0) + 1
 			hud.flash(pk.name)
+			Sfx.play("pickup", -4.0)
 			pk.node.queue_free()
 			continue
 		if pk.age > 40.0:

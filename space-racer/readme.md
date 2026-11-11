@@ -145,12 +145,21 @@ lays it onto a fresh copy of the planet. Sandbox mode ignores materials.
 Ships are now generated from the grid, so `assets/models/ship.blend` isn't
 used for the moment (see `ShipBuilder.gd` for how the hull is built).
 
+## Sound
+
+All synthesised at start-up in `Sfx.gd` (no audio files): engine hum that
+rises with speed, boost, drift skid, drill and laser loops, explosions sized
+to the blast, missile launch, warp, hop, hits, shield down, gate chime, lap
+arpeggio, pickups, bomb ticks, menu ticks and garage clunks. Only your ship
+makes engine and weapon noise; rivals' explosions are still heard.
+
 ## Code map (`scripts/`)
 
 `Parts.gd` mechanics, hulls, parts, presets, stat maths ·
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
+`Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

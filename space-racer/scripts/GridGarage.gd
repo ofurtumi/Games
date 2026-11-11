@@ -17,6 +17,7 @@ const Ui = preload("res://scripts/Ui.gd")
 const Save = preload("res://scripts/Save.gd")
 const PartDemo = preload("res://scripts/PartDemo.gd")
 const SubGridEditorScript = preload("res://scripts/SubGridEditor.gd")
+const Sfx = preload("res://scripts/Sfx.gd")
 
 const BAND = Rect2(390, 12, 780, 104)
 const STAT_LABELS = [["power", "Power"], ["thrust", "Thrust"], ["tier", "Tier"], ["shield", "Shield +"],
@@ -258,6 +259,7 @@ func _gui_input(event):
 				var g = _ghost()
 				if Parts.can_place(lo.frame, lo.parts, g) and _free(selected) > 0:
 					lo.parts.append(g)
+					Sfx.play("clunk")
 					_commit()
 		elif right:
 			# Scrap whatever is under the cursor; the selection stays put.
@@ -265,6 +267,7 @@ func _gui_input(event):
 			if idx >= 0:
 				lo.parts.remove_at(idx)
 				inspected = -1
+				Sfx.play("scrap")
 				_commit()
 			elif Rect2(Vector2.ZERO, Vector2(Parts.frame_size(lo.frame))).has_point(Vector2(c)):
 				selected = ""
