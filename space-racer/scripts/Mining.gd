@@ -947,8 +947,55 @@ func open_shop(mech: String, title: String) -> void:
 			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)],
 			"action": func(): _buy_part(pid, mech, title)})
 	var back = open_menu if docked else main.menu.hide_menu
+	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % _spares().values().reduce(func(a, b): return a + b, 0),
+		"action": func(): open_sell(mech, title)})
 	rows.append({"label": "Leave", "action": back})
 	main.menu.show_menu(title, rows, back, main.menu.title == title)
+
+# Parts you own that the current build isn't using.
+func _spares() -> Dictionary:
+	var used = Parts.count_parts(main.loadout)
+	var out = {}
+	for id in main.owned():
+		var n = main.owned()[id] - used.get(id, 0)
+		if n > 0 and Parts.PARTS.has(id):
+			out[id] = n
+	return out
+
+# Half the shop price, into the bank.
+static func sell_price(id: String) -> Dictionary:
+	var out = {}
+	var pr = Parts.price(id)
+	for k in pr:
+		if pr[k] / 2 > 0:
+			out[k] = pr[k] / 2
+	return out
+
+func open_sell(mech: String, title: String) -> void:
+	var rows = []
+	var spares = _spares()
+	for id in spares:
+		var pid = id
+		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(sell_price(pid))],
+			"action": func(): _sell_part(pid, mech, title)})
+	var back = func(): open_shop(mech, title)
+	rows.append({"label": "Back", "action": back})
+	main.menu.show_menu("SELL", rows, back, main.menu.title == "SELL")
+
+func _sell_part(id: String, mech: String, title: String) -> void:
+	if _spares().get(id, 0) <= 0:
+		return
+	var o = main.owned()
+	o[id] -= 1
+	if o[id] <= 0:
+		o.erase(id)
+	var pay = sell_price(id)
+	for k in pay:
+		main.inventory[k] = main.inventory.get(k, 0) + pay[k]
+	main.notify("SOLD  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
+	Sfx.play("coins")
+	main.save_game()
+	open_sell(mech, title)
 
 func _buy_part(id: String, mech: String, title: String) -> void:
 	var pr = Parts.price(id)
