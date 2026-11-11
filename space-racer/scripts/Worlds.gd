@@ -89,6 +89,7 @@ class MineWorld:
 		preload("res://scripts/Sfx.gd").play("small_boom" if r < 2.0 else "boom")
 		for pl in mining.planets_near(p, r + 2.0):
 			pl.terrain.blast(pl.local(p), r, tier)
+		mining.blast_enemies(p, r)
 		mining.main.fx.burst(Vector3(p.x, p.y, 1.0), Color(1.0, 0.55, 0.15), 30, 10.0, 1.2, 0.18, 0.5, 0.0)
 	func touch(p: Vector2, r: float) -> bool:
 		return mining.touch_enemies(p, r)

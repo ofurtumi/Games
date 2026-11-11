@@ -30,7 +30,7 @@ static func _pay(rng: RandomNumberGenerator, value: int, avoid: String = "") -> 
 	return out
 
 static func make(rng: RandomNumberGenerator, here: int, unlocks: Array) -> Dictionary:
-	var kinds = ["haul", "haul", "race", "salvage", "survey", "mine"]
+	var kinds = ["haul", "haul", "race", "salvage", "survey", "mine", "bounty"]
 	var kind = kinds[rng.randi() % kinds.size()]
 	var c = {"kind": kind, "from": here, "have": 0}
 	match kind:
@@ -60,6 +60,9 @@ static func make(rng: RandomNumberGenerator, here: int, unlocks: Array) -> Dicti
 			c.depth = layer[0]
 			c.layer = layer[1]
 			c.reward = _pay(rng, 18 if layer[0] < 0.5 else 34)
+		"bounty":
+			c.need = 3 + rng.randi() % 3
+			c.reward = _pay(rng, 10 * c.need)
 		"mine":
 			var mat = ["metal", "crystal", "core"][rng.randi() % 3]
 			c.mat = mat
@@ -79,11 +82,13 @@ static func title(c: Dictionary) -> String:
 			return "Reach %s's %s" % [PLANET_NAMES[c.planet].capitalize(), c.layer.to_lower()]
 		"mine":
 			return "Mine %d %s" % [c.need, c.mat]
+		"bounty":
+			return "Destroy %d drones" % c.need
 	return "?"
 
 static func progress(c: Dictionary) -> String:
 	match c.kind:
-		"salvage", "mine":
+		"salvage", "mine", "bounty":
 			return "%d / %d" % [c.have, c.need]
 		"haul":
 			return "to " + PLANET_NAMES[c.to]
@@ -113,6 +118,9 @@ static func on_event(c: Dictionary, event: String, data: Dictionary) -> bool:
 			return c.have >= c.need
 		["survey", "depth"]:
 			return data.planet == c.planet and data.frac >= c.depth
+		["bounty", "drone"]:
+			c.have += 1
+			return c.have >= c.need
 		["mine", "mined"]:
 			if data.mat == c.mat:
 				c.have += data.n

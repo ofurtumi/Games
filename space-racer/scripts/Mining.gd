@@ -27,6 +27,8 @@ const MinerScript = preload("res://scripts/Miner.gd")
 const ShipBuilder = preload("res://scripts/ShipBuilder.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
 const Contracts = preload("res://scripts/Contracts.gd")
+const DronesScript = preload("res://scripts/Drones.gd")
+const TradersScript = preload("res://scripts/Traders.gd")
 
 # Each planet has an outpost above its north pole run by one mechanic, who
 # sells program cards and parts for materials.
@@ -81,6 +83,10 @@ var salvage = 0.0
 var salvage_site = null
 var _market_cool = false
 var _dead_left = 0.0
+var drones
+var traders
+var trader_cool = 0.0
+var _trade_t = 0.0
 var _own_wreck = null
 const REPAIR_BILL = {"metal": 8, "rock": 10}
 var pickups = []
@@ -146,6 +152,12 @@ func setup(m) -> void:
 	miner.mining = self
 	add_child(miner)
 	miner.equip(main.loadout)
+	drones = DronesScript.new()
+	add_child(drones)
+	drones.setup(self)
+	traders = TradersScript.new()
+	add_child(traders)
+	traders.setup(self)
 	var layer = CanvasLayer.new()
 	layer.layer = 2
 	add_child(layer)
@@ -332,9 +344,12 @@ func _process(delta):
 					_dock(i)
 					break
 	_update_pickups(delta)
+	traders.step(delta)
 	if not docked:
 		_service_depots()
 		_update_sites(delta)
+		drones.step(delta)
+		_update_trading(delta)
 		var pl = nearest_planet(miner.pos)
 		var frac = pl.depth_frac(miner.pos)
 		if frac > 0.25:
@@ -378,6 +393,7 @@ func _dock(i: int = -1) -> void:
 func launch() -> void:
 	docked = false
 	_undock_cd = 2.5
+	trader_cool = 3.0
 	main.menu.hide_menu()
 	miner.vel = Vector2(0, 7.0)
 	miner.pos = station_pad + Vector2(0, 2.0)
@@ -588,6 +604,12 @@ func _draw_hud() -> void:
 	for s in sites:
 		if s.found and not s.done and s != tow:
 			marks.append([s.pos, _site_label(s), SITE_COLORS[s.type]])
+	for t in traders.traders:
+		if t.pos.distance_to(miner.pos) < 500.0:
+			marks.append([t.pos, "TRADER", Color(0.6, 0.85, 1.0)])
+	for d in drones.drones:
+		if d.hp > 0.0 and d.state == "chase":
+			marks.append([d.pos, "!", Color(1.0, 0.25, 0.2)])
 	for p2 in planets:
 		if miner.pos.distance_to(p2.centre) > p2.def.radius * 1.6:
 			marks.append([p2.centre, p2.def.name.to_upper(), p2.terrain.planet.rock.lightened(0.3)])
@@ -871,15 +893,44 @@ func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS")
 	Sfx.play("coins")
 	open_market(offers, title)
 
-# Hooks for the weapons adapter; enemies fill these in.
-func touch_enemies(_p: Vector2, _r: float) -> bool:
+# Hooks for the weapons adapter.
+func touch_enemies(p: Vector2, r: float) -> bool:
+	return drones != null and drones.touch(p, r)
+
+func nearest_enemy(p: Vector2, r: float):
+	return drones.nearest(p, r) if drones != null else null
+
+func pull_enemies(p: Vector2, r: float, k: float) -> void:
+	if drones != null:
+		drones.pull(p, r, k)
+
+func blast_enemies(p: Vector2, r: float) -> void:
+	if drones != null:
+		drones.blast(p, r)
+
+func solid_at(p: Vector2) -> bool:
+	for pl in planets_near(p, 1.0):
+		if pl.terrain.is_solid(pl.terrain.world_to_cell(pl.local(p))):
+			return true
 	return false
 
-func nearest_enemy(_p: Vector2, _r: float):
-	return null
+func spawn_pickup(w: Vector2, mat: String) -> void:
+	if not _pickup_mats.has(mat):
+		_pickup_mats[mat] = MeshKit.mat(MAT_COLORS[mat], 0.6)
+	var node = MeshKit.part(self, _pickup_mesh, _pickup_mats[mat], Vector3(w.x, w.y, 0.8), Vector3.ZERO, Vector3.ONE, false)
+	pickups.append({"node": node, "pos": w, "vel": Vector2(randf_range(-3, 3), randf_range(-3, 3)), "mat": mat, "age": 0.0})
 
-func pull_enemies(_p: Vector2, _r: float, _k: float) -> void:
-	pass
+# Pull up slowly beside a trader to deal.
+func _update_trading(delta: float) -> void:
+	trader_cool -= delta
+	var t = traders.near(miner.pos, 6.0)
+	if t != null and miner.vel.length() < 4.0 and trader_cool <= 0.0:
+		_trade_t += delta
+		if _trade_t > 0.6:
+			_trade_t = 0.0
+			traders.open_deals(t)
+	else:
+		_trade_t = 0.0
 
 # ---------------------------------------------------------------- parts shop
 

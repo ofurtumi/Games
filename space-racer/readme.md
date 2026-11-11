@@ -51,6 +51,7 @@ at once (they show on the expedition HUD with their progress):
 - **Salvage** wrecks, anywhere
 - **Survey**: reach a planet's mantle or deep layer
 - **Mine** a quota of an ore
+- **Bounty**: destroy a number of drones
 Rewards are materials; salvage jobs sometimes also pay a blueprint you
 haven't found. Taking a job puts up a fresh offer. Pick an active job on
 the board to abandon it.
@@ -82,6 +83,20 @@ Nothing gets a marker until you've been near it, and some of it is buried.
   Space drops it. Heavy hulls drag light ships around.
 - **Nine Fingers**, a black-market outpost somewhere out in the dark, sells
   the blueprints for materials (paid from the hold first, then the bank).
+
+### Drones and traders
+
+**Drones** guard wrecks and hulls (two at the ones carrying a blueprint or
+a hull) and patrol around Moss and Magma. They sit on station until you come
+close, then chase, fire slow red bolts and ram; get far enough away and they
+go back. Every tool hurts them (lasers, missiles, bombs, the wrecking-ball
+drill) and homing missiles go for them before ore. Dead drones drop metal
+and crystal; chasing ones get a red `!` marker.
+
+**Traders** (blue blinking beacon) fly between the outposts and park beside
+the pads. Pull up slowly next to one to deal: material swaps, a refuel for
+metal, and one part at 75% of the shop price. Within 500 m they get a
+TRADER marker.
 
 ## Controls
 
@@ -182,7 +197,7 @@ makes engine and weapon noise; rivals' explosions are still heard.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·
