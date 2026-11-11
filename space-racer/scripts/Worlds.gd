@@ -32,6 +32,7 @@ class RaceWorld:
 		return out
 	func blast(p: Vector2, r: float, tier: int) -> void:
 		main._explode(Vector3(p.x, 0.6, p.y), r, tier)
+		main.hazards.blast(p, r, owner)
 		for s in racers():
 			if s.pos2().distance_to(p) < r + s.stats.radius:
 				s.take_hit(16.0)
@@ -43,6 +44,8 @@ class RaceWorld:
 			if m.timer <= 0.0 and Vector2(m.pos.x - p.x, m.pos.z - p.y).length() < r:
 				main.detonate_mine(m)
 				return true
+		if main.hazards.touch(p, r, owner):
+			return true
 		for s in racers():
 			if s.pos2().distance_to(p) < r + s.stats.radius:
 				if s.zap_cd <= 0.0:
@@ -59,6 +62,10 @@ class RaceWorld:
 				if q.distance_to(p) < bd:
 					bd = q.distance_to(p)
 					best = q
+		var dq = main.hazards.nearest(p, bd)
+		if dq != null:
+			bd = dq.distance_to(p)
+			best = dq
 		for s in racers():
 			var q = s.pos2()
 			if q.distance_to(p) < bd:
@@ -71,6 +78,7 @@ class RaceWorld:
 			if q.distance_to(p) < r:
 				var d = (p - q).normalized() * k
 				pk.vel += Vector3(d.x, 0.0, d.y)
+		main.hazards.pull(p, r, k)
 		for sh in racers():
 			if sh.pos2().distance_to(p) < r:
 				sh.add_vel2((p - sh.pos2()).normalized() * k * 0.5)

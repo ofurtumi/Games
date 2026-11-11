@@ -20,6 +20,7 @@ const GridGarageScript = preload("res://scripts/GridGarage.gd")
 const GtMenuScript = preload("res://scripts/GtMenu.gd")
 const Save = preload("res://scripts/Save.gd")
 const MiningScript = preload("res://scripts/Mining.gd")
+const RaceDronesScript = preload("res://scripts/RaceDrones.gd")
 const Controls = preload("res://scripts/Controls.gd")
 const OverlayScript = preload("res://scripts/Overlay.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
@@ -84,6 +85,7 @@ var _pickup_mats = {}
 var save_data = {}
 var mode = "race"   # or "mining"
 var mining = null
+var hazards               # drone turrets beside the road (RaceDrones)
 var rebinding = ""
 var overlay
 var shake = 0.0
@@ -173,6 +175,10 @@ func _ready():
 	overlay = OverlayScript.new()
 	top.add_child(overlay)
 	_pickup_mesh = MeshKit.box(Vector3.ONE * 0.32)
+	hazards = RaceDronesScript.new()
+	hazards.name = "RaceDrones"
+	add_child(hazards)
+	hazards.setup(self)
 	if loadout.is_empty():
 		loadout = Parts.presets()[preset_index]
 	ship.equip(loadout)
@@ -309,6 +315,8 @@ func editor_closed() -> void:
 	ship.set_process(not garage)
 
 func _reset_race() -> void:
+	if hazards != null:
+		hazards.reset()
 	session = {"laps": 0, "best": -1.0, "medals": [], "earned": {}}
 	lap = 1
 	lap_time = 0.0
@@ -827,7 +835,7 @@ func enter_mining() -> void:
 	for rv in rivals:
 		rv.queue_free()
 	rivals.clear()
-	for n in [terrain, track, ship, hud]:
+	for n in [terrain, track, ship, hud, hazards]:
 		n.visible = false
 	ship.set_process(false)
 	for pk in pickups:
@@ -1093,6 +1101,7 @@ func _restart_race() -> void:
 	next_cp = 1
 	last_cp = 0
 	_respawn()
+	hazards.reset()
 	_spawn_rivals(planet_index)
 	start_countdown()
 
@@ -1102,7 +1111,7 @@ func leave_mining() -> void:
 	mining.leave()
 	mining = null
 	mode = "race"
-	for n in [terrain, track, ship, hud]:
+	for n in [terrain, track, ship, hud, hazards]:
 		n.visible = true
 	cam.current = true
 	ship.set_process(true)
@@ -1236,6 +1245,8 @@ func _process(delta):
 	else:
 		lap_time += delta
 		_race(delta)
+		if not menu.visible:
+			hazards.step(delta)
 	_update_pickups(delta)
 	_update_charges(delta)
 	_update_camera(delta)
@@ -1394,11 +1405,14 @@ func _on_cell_destroyed(p: Vector3, k: int) -> void:
 	if ore == "":
 		return
 	for n in 1 + (randi() % 2):
-		var c = terrain.kind_color(k)
-		if not _pickup_mats.has(ore):
-			_pickup_mats[ore] = MeshKit.mat(c, 0.5)
-		var node = MeshKit.part(self, _pickup_mesh, _pickup_mats[ore], p, Vector3.ZERO, Vector3.ONE, false)
-		pickups.append({"node": node, "pos": p, "vel": Vector3(randf_range(-3, 3), 5.0, randf_range(-3, 3)), "name": ore, "color": c, "age": 0.0})
+		spawn_pickup(p, ore, terrain.kind_color(k))
+
+# An ore chunk that pops out at p and waits to be picked up.
+func spawn_pickup(p: Vector3, ore: String, c: Color = MiningScript.MAT_COLORS.get(ore, Color.WHITE)) -> void:
+	if not _pickup_mats.has(ore):
+		_pickup_mats[ore] = MeshKit.mat(c, 0.5)
+	var node = MeshKit.part(self, _pickup_mesh, _pickup_mats[ore], p, Vector3.ZERO, Vector3.ONE, false)
+	pickups.append({"node": node, "pos": p, "vel": Vector3(randf_range(-3, 3), 5.0, randf_range(-3, 3)), "name": ore, "color": c, "age": 0.0})
 
 # Ore chunks bob where they land until the ship's magnet range reaches them.
 func _update_pickups(delta: float) -> void:

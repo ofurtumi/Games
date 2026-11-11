@@ -114,6 +114,12 @@ drill) and homing missiles go for them before ore. Dead drones drop metal
 and crystal; chasing ones get a red `!` marker. A cleared post fills again
 four minutes later, while you're well away from it.
 
+Race tracks have them too: drone turrets hovering over the kerb (two on
+Rime, three on Moss, four on Magma, none on Cinder). They turn to whoever
+comes by, you or a rival, and fire bolts across the road. Your tools shoot
+them down for ore and bounty credit (a rival's kill pays you nothing), and
+a downed one is back 40 s later once you're 60 m away.
+
 **Traders** (blue blinking beacon) fly between the outposts and park beside
 the pads. Pull up slowly next to one to deal: material swaps, a refuel for
 metal, and one part at 75% of the shop price. Within 500 m they get a
@@ -226,7 +232,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·
