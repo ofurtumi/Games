@@ -13,6 +13,8 @@ const SPEED = 13.0
 const SIGHT = 26.0
 const LEASH = 60.0
 const HP = 30.0
+const RESPAWN = 240.0      # seconds until a dead drone's post is filled again
+const RESPAWN_AWAY = 150.0 # ...and only while you're this far off
 
 var mining
 var drones = []    # {pos, vel, hp, anchor, radius, ang, state, cd, hit_cd, node, eye}
@@ -40,16 +42,31 @@ func setup(m) -> void:
 				spawn(pl.centre, pl.def.radius + 25.0 + k * 6.0, TAU * k / 4.0)
 
 func spawn(anchor: Vector2, radius: float, ang: float = randf() * TAU) -> void:
+	var made = _model()
+	var pos = anchor + Vector2(cos(ang), sin(ang)) * radius
+	made[0].position = Vector3(pos.x, pos.y, 0.8)
+	drones.append({"pos": pos, "vel": Vector2.ZERO, "hp": HP, "anchor": anchor, "radius": radius, "ang": ang,
+		"state": "idle", "cd": randf() * 1.5, "hit_cd": 0.0, "node": made[0], "eye": made[1], "respawn": 0.0})
+
+# A replacement turns up on the dead one's post, out of sight.
+func _revive(d: Dictionary) -> void:
+	var made = _model()
+	d.pos = d.anchor + Vector2(cos(d.ang), sin(d.ang)) * d.radius
+	made[0].position = Vector3(d.pos.x, d.pos.y, 0.8)
+	d.node = made[0]
+	d.eye = made[1]
+	d.hp = HP
+	d.vel = Vector2.ZERO
+	d.state = "idle"
+
+func _model() -> Array:
 	var node = Node3D.new()
 	MeshKit.part(node, MeshKit.sphere(0.7, 4, 2), _body, Vector3.ZERO, Vector3.ZERO, Vector3(1.0, 1.0, 0.6))
 	for s in [-1.0, 1.0]:
 		MeshKit.part(node, MeshKit.box(Vector3(0.9, 0.08, 0.5)), _body, Vector3(s * 0.8, 0, 0), Vector3(0, 0, s * 20.0))
 	var eye = MeshKit.part(node, MeshKit.sphere(0.25, 6, 3), _eye, Vector3(0, 0, 0.45), Vector3.ZERO, Vector3.ONE, false)
 	add_child(node)
-	var pos = anchor + Vector2(cos(ang), sin(ang)) * radius
-	node.position = Vector3(pos.x, pos.y, 0.8)
-	drones.append({"pos": pos, "vel": Vector2.ZERO, "hp": HP, "anchor": anchor, "radius": radius, "ang": ang,
-		"state": "idle", "cd": randf() * 1.5, "hit_cd": 0.0, "node": node, "eye": eye})
+	return [node, eye]
 
 func alive() -> Array:
 	return drones.filter(func(d): return d.hp > 0.0)
@@ -58,6 +75,9 @@ func step(delta: float) -> void:
 	var ship = mining.miner.pos
 	for d in drones:
 		if d.hp <= 0.0:
+			d.respawn -= delta
+			if d.respawn <= 0.0 and d.anchor.distance_to(ship) > RESPAWN_AWAY:
+				_revive(d)
 			continue
 		var dist = d.pos.distance_to(ship)
 		if dist > 320.0:
@@ -133,6 +153,7 @@ func damage(d: Dictionary, amount: float) -> void:
 	mining.main.fx.burst(Vector3(d.pos.x, d.pos.y, 1.0), Color(1.0, 0.8, 0.4), 5, 5.0, 1.2, 0.08, 0.3, 0.0)
 	if d.hp <= 0.0:
 		kills += 1
+		d.respawn = RESPAWN
 		mining.main.fx.burst(Vector3(d.pos.x, d.pos.y, 1.0), Color(1.0, 0.5, 0.15), 30, 10.0, 1.2, 0.18, 0.6, 0.0)
 		mining.main.fx.burst(Vector3(d.pos.x, d.pos.y, 1.0), Color(0.15, 0.14, 0.16), 14, 6.0, 0.0, 0.3, 0.9, 0.0)
 		Sfx.play("small_boom")

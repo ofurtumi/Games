@@ -107,7 +107,8 @@ a hull) and patrol around Moss and Magma. They sit on station until you come
 close, then chase, fire slow red bolts and ram; get far enough away and they
 go back. Every tool hurts them (lasers, missiles, bombs, the wrecking-ball
 drill) and homing missiles go for them before ore. Dead drones drop metal
-and crystal; chasing ones get a red `!` marker.
+and crystal; chasing ones get a red `!` marker. A cleared post fills again
+four minutes later, while you're well away from it.
 
 **Traders** (blue blinking beacon) fly between the outposts and park beside
 the pads. Pull up slowly next to one to deal: material swaps, a refuel for
