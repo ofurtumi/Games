@@ -1024,12 +1024,21 @@ func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void
 	var rows = []
 	for offer in offers:
 		var o = offer
-		rows.append({"label": o.name,
+		var row = {"label": o.name,
 			"value": func(): return "OWNED" if main.unlocks().has(o.name) else _price_text(o.price),
-			"action": func(): _buy(o, offers, title)})
+			"action": func(): _buy(o, offers, title)}
+		# A card for the tool sub-grid, or a whole part: say which.
+		for id in Parts.NODES:
+			if Parts.NODES[id].name == o.name:
+				row.note = {"title": o.name + "  ·  program card (" + Parts.NODES[id].type + ")", "text": Parts.NODES[id].get("desc", "")}
+		for id in Parts.PARTS:
+			if Parts.PARTS[id].name == o.name:
+				row.part = id
+		rows.append(row)
 	var back = open_menu if docked else main.menu.hide_menu
 	rows.append({"label": "Leave", "action": back})
 	main.menu.show_menu(title, rows, back, main.menu.title == title)
+	main.menu.blurb = "Blueprints: program cards you wire into a placed tool's sub-grid in the garage (click the tool) to change what it does, and the odd locked part. Bought once, yours for good."
 	main.menu.wallet = wallet
 
 func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS") -> void:

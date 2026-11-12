@@ -7,7 +7,9 @@ extends Control
 # show_menu(title, rows, on_back). Row: {label, value (String or Callable),
 # action (Callable), left/right (Callable), alt_left/alt_right (Callable,
 # with Shift), swatch (Color or Callable), part (a part id: its card shows
-# along the bottom while the row is selected)}.
+# along the bottom while the row is selected), note ({title, text}: a card
+# for something that isn't a part)}. Every menu gets a line under its title
+# saying what it's for (BLURBS, by title; set `blurb` to override).
 
 const Ui = preload("res://scripts/Ui.gd")
 const BACKDROP = preload("res://assets/shaders/menu_backdrop.gdshader")
@@ -31,6 +33,60 @@ var backdrop: ColorRect
 var dim_backdrop = true
 var capture: Callable   # when set, the next key press goes here (rebinding)
 var wallet: Callable    # shops set this: returns {hold: {...}, bank: {...}}; cleared by show_menu
+var blurb = "":         # the line(s) under the title; show_menu picks it from BLURBS
+	set(v):
+		blurb = v
+		_blurb_lines = _wrap(v, ROW_W + 120.0)
+var _blurb_lines = []
+
+const BLURB_SIZE = 15
+const BLURB_LINE = 20.0
+
+static func _wrap(s: String, width: float) -> Array:
+	var out = []
+	if s == "":
+		return out
+	var line = ""
+	for word in s.split(" "):
+		var trial = word if line == "" else line + " " + word
+		if Ui.font(false).get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, BLURB_SIZE).x > width and line != "":
+			out.append(line)
+			line = word
+		else:
+			line = trial
+	out.append(line)
+	return out
+
+# Rows sit lower when the description takes more than one line.
+func _rows_top() -> float:
+	return origin.y + maxf(0.0, _blurb_lines.size() - 1) * BLURB_LINE + (6.0 if _blurb_lines.size() > 0 else 0.0)
+
+# What each menu is for, by title: [match, how ("is", "starts", "ends"), text].
+const BLURBS = [
+	["PAUSE", "is", "The race is held while you're here."],
+	["PIT SHOP", "is", "Stock parts for your ship, paid in credits. Mechanics' specials are only sold at outposts."],
+	["SELL", "is", "Parts your current build isn't using, sold back for half what they cost."],
+	["MARKET", "is", "Sell materials from your bank for credits. Docking unloads your hold into the bank."],
+	["SOUND", "is", "Volume from 0 to 10. Left and right to change."],
+	["CONTROLS", "is", "Pick an action, then press the key you want for it."],
+	["RESET SAVE?", "is", "Starts a fresh career. A copy of this save is kept next to it."],
+	["ABANDON?", "is", "Drops the contract. Nothing you've done on it is paid."],
+	["EXPEDITION", "is", "Paused out in space."],
+	["NINE FINGERS", "is", "A black market. Program cards and parts you won't find at the outposts."],
+	["CONTRACTS", "ends", "Jobs from this planet. Do them anywhere, three at a time; pick an active one to abandon it."],
+	["OUTPOST", "ends", "Docked: your hold is unloaded into the bank, and fuel and shield are topped up."],
+	["SHOP", "ends", "Parts for your ship: stock parts plus this outpost's mechanics' own. They go to your garage."],
+	["TRADER", "starts", "A travelling trader: swap materials, refuel, or buy the part they're carrying, cheap."],
+	["RESULTS", "starts", "Where everyone finished, and what you won."],
+	["PRACTICE", "starts", "This run against the track's medal times."],
+]
+
+static func blurb_for(menu_title: String) -> String:
+	for b in BLURBS:
+		var hit = menu_title == b[0] if b[1] == "is" else (menu_title.begins_with(b[0]) if b[1] == "starts" else menu_title.ends_with(b[0]))
+		if hit:
+			return b[2]
+	return ""
 
 const MATS = [["rock", Color(0.7, 0.6, 0.5)], ["metal", Color(1.0, 0.6, 0.25)], ["crystal", Color(0.5, 0.9, 1.0)], ["core", Color(1.0, 0.35, 0.85)]]
 
@@ -52,6 +108,7 @@ func show_menu(menu_title: String, menu_rows: Array, back: Callable, keep_select
 	title = menu_title
 	rows = menu_rows
 	wallet = Callable()
+	blurb = blurb_for(menu_title)
 	on_back = back
 	if not keep_selection:
 		selected = 0
@@ -80,7 +137,7 @@ func _row_rect(i: int) -> Rect2:
 	var appear = Ui.ease_out((t - 0.12 - i * STAGGER) / SLIDE)
 	var x = origin.x - (1.0 - appear) * (ROW_W + origin.x + 60.0)
 	var w = ROW_W + (24.0 if i == selected else 0.0)
-	return Rect2(x, origin.y + i * (ROW_H + ROW_GAP), w, ROW_H)
+	return Rect2(x, _rows_top() + i * (ROW_H + ROW_GAP), w, ROW_H)
 
 func _draw():
 	var ta = Ui.ease_out(t / SLIDE)
@@ -89,6 +146,8 @@ func _draw():
 		Ui.segment(self, tr, Ui.INK)
 		Ui.segment(self, Rect2(tr.position.x, tr.end.y - 4, tr.size.x, 4), Ui.HILITE, 0)
 		Ui.text(self, Vector2(origin.x, tr.position.y + 42), title, 34, Color.WHITE, true)
+		for li in _blurb_lines.size():
+			Ui.text(self, Vector2(origin.x + (ta - 1.0) * 700.0, origin.y - 10 + li * BLURB_LINE), _blurb_lines[li], BLURB_SIZE, Color(0.82, 0.85, 0.9), false)
 	for i in rows.size():
 		var r = rows[i]
 		var rr = _row_rect(i)
@@ -114,6 +173,14 @@ func _draw():
 			draw_rect(sq, ink, false, 1.5)
 	if wallet.is_valid():
 		_draw_wallet(wallet.call(), ta)
+	if selected < rows.size() and rows[selected].has("note") and not rows[selected].has("part"):
+		var bw2 = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
+		var band2 = Rect2(size.x - bw2 + (1.0 - ta) * 1000.0, origin.y + 40.0, bw2 + 20.0, 84)
+		var nt = rows[selected].note
+		Ui.segment(self, band2, Color(0.03, 0.035, 0.045, 0.9), 10.0)
+		Ui.segment(self, Rect2(band2.position, Vector2(band2.size.x, 4)), Ui.HILITE, 0.0)
+		Ui.text(self, band2.position + Vector2(36, 32), nt.title.to_upper(), 22, Color.WHITE, true)
+		Ui.text(self, band2.position + Vector2(36, 60), nt.text, 15, Color(0.85, 0.87, 0.9))
 	if selected < rows.size() and rows[selected].has("part"):
 		# Right side, under the wallet, clear of the rows however long the list.
 		var bw = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
