@@ -307,7 +307,10 @@ the price plus a fee (a quarter, at least 20 cr). A small yellow courier
 flies it over (it's on your map, and keeps flying while you wait at the
 station). About one in three gets jumped by pirates on the way: Rix tells you
 where, and the courier wreck (on your map, guarded by two drones) still has
-your part in it. Salvage it to get it back. Orders are saved.
+your part in it. Salvage it to get it back. Orders are saved. The first
+courier wreck you salvage also gives you its **Courier frame** (small, light,
+battered), and the contract boards offer **courier** jobs: carry a package to
+another outpost, paid on docking there.
 Under the shop's part card is an overview panel (Tab switches): **Ship** draws your frame with
 what's fitted (broken slots scorched), lists the parts and gives top speed,
 accel, shield and drill; **Parts owned** lists everything you own with

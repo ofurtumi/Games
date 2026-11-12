@@ -57,6 +57,15 @@ const FRAMES = {
 		"######",
 		"######",
 	]},
+	# The couriers' little frame: light and quick, not much room. Yours from
+	# the first courier wreck you salvage.
+	"courier": {"name": "Courier frame", "mech": "", "mass": 0.25, "locked": true, "rows": [
+		".#.",
+		"###",
+		"###",
+		"###",
+		"#.#",
+	]},
 	# Salvaged frames: found as derelicts, unlocked by towing them home.
 	"manta": {"name": "Manta frame", "mech": "", "mass": 0.7, "locked": true, "rows": [
 		"...##...",

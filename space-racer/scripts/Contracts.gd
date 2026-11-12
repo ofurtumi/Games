@@ -6,6 +6,7 @@ extends RefCounted
 #   salvage - work N wrecks, anywhere
 #   survey  - get down to a planet's mantle or deep layer
 #   mine    - pick up N of an ore
+#   courier - carry a package from this outpost to another one
 # A contract is a dictionary saved as-is: {kind, ...params, reward, have}.
 # Planets are indexed like Mining.PLANETS (and their race palettes).
 
@@ -21,7 +22,7 @@ static func _pay(rng: RandomNumberGenerator, value: int, avoid: String = "") -> 
 	return {"credits": int(round(value * 3 * rng.randf_range(0.95, 1.1) / 5.0)) * 5}
 
 static func make(rng: RandomNumberGenerator, here: int, unlocks: Array) -> Dictionary:
-	var kinds = ["haul", "haul", "race", "salvage", "survey", "mine", "bounty"]
+	var kinds = ["haul", "haul", "race", "salvage", "survey", "mine", "bounty", "courier", "courier"]
 	var kind = kinds[rng.randi() % kinds.size()]
 	var c = {"kind": kind, "from": here, "have": 0}
 	match kind:
@@ -54,6 +55,9 @@ static func make(rng: RandomNumberGenerator, here: int, unlocks: Array) -> Dicti
 		"bounty":
 			c.need = 3 + rng.randi() % 3
 			c.reward = _pay(rng, 10 * c.need)
+		"courier":
+			c.to = (here + 1 + rng.randi() % 3) % 4
+			c.reward = _pay(rng, 14 + 6 * absi(c.to - here))
 		"mine":
 			var mat = ["metal", "crystal", "core"][rng.randi() % 3]
 			c.mat = mat
@@ -75,13 +79,15 @@ static func title(c: Dictionary) -> String:
 			return "Mine %d %s" % [c.need, c.mat]
 		"bounty":
 			return "Destroy %d drones" % c.need
+		"courier":
+			return "Courier a package to %s" % PLANET_NAMES[c.to].capitalize()
 	return "?"
 
 static func progress(c: Dictionary) -> String:
 	match c.kind:
 		"salvage", "mine", "bounty":
 			return "%d / %d" % [c.have, c.need]
-		"haul":
+		"haul", "courier":
 			return "to " + PLANET_NAMES[c.to]
 	return ""
 
@@ -102,6 +108,8 @@ static func on_event(c: Dictionary, event: String, data: Dictionary) -> bool:
 			if data.planet == c.to and data.cargo.get(c.mat, 0) >= c.need:
 				data.cargo[c.mat] -= c.need
 				return true
+		["courier", "dock"]:
+			return data.planet == c.to
 		["race", "race"]:
 			return data.planet == c.planet and data.place <= c.place
 		["salvage", "salvage"]:

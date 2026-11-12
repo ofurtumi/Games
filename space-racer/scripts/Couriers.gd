@@ -127,6 +127,10 @@ func recovered(o: Dictionary) -> void:
 	var main = mining.main
 	main.owned()[o.part] = main.owned().get(o.part, 0) + o.n
 	main.notify("RECOVERED  %s" % Parts.PARTS[o.part].name.to_upper(), Color(1.0, 0.82, 0.25))
+	# The first courier wreck you pick over: its frame's yours (battered).
+	if Parts.is_locked(Parts.FRAMES.courier, main.unlocks()):
+		main.break_frame("courier")
+		main.unlock(Parts.FRAMES.courier.name)
 	_drop(o)
 
 func _drop(o: Dictionary) -> void:
