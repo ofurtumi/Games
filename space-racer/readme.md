@@ -9,7 +9,9 @@ track, swappable builds. Godot 4.7, everything built in code.
 The game opens on a title screen with your ship lapping the track behind it:
 Race (the cup on your current planet, against its locals), Time trial (five
 practice laps for medals), Expedition, Garage, Track Builder, Controls,
-Rivals, Sound, Quit.
+Rivals, Sound, Reset save, Quit. **Reset save** (after an "are you sure")
+copies the save aside as `space_racer_save.backup-<date>.txt` and starts a
+fresh career; controls and sound settings stay.
 
 **A new game** shows only **Start**. Rix, your contact, messages you on an
 old green terminal: they found a rusty ship, will you win the Cinder cup with

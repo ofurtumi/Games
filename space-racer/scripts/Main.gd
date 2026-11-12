@@ -948,8 +948,39 @@ func show_title() -> void:
 		{"label": "Controls", "action": func(): open_controls(show_title)},
 		_rivals_row(),
 		{"label": "Sound", "action": func(): open_sound(show_title)},
+		{"label": "Reset save", "action": _confirm_reset},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], Callable())
+
+func _confirm_reset() -> void:
+	menu.show_menu("RESET SAVE?", [
+		{"label": "Start over", "value": "parts, frames, wins, materials"},
+		{"label": "Reset", "action": reset_save},
+		{"label": "Back", "action": show_title},
+	], show_title)
+	menu.selected = 2
+
+# Back to a fresh career (the old save is copied aside first). Controls and
+# sound settings stay.
+func reset_save() -> void:
+	if not _nosave():
+		Save.backup()
+	var keep = {}
+	for k in ["keys", "sound"]:
+		if save_data.has(k):
+			keep[k] = save_data[k]
+	_title_track(false)
+	new_game()
+	for k in keep:
+		save_data[k] = keep[k]
+	ship.equip(loadout)
+	planet_index = 0
+	track_seed = 500
+	_new_planet()
+	session = {"laps": 0, "best": -1.0, "medals": [], "earned": {}}
+	save_game()
+	notify("SAVE RESET", Color(1.0, 0.82, 0.25))
+	show_title()
 
 # Behind the title the ship laps on its own, so the track is cleared of
 # anything that would wreck it (mines, barriers, walls, ramps, drones).

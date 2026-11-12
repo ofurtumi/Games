@@ -7,6 +7,15 @@ const Parts = preload("res://scripts/Parts.gd")
 const PATH = "user://space_racer_save.txt"
 const SLOTS = 6
 
+# Copies the save aside (space_racer_save.backup-<date>.txt) before a reset.
+static func backup() -> String:
+	if not FileAccess.file_exists(PATH):
+		return ""
+	var stamp = Time.get_datetime_string_from_system().replace(":", "").replace("T", "-")
+	var to = "user://space_racer_save.backup-%s.txt" % stamp
+	DirAccess.copy_absolute(ProjectSettings.globalize_path(PATH), ProjectSettings.globalize_path(to))
+	return to
+
 static func read() -> Dictionary:
 	if not FileAccess.file_exists(PATH):
 		return {}
