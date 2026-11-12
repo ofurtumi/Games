@@ -1110,6 +1110,7 @@ func open_shop(mech: String, title: String) -> void:
 	rows.append({"label": "Leave", "action": back})
 	main.menu.show_menu(title, rows, back, main.menu.title == title)
 	main.menu.wallet = wallet
+	main.menu.overview = main.shop_overview
 
 # Hold and bank, for the shop menus' wallet panel.
 func wallet() -> Dictionary:
@@ -1134,6 +1135,7 @@ func open_sell(mech: String, title: String) -> void:
 	rows.append({"label": "Back", "action": back})
 	main.menu.show_menu("SELL", rows, back, main.menu.title == "SELL")
 	main.menu.wallet = wallet
+	main.menu.overview = main.shop_overview
 
 func _sell_part(id: String, mech: String, title: String) -> void:
 	if _spares().get(id, 0) <= 0:

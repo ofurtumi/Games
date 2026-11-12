@@ -15,6 +15,7 @@ const Ui = preload("res://scripts/Ui.gd")
 const BACKDROP = preload("res://assets/shaders/menu_backdrop.gdshader")
 const Sfx = preload("res://scripts/Sfx.gd")
 const PartInfo = preload("res://scripts/PartInfo.gd")
+const ShopOverview = preload("res://scripts/ShopOverview.gd")
 
 const ROW_H = 40.0
 const ROW_GAP = 6.0
@@ -38,6 +39,8 @@ var blurb = "":         # the line(s) under the title; show_menu picks it from B
 		blurb = v
 		_blurb_lines = _wrap(v, ROW_W + 120.0)
 var _blurb_lines = []
+var overview: Callable   # shops set this: returns ShopOverview data; cleared by show_menu
+var overview_mode = "ship"
 
 const BLURB_SIZE = 15
 const BLURB_LINE = 20.0
@@ -108,6 +111,7 @@ func show_menu(menu_title: String, menu_rows: Array, back: Callable, keep_select
 	title = menu_title
 	rows = menu_rows
 	wallet = Callable()
+	overview = Callable()
 	blurb = blurb_for(menu_title)
 	on_back = back
 	if not keep_selection:
@@ -173,6 +177,12 @@ func _draw():
 			draw_rect(sq, ink, false, 1.5)
 	if wallet.is_valid():
 		_draw_wallet(wallet.call(), ta)
+	if overview.is_valid():
+		var bw3 = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
+		var top3 = origin.y + 160.0
+		var data = overview.call()
+		data.selected = rows[selected].get("part", "") if selected < rows.size() else ""
+		ShopOverview.draw(self, Rect2(size.x - bw3 + (1.0 - ta) * 1000.0, top3, bw3 + 20.0, minf(size.y - top3 - 30.0, 440.0)), data, overview_mode)
 	if selected < rows.size() and rows[selected].has("note") and not rows[selected].has("part"):
 		var bw2 = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
 		var band2 = Rect2(size.x - bw2 + (1.0 - ta) * 1000.0, origin.y + 40.0, bw2 + 20.0, 84)
@@ -282,6 +292,10 @@ func _unhandled_key_input(event):
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if not event.echo:
 				_activate(selected)
+		KEY_TAB:
+			if overview.is_valid() and not event.echo:
+				overview_mode = "parts" if overview_mode == "ship" else "ship"
+				Sfx.play("ui_move")
 		KEY_ESCAPE, KEY_BACKSPACE:
 			if not event.echo and on_back.is_valid():
 				Sfx.play("ui_back")

@@ -267,6 +267,10 @@ you don't own the parts for is refused and tells you what's missing.
 Shops, the black market and traders show your hold and bank top right.
 Shop rows show the selected part's card on the right, the same one the
 garage shows: maker, what it does, its numbers and its placement rule.
+Under it an overview panel (Tab switches): **Ship** draws your frame with
+what's fitted (broken slots scorched), lists the parts and gives top speed,
+accel, shield and drill; **Parts owned** lists everything you own with
+owned / fitted / spare, the shop's selected part marked.
 **Sell parts** (bottom of every shop) sells spares, the parts your current
 build isn't using, for half the shop price into the bank.
 Between races, **Pit shop** on the pause menu sells the stock parts (no
@@ -323,7 +327,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `ShopOverview.gd` shops' ship / parts panel · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

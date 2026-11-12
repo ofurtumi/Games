@@ -816,6 +816,10 @@ func open_menu() -> void:
 
 # The track's pit lane sells stock parts (no mechanics' specials, those are
 # at the outposts) and buys spares back, all through the bank.
+# What the shops' overview panel shows: your build and what you own.
+func shop_overview() -> Dictionary:
+	return {"lo": loadout, "owned": owned(), "stats": ship.stats, "broken": broken_cells(loadout.get("frame", "basic"))}
+
 func open_pit(back: Callable) -> void:
 	var rows = []
 	for id in Parts.shop_stock(""):
@@ -832,6 +836,7 @@ func open_pit(back: Callable) -> void:
 	rows.append({"label": "Back", "action": back})
 	menu.show_menu("PIT SHOP", rows, back, menu.title == "PIT SHOP")
 	menu.wallet = func(): return {"bank": inventory}
+	menu.overview = shop_overview
 
 func _price_text(price: Dictionary) -> String:
 	var bits = []
@@ -896,6 +901,7 @@ func _pit_sell_menu(back: Callable) -> void:
 	rows.append({"label": "Back", "action": up})
 	menu.show_menu("SELL", rows, up, menu.title == "SELL")
 	menu.wallet = func(): return {"bank": inventory}
+	menu.overview = shop_overview
 
 func _pit_sell(id: String, back: Callable) -> void:
 	if spare_parts().get(id, 0) <= 0:
