@@ -190,10 +190,16 @@ outposts and from Nine Fingers.
 
 ## Owning parts
 
-You own parts in quantities and a build can only use what you own. New
-pilots start with a small kit (one Core engine, three Thrusters, a Pilot
-drill, two Air brakes, two Shield plates, two Razor fins, a Hop jet). The
-garage list shows free / owned for each part; parts you have none of are
+You own parts in quantities and a build can only use what you own. A new
+game starts you in the **Rustbucket**: a Basic frame with only the parts to
+fly it (a Core engine, two Thrusters, a Pilot drill, one Shield plate) and
+seven of its sixteen slots broken. Broken slots show scorched and cracked in
+the garage; click one to repair it for materials from the bank (6 rock 2
+metal for the first, a little more for each after, crystal too once you've
+done five). The Basic frame is the only one you start with: the Dart and
+Advanced frames have to be earned, and frames towed home from derelicts
+arrive with about half their slots broken. (Saves from before this keep
+their frames whole.) The garage list shows free / owned for each part; parts you have none of are
 greyed out. Buy more at an outpost's **Shop**: every outpost sells stock
 parts, plus its mechanics' own (Cinder: Grindhaus + Aegis, Rime: Vex, Moss:
 Lodestone + Aegis, Magma: Arclight + Grindhaus, Nine Fingers: its own).

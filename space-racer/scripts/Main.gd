@@ -125,12 +125,19 @@ func _ready():
 	_parse_args()
 	if not _nosave():
 		save_data = Save.read()
+		if save_data.is_empty():
+			new_game()
 		inventory = save_data.get("inventory", {})
 		if loadout.is_empty() and not has_meta("preset"):
 			loadout = Save.clean_loadout(save_data.get("loadout", null))
 		if loadout.is_empty():
 			loadout = Parts.presets()[0]
 		_migrate_owned()
+		_migrate_career()
+	elif has_meta("career"):
+		new_game()
+	else:
+		_migrate_career()
 	Controls.apply(save_data.get("keys", {}))
 	add_child(Sfx.new())
 	apply_sound()
@@ -353,6 +360,84 @@ func owned() -> Dictionary:
 	if not save_data.has("owned"):
 		save_data.owned = Parts.STARTER_KIT.duplicate()
 	return save_data.owned
+
+# ---------------------------------------------------------------- career
+
+# A new pilot: the Rustbucket (a Basic frame with most slots broken) and
+# just the parts on it. Everything else is earned.
+func new_game() -> void:
+	save_data = {"career": 1, "owned": Parts.CAREER_KIT.duplicate(), "inventory": {}}
+	loadout = Parts.career_ship()
+	save_data.loadout = loadout.duplicate(true)
+	var used = {}
+	for p in loadout.parts:
+		for c in Parts.cells_of(p):
+			used[c] = true
+	var broken = []
+	for c in Parts.frame_cells("basic"):
+		if not used.has(c):
+			broken.append(c)
+	save_data.broken = {"basic": broken}
+	inventory = save_data.inventory
+
+# Saves from before the career keep the frames they started with, whole.
+func _migrate_career() -> void:
+	if save_data.has("career"):
+		return
+	save_data.career = 1
+	var u = unlocks()
+	for f in ["Dart frame", "Advanced frame"]:
+		if not u.has(f):
+			u.append(f)
+	save_data.unlocks = u
+
+# Broken slots on one of your frames, as a set of cells.
+func broken_cells(frame: String) -> Dictionary:
+	var out = {}
+	for c in save_data.get("broken", {}).get(frame, []):
+		out[c] = true
+	return out
+
+# Each slot repaired on a frame makes the next one dearer.
+func repair_cost(frame: String) -> Dictionary:
+	var n = save_data.get("repaired", {}).get(frame, 0)
+	var cost = {"rock": 6 + 4 * n, "metal": 2 + 2 * n}
+	if n >= 5:
+		cost.crystal = n - 4
+	return cost
+
+func repair_slot(frame: String, c: Vector2i) -> bool:
+	var b = save_data.get("broken", {}).get(frame, [])
+	if not b.has(c):
+		return false
+	var cost = repair_cost(frame)
+	if not can_afford(cost):
+		notify("NOT ENOUGH  -  " + _price_text(cost).to_upper(), Color(1.0, 0.4, 0.3), "repair")
+		return false
+	for k in cost:
+		inventory[k] -= cost[k]
+	b.erase(c)
+	var r = save_data.get("repaired", {})
+	r[frame] = r.get(frame, 0) + 1
+	save_data.repaired = r
+	notify("SLOT REPAIRED", Color(0.5, 1.0, 0.6), "repair")
+	Sfx.play("clunk")
+	save_game()
+	return true
+
+# A frame you've just got hold of comes in battered: about half its slots
+# broken (the same ones every time for a given frame).
+func break_frame(frame: String, share: float = 0.5) -> void:
+	var cells = Parts.frame_cells(frame).keys()
+	var r = RandomNumberGenerator.new()
+	r.seed = hash(frame)
+	var broken = []
+	for c in cells:
+		if r.randf() < share:
+			broken.append(c)
+	var all = save_data.get("broken", {})
+	all[frame] = broken
+	save_data.broken = all
 
 # First run with the parts economy: keep everything already built.
 func _migrate_owned() -> void:

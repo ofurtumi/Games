@@ -956,6 +956,7 @@ func _update_tow(delta: float) -> void:
 		drop.append(o.pad)
 	for o in drop:
 		if tow.pos.distance_to(o) < 10.0:
+			main.break_frame(tow.data.frame)
 			main.unlock(Parts.FRAMES[tow.data.frame].name)
 			tow.node.queue_free()
 			tow.done = true

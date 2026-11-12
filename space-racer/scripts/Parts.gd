@@ -37,7 +37,7 @@ const FRAMES = {
 		"#####",
 		".###.",
 	]},
-	"dart": {"name": "Dart frame", "mech": "vex", "mass": 0.35, "rows": [
+	"dart": {"name": "Dart frame", "mech": "vex", "mass": 0.35, "locked": true, "rows": [
 		"..#..",
 		"..#..",
 		"..#..",
@@ -83,7 +83,7 @@ const FRAMES = {
 		"########",
 		".######.",
 	]},
-	"advanced": {"name": "Advanced frame", "mech": "grind", "mass": 0.9, "rows": [
+	"advanced": {"name": "Advanced frame", "mech": "grind", "mass": 0.9, "locked": true, "rows": [
 		"....##....",
 		"....##....",
 		"....##....",
@@ -380,6 +380,14 @@ const PATTERNS = ["stripe", "twin", "nose", "none"]
 static func _p(id: String, x: int, y: int, rot: int = 0) -> Dictionary:
 	return {"id": id, "cell": Vector2i(x, y), "rot": rot}
 
+# A new pilot's ship: a Basic frame with only the slots these parts sit on
+# still working, and just the parts to fly it.
+const CAREER_KIT = {"engine_1": 1, "thruster": 2, "drill_1": 1, "shield": 1}
+
+static func career_ship() -> Dictionary:
+	return {"name": "Rustbucket", "frame": "basic", "paint": {"primary": Color(0.62, 0.58, 0.52), "secondary": Color(0.75, 0.32, 0.12), "pattern": "stripe"},
+		"parts": [_p("drill_1", 2, 0), _p("engine_1", 2, 3), _p("thruster", 1, 5), _p("thruster", 3, 5), _p("shield", 2, 5)]}
+
 static func presets() -> Array:
 	return [
 		{"name": "Stock", "frame": "basic", "paint": {"primary": Color(0.92, 0.92, 0.95), "secondary": Color(0.85, 0.15, 0.15), "pattern": "stripe"},
@@ -448,7 +456,9 @@ static func occupancy(parts: Array, skip: int = -1) -> Dictionary:
 	return occ
 
 # Why `p` can't go there, or "" if it can.
-static func placement_error(frame_id: String, parts: Array, p: Dictionary, skip: int = -1) -> String:
+# `broken`: cells of this frame that are broken (the player's own frames;
+# rivals' are whole). Nothing goes on a broken slot until it's repaired.
+static func placement_error(frame_id: String, parts: Array, p: Dictionary, skip: int = -1, broken: Dictionary = {}) -> String:
 	var def = PARTS[p.id]
 	var frame = frame_cells(frame_id)
 	var occ = occupancy(parts, skip)
@@ -458,6 +468,8 @@ static func placement_error(frame_id: String, parts: Array, p: Dictionary, skip:
 			return "off the frame"
 		if occ.has(c):
 			return "overlaps"
+		if broken.has(c):
+			return "broken slot - repair it first"
 	if def.get("edge", false):
 		var touches = false
 		for c in cells:
@@ -504,8 +516,8 @@ static func blocks_exhaust(parts: Array, p: Dictionary, skip: int = -1) -> bool:
 				return true
 	return false
 
-static func can_place(frame_id: String, parts: Array, p: Dictionary, skip: int = -1) -> bool:
-	return placement_error(frame_id, parts, p, skip) == ""
+static func can_place(frame_id: String, parts: Array, p: Dictionary, skip: int = -1, broken: Dictionary = {}) -> bool:
+	return placement_error(frame_id, parts, p, skip, broken) == ""
 
 # ---------------------------------------------------------------- stats
 

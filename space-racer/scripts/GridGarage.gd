@@ -98,7 +98,7 @@ func _process(delta):
 	var key = ""
 	if selected != "" and not editor.visible and _part_at(hover) < 0:
 		var g = _ghost()
-		if Parts.can_place(lo.frame, lo.parts, g):
+		if Parts.can_place(lo.frame, lo.parts, g, -1, _broken()):
 			key = var_to_str(g)
 	if key != _preview_key:
 		_preview_key = key
@@ -174,9 +174,20 @@ func _try_load(other: Dictionary) -> void:
 			names.append("%d %s" % [miss[id], Parts.PARTS[id].name])
 		main.notify("MISSING  " + ", ".join(names).to_upper(), Color(1.0, 0.4, 0.3))
 		return
+	if Parts.is_locked(Parts.FRAMES[other.frame], main.unlocks()):
+		main.notify("YOU DON'T HAVE THE " + Parts.FRAMES[other.frame].name.to_upper() + " YET", Color(1.0, 0.4, 0.3))
+		return
+	var broken = main.broken_cells(other.frame)
+	for p in other.parts:
+		if Parts.cells_of(p).any(func(c): return broken.has(c)):
+			main.notify("BROKEN SLOTS ON THAT FRAME  -  REPAIR THEM FIRST", Color(1.0, 0.4, 0.3))
+			return
 	lo = other.duplicate(true)
 	name_edit.text = lo.name
 	main.equip(lo.duplicate(true), false)
+
+func _broken() -> Dictionary:
+	return main.broken_cells(lo.frame)
 
 func _part_at(c: Vector2i) -> int:
 	return Parts.occupancy(lo.parts).get(c, -1)
@@ -248,13 +259,16 @@ func _gui_input(event):
 					return
 			# Clicking a placed part opens its sub-grid, selection or not.
 			var at = _part_at(c)
+			if at < 0 and _broken().has(c):
+				main.repair_slot(lo.frame, c)
+				return
 			if at >= 0:
 				inspected = at
 				if Parts.sub_size(lo.parts[at].id) != Vector2i.ZERO:
 					editor.open(self, at)
 			elif selected != "":
 				var g = _ghost()
-				if Parts.can_place(lo.frame, lo.parts, g) and _free(selected) > 0:
+				if Parts.can_place(lo.frame, lo.parts, g, -1, _broken()) and _free(selected) > 0:
 					lo.parts.append(g)
 					Sfx.play("clunk")
 					_commit()
@@ -317,7 +331,7 @@ func _cycle_frame(dir: int) -> void:
 	lo.frame = keys[(keys.find(lo.frame) + dir + keys.size()) % keys.size()]
 	var kept = []
 	for p in lo.parts:
-		if Parts.can_place(lo.frame, kept, p):
+		if Parts.can_place(lo.frame, kept, p, -1, _broken()):
 			kept.append(p)
 	lo.parts = kept
 	_commit()
@@ -447,11 +461,19 @@ func _draw():
 		for x in sz.x:
 			var c = Vector2i(x, y)
 			draw_rect(_cell_rect(c).grow(-1), Color(0.78, 0.8, 0.83) if frame.has(c) else Color(1, 1, 1, 0.04))
+	# Broken slots: scorched, cracked, and a wrench when you point at one.
+	var broken = _broken()
+	for c in broken:
+		var r = _cell_rect(c).grow(-1)
+		draw_rect(r, Color(0.2, 0.12, 0.1) if c != hover else Color(0.34, 0.18, 0.12))
+		draw_line(r.position + r.size * Vector2(0.2, 0.15), r.position + r.size * Vector2(0.55, 0.5), Color(0.75, 0.3, 0.15), 2.0)
+		draw_line(r.position + r.size * Vector2(0.55, 0.5), r.position + r.size * Vector2(0.4, 0.85), Color(0.75, 0.3, 0.15), 2.0)
+		draw_line(r.position + r.size * Vector2(0.55, 0.5), r.position + r.size * Vector2(0.85, 0.6), Color(0.75, 0.3, 0.15), 2.0)
 	# Where the selected part may go: green on every cell that works as its
 	# anchor with the current rotation, a dim red wash on the rest.
 	if selected != "":
 		for c in frame:
-			var ok = Parts.can_place(lo.frame, lo.parts, {"id": selected, "cell": c, "rot": rot})
+			var ok = Parts.can_place(lo.frame, lo.parts, {"id": selected, "cell": c, "rot": rot}, -1, _broken())
 			var r = _cell_rect(c).grow(-1)
 			if ok:
 				draw_rect(r, Color(0.35, 0.85, 0.4, 0.55))
@@ -476,9 +498,11 @@ func _draw():
 	if over >= 0:
 		for c in Parts.cells_of(lo.parts[over]):
 			draw_rect(_cell_rect(c).grow(-1), Color(0.3, 0.55, 1.0), false, 3.0)
+	elif broken.has(hover):
+		err = "click to repair:  " + main._price_text(main.repair_cost(lo.frame))
 	elif selected != "" and Rect2(Vector2.ZERO, Vector2(sz)).has_point(Vector2(hover)):
 		var g = _ghost()
-		err = Parts.placement_error(lo.frame, lo.parts, g)
+		err = Parts.placement_error(lo.frame, lo.parts, g, -1, _broken())
 		var ok = err == ""
 		_draw_part(g, Color(1, 1, 1, 0.5) if ok else Color(1, 0.2, 0.15, 0.45), Color.WHITE if ok else Color(1, 0.3, 0.2))
 	_draw_status(err, over)
@@ -546,7 +570,10 @@ func _draw_status(err: String, over: int = -1) -> void:
 	Ui.text(self, Vector2(rr[1].end.x + 6, rr[1].position.y + 26), "R", 13, Ui.DIM, true)
 	var sr = _status_rect()
 	var st = main.ship.stats
-	if selected != "" and _free(selected) <= 0 and over < 0:
+	if err.begins_with("click to repair"):
+		Ui.segment(self, sr, Color(0.95, 0.7, 0.2), 8.0)
+		Ui.text(self, sr.position + Vector2(18, 27), err.to_upper(), 18, Ui.INK, true)
+	elif selected != "" and _free(selected) <= 0 and over < 0:
 		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
 		Ui.text(self, sr.position + Vector2(18, 27), "NONE LEFT  -  BUY MORE AT AN OUTPOST", 18, Color.WHITE, true)
 	elif over >= 0 and Parts.sub_size(lo.parts[over].id) != Vector2i.ZERO:
