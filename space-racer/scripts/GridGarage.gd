@@ -145,6 +145,10 @@ func _list_rect(i: int) -> Rect2:
 	var appear = Ui.ease_out((t - i * 0.03) / 0.25)
 	return Rect2(30 - (1.0 - appear) * 400.0, 122 + i * 30, 300, 26)
 
+# Top right: the way out (Esc does the same).
+func _done_rect() -> Rect2:
+	return Rect2(size.x - 220, 14, 200, 44)
+
 func _frame_rect() -> Rect2:
 	return Rect2(430, 132, 500, 38)
 
@@ -233,6 +237,11 @@ func _gui_input(event):
 		var c = _cell_at(pos)
 		var left = event.button_index == MOUSE_BUTTON_LEFT
 		var right = event.button_index == MOUSE_BUTTON_RIGHT
+		if left and _done_rect().has_point(pos):
+			Sfx.play("ui_back")
+			close()
+			accept_event()
+			return
 		if left:
 			name_edit.release_focus()
 		if left or right:
@@ -556,6 +565,10 @@ func _draw():
 			draw_rect(Rect2(r.end.x - 70 + q.x * 6, r.position.y + 3 + q.y * 6, 5, 5), Color.WHITE if sel else Color(0.3, 0.32, 0.36))
 	_draw_slots()
 	_draw_repairs()
+	var dr = _done_rect()
+	Ui.segment(self, dr, Ui.HILITE, 10.0)
+	Ui.text(self, dr.position + Vector2(0, 30), "DONE", 20, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, dr.size.x)
+	Ui.text(self, dr.position + Vector2(0, 30), "ESC", 11, Color(0.75, 0.82, 1.0), true, HORIZONTAL_ALIGNMENT_RIGHT, dr.size.x - 14)
 	var prs = _paint_rects()
 	var paint = lo.paint
 	var labels = ["HULL", "TRIM", paint.pattern.to_upper(), "GLOW"]

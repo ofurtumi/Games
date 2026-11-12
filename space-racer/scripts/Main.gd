@@ -1090,6 +1090,7 @@ func open_controls(back: Callable) -> void:
 			"value": func(): return "press a key" if rebinding == id else Controls.key_name(id, save_data.get("keys", {})),
 			"action": func(): _rebind(id, back)})
 	rows.append({"label": "Reset to defaults", "action": func(): _reset_keys(back)})
+	rows.append({"label": "Back", "action": back})
 	menu.show_menu("CONTROLS", rows, back, menu.title == "CONTROLS")
 
 func _reset_keys(back: Callable) -> void:

@@ -60,6 +60,9 @@ func _process(delta):
 	centre += dir * PAN / zoom * delta
 	queue_redraw()
 
+func _close_rect() -> Rect2:
+	return Rect2(size.x - 190, size.y - 58, 170, 40)
+
 func zoom_by(k: float, about: Vector2) -> void:
 	var before = to_world(about)
 	zoom = clampf(zoom * k, 0.08, 3.0)
@@ -83,6 +86,8 @@ func _input(event):
 			zoom_by(1.15, event.position)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_by(1.0 / 1.15, event.position)
+		elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed and _close_rect().has_point(event.position):
+			close()
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			_drag = event.pressed
 		get_viewport().set_input_as_handled()
@@ -152,6 +157,9 @@ func _draw():
 	var keys = "WASD / DRAG  MOVE    WHEEL  ZOOM    SPACE  YOU    M  CLOSE"
 	Ui.segment(self, Rect2(size.x * 0.5 - 380, size.y - 52, 760, 34), Color(0.03, 0.035, 0.045, 0.85), 8.0)
 	Ui.text(self, Vector2(size.x * 0.5 - 380, size.y - 29), keys, 14, Ui.DIM, true, HORIZONTAL_ALIGNMENT_CENTER, 760)
+	var cr = _close_rect()
+	Ui.segment(self, cr, Ui.HILITE, 8.0)
+	Ui.text(self, cr.position + Vector2(0, 27), "CLOSE", 18, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, cr.size.x)
 	draw_arc(Vector2(size.x - 250, 52), 7, 0, TAU, 16, SIGNAL, 2.0)
 	Ui.text(self, Vector2(size.x - 234, 57), "SIGNAL - NOT VISITED", 13, SIGNAL, true)
 
