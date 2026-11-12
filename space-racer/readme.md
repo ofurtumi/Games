@@ -260,8 +260,8 @@ outposts and from Nine Fingers.
 ## Credits
 
 Materials are what you dig; **credits** (cr) are what you spend. Every
-outpost has a **Market** that buys materials from your bank (rock 2 cr,
-metal 6, crystal 15, core 45 each; docking unloads your hold into the bank),
+outpost has a **Market** that buys materials from your bank (rock 1 cr per
+2, metal 6, crystal 15, core 45 each; docking unloads your hold into the bank),
 and the pit shop has one too. Shops, the pit, blueprints and traders' parts
 and refuels are priced in credits (a part's price is its material cost at
 those rates); selling a part back pays half in credits. Race prizes (200 /

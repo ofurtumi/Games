@@ -980,20 +980,19 @@ func credits() -> int:
 
 # ---------------------------------------------------------------- market
 
-# Sell materials from the bank for credits, at Parts.MAT_VALUE each. Outposts
+# Sell materials from the bank for credits, at Parts.SELL_VALUE each. Outposts
 # and the pit both have one.
 func open_exchange(back: Callable) -> void:
 	var rows = []
 	for m in ["rock", "metal", "crystal", "core"]:
 		var mat = m
-		var v = Parts.MAT_VALUE[m]
-		rows.append({"label": "Sell 10 " + m, "value": func(): return "%d in bank   +%d cr" % [inventory.get(mat, 0), v * mini(10, inventory.get(mat, 0))],
+		rows.append({"label": "Sell 10 " + m, "value": func(): return "%d in bank   +%d cr" % [inventory.get(mat, 0), Parts.sale(mat, mini(10, inventory.get(mat, 0)))],
 			"action": func(): _sell_mat(mat, 10, back)})
-		rows.append({"label": "Sell all " + m, "value": func(): return "+%d cr" % (v * inventory.get(mat, 0)),
+		rows.append({"label": "Sell all " + m, "value": func(): return "+%d cr" % Parts.sale(mat, inventory.get(mat, 0)),
 			"action": func(): _sell_mat(mat, inventory.get(mat, 0), back)})
 	rows.append({"label": "Back", "action": back})
 	menu.show_menu("MARKET", rows, back, menu.title == "MARKET")
-	menu.blurb = "Sell materials from your bank for credits (rock %d, metal %d, crystal %d, core %d each). Docking unloads your hold into the bank. Keep some rock and metal for repairs." % [Parts.MAT_VALUE.rock, Parts.MAT_VALUE.metal, Parts.MAT_VALUE.crystal, Parts.MAT_VALUE.core]
+	menu.blurb = "Sell materials from your bank for credits (rock 1 cr per 2, metal %d, crystal %d, core %d each). Docking unloads your hold into the bank. Keep some rock and metal for repairs." % [int(Parts.SELL_VALUE.metal), int(Parts.SELL_VALUE.crystal), int(Parts.SELL_VALUE.core)]
 	menu.wallet = func(): return {"bank": inventory}
 
 func _sell_mat(m: String, n: int, back: Callable) -> void:
@@ -1002,8 +1001,8 @@ func _sell_mat(m: String, n: int, back: Callable) -> void:
 		notify("NO " + m.to_upper() + " IN THE BANK", Color(1.0, 0.4, 0.3), "market")
 		return
 	inventory[m] -= n
-	inventory.credits = credits() + n * Parts.MAT_VALUE[m]
-	notify("SOLD %d %s  +%d CR" % [n, m.to_upper(), n * Parts.MAT_VALUE[m]], Color(1.0, 0.82, 0.25), "market")
+	inventory.credits = credits() + Parts.sale(m, n)
+	notify("SOLD %d %s  +%d CR" % [n, m.to_upper(), Parts.sale(m, n)], Color(1.0, 0.82, 0.25), "market")
 	Sfx.play("coins")
 	save_game()
 	open_exchange(back)

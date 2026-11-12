@@ -728,6 +728,12 @@ const SHOP_MECHS = {"grind": ["grind", "aegis"], "vex": ["vex"], "lode": ["lode"
 # Credits: what the outposts' markets pay per unit of each material, and the
 # rate every price in credits is figured at.
 const MAT_VALUE = {"rock": 2, "metal": 6, "crystal": 15, "core": 45}
+# What the Market actually pays. Rock comes by the hold-load just from
+# digging, so it fetches far less than its share in a part's price.
+const SELL_VALUE = {"rock": 0.5, "metal": 6.0, "crystal": 15.0, "core": 45.0}
+
+static func sale(m: String, n: int) -> int:
+	return int(floor(n * SELL_VALUE.get(m, 0.0)))
 
 static func to_credits(materials: Dictionary) -> int:
 	var n = 0
