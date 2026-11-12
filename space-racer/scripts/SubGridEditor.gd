@@ -114,6 +114,15 @@ func _in_port(i: int) -> Vector2:
 	var r = _node_rect(i)
 	return Vector2(r.position.x - 2, r.get_center().y)
 
+# Copies of a card not in use anywhere on the build (this part's grid as it
+# stands in the editor).
+func _free(id: String) -> int:
+	var used = Parts.count_cards(garage.lo, idx)
+	for nd in sub.nodes:
+		if nd.id == id:
+			used[id] = used.get(id, 0) + 1
+	return garage.main.cards().get(id, 0) - used.get(id, 0)
+
 func _palette() -> Array:
 	return Parts.NODES.keys().filter(func(n): return Parts.node_allowed(pid, n))
 
@@ -258,6 +267,9 @@ func _gui_input(event):
 						return
 			var c = Vector2i(((pos - _origin()) / CELL).floor())
 			if placing != "" and Rect2i(Vector2i.ZERO, gsize).has_point(c) and _node_at(c) == -2:
+				if _free(placing) <= 0:
+					garage.main.notify("NO " + Parts.NODES[placing].name.to_upper() + " CARDS LEFT  -  BUY MORE AT AN OUTPOST", Color(1.0, 0.4, 0.3), "cards")
+					return
 				sub.nodes.append({"id": placing, "cell": c})
 				Sfx.play("clunk", -4.0, 1.4)
 		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and drag_from != -2:
@@ -333,6 +345,9 @@ func _draw():
 		Ui.segment(self, r, Ui.HILITE if on else (Color.WHITE if i == hover_pal else Ui.PAPER), 6.0)
 		draw_rect(Rect2(r.position.x + 4, r.position.y + 5, 5, r.size.y - 10), TYPE_COLORS[nd.type])
 		Ui.text(self, r.position + Vector2(18, 21), nd.name, 15, Color.WHITE if on else Ui.INK, on)
+		var free = _free(pal[i])
+		Ui.text(self, r.position + Vector2(0, 21), "%d / %d" % [maxi(free, 0), garage.main.cards().get(pal[i], 0)], 13,
+			Color.WHITE if on else (Color(0.8, 0.25, 0.2) if free <= 0 else Ui.DIM), true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 10)
 	# Grid.
 	var o = _origin()
 	draw_rect(Rect2(o - Vector2(10, 10), Vector2(gsize) * CELL + Vector2(20, 20)), Color(0.02, 0.025, 0.03))

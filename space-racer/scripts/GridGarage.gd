@@ -176,6 +176,13 @@ func _try_load(other: Dictionary) -> void:
 			names.append("%d %s" % [miss[id], Parts.PARTS[id].name])
 		main.notify("MISSING  " + ", ".join(names).to_upper(), Color(1.0, 0.4, 0.3))
 		return
+	var mc = main.missing_cards(other)
+	if not mc.is_empty():
+		var names = []
+		for id in mc:
+			names.append("%d %s" % [mc[id], Parts.NODES[id].name])
+		main.notify("MISSING CARDS  " + ", ".join(names).to_upper(), Color(1.0, 0.4, 0.3))
+		return
 	if Parts.is_locked(Parts.FRAMES[other.frame], main.unlocks()):
 		main.notify("YOU DON'T HAVE THE " + Parts.FRAMES[other.frame].name.to_upper() + " YET", Color(1.0, 0.4, 0.3))
 		return

@@ -202,6 +202,15 @@ a laser, a rocket or a ramp in front of them.
 
 ## Component sub-grids
 
+**Program cards cost.** The nodes you place are cards you own in copies:
+each placed card uses one (the palette shows free / owned; with none free it
+won't place), taking it out frees it again. A new pilot has one Fast and one
+Bomb. Every outpost has a **Cards** counter selling copies for credits (mods
+40, splits and payloads 60, upgrades 50; locked cards half again, and only
+after their blueprint, which comes with a first copy). A saved build that
+needs more cards than you own won't load. Saves from before this get four of
+every card they could use.
+
 Every component with behaviour (drills, lasers, missile pods, bomb bays,
 engines, thrusters, shields, magnets, tanks, scoops) has a little grid of its
 own. Click a placed component in the garage to open it (hovering one says

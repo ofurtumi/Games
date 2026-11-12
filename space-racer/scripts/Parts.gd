@@ -765,6 +765,27 @@ static func shop_stock(mech: String) -> Array:
 			out.append(id)
 	return out
 
+# Program cards placed across a build's sub-grids (skip: one part to leave
+# out, the one being edited).
+static func count_cards(lo: Dictionary, skip: int = -1) -> Dictionary:
+	var n = {}
+	for i in lo.get("parts", []).size():
+		if i == skip:
+			continue
+		for nd in sub_of(lo.parts[i]).nodes:
+			n[nd.id] = n.get(nd.id, 0) + 1
+	return n
+
+# A copy of a card, in credits: by kind, half again for the locked ones.
+const CARD_PRICE = {"mod": 40, "split": 60, "payload": 60, "upgrade": 50}
+
+static func card_price(id: String) -> Dictionary:
+	var d = NODES[id]
+	var n = CARD_PRICE.get(d.type, 50)
+	if d.get("locked", false):
+		n = int(n * 1.5)
+	return {"credits": n}
+
 static func count_parts(lo: Dictionary) -> Dictionary:
 	var n = {}
 	for p in lo.get("parts", []):

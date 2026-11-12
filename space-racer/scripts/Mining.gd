@@ -563,6 +563,7 @@ func open_menu() -> void:
 			{"label": "Contracts", "value": func(): return "%d / %d active" % [main.contracts().size(), Contracts.MAX_ACTIVE], "action": open_contracts},
 			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
 			{"label": "Market", "value": func(): return "%d cr" % main.credits(), "action": func(): main.open_exchange(open_menu)},
+			{"label": "Cards", "value": "program cards", "action": func(): main.open_cards(open_menu)},
 			{"label": "Blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
 			{"label": "Race here", "value": def.name, "action": func(): depart_to_race(outposts[at_outpost].planet)},
@@ -1048,6 +1049,10 @@ func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS")
 		return
 	_pay(cr)
 	main.unlock(o.name)
+	# A blueprint comes with a first copy of its card.
+	for id in Parts.NODES:
+		if Parts.NODES[id].name == o.name:
+			main.cards()[id] = main.cards().get(id, 0) + 1
 	Sfx.play("coins")
 	open_market(offers, title)
 

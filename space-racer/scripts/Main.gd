@@ -376,7 +376,7 @@ func owned() -> Dictionary:
 # A new pilot: the Rustbucket (the starter frame, most slots broken) and
 # just the parts on it. Everything else is earned.
 func new_game() -> void:
-	save_data = {"career": 1, "story": 0, "owned": Parts.CAREER_KIT.duplicate(), "inventory": {}}
+	save_data = {"career": 1, "story": 0, "owned": Parts.CAREER_KIT.duplicate(), "inventory": {}, "cards": {"fast": 1, "bomb": 1}}
 	loadout = Parts.career_ship()
 	save_data.loadout = loadout.duplicate(true)
 	var used = {}
@@ -579,6 +579,64 @@ func _migrate_owned() -> void:
 	save_data.owned = o
 
 # Parts this build needs beyond what you own.
+# ---------------------------------------------------------------- cards
+
+# Program cards you own, by node id. Saves from before cards had a count get
+# four of every card they could use, and at least what their builds hold.
+func cards() -> Dictionary:
+	if not save_data.has("cards"):
+		var c = {}
+		for id in Parts.NODES:
+			if not Parts.is_locked(Parts.NODES[id], unlocks()):
+				c[id] = 4
+		var builds = [loadout] + save_data.get("slots", []).filter(func(x): return x != null)
+		for b in builds:
+			var n = Parts.count_cards(b)
+			for id in n:
+				c[id] = maxi(c.get(id, 0), n[id])
+		save_data.cards = c
+	return save_data.cards
+
+func missing_cards(lo: Dictionary) -> Dictionary:
+	var need = Parts.count_cards(lo)
+	var miss = {}
+	for id in need:
+		if need[id] > cards().get(id, 0):
+			miss[id] = need[id] - cards().get(id, 0)
+	return miss
+
+# The card counter (outposts): copies of every card you can use. Locked ones
+# need their blueprint (Blueprints menu) first.
+func open_cards(back: Callable) -> void:
+	var rows = []
+	var used = Parts.count_cards(loadout)
+	for id in Parts.NODES:
+		var nid = id
+		var nd = Parts.NODES[id]
+		var row = {"label": nd.name, "note": {"title": nd.name + "  ·  " + nd.type + " card  ·  for " + ", ".join(nd.get("for", [])), "text": nd.get("desc", "")}}
+		if Parts.is_locked(nd, unlocks()):
+			row.value = "blueprint needed"
+		else:
+			var pr = Parts.card_price(nid)
+			row.value = func(): return "%d owned  %d in use   %s" % [cards().get(nid, 0), used.get(nid, 0), _price_text(pr)]
+			row.action = func(): _buy_card(nid, back)
+		rows.append(row)
+	rows.append({"label": "Back", "action": back})
+	menu.show_menu("CARDS", rows, back, menu.title == "CARDS")
+	menu.wallet = func(): return {"bank": inventory}
+
+func _buy_card(id: String, back: Callable) -> void:
+	var pr = Parts.card_price(id)
+	if not can_afford(pr):
+		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
+		return
+	inventory.credits -= pr.credits
+	cards()[id] = cards().get(id, 0) + 1
+	notify("CARD  " + Parts.NODES[id].name.to_upper(), Color.WHITE)
+	Sfx.play("coins")
+	save_game()
+	open_cards(back)
+
 func missing_parts(lo: Dictionary) -> Dictionary:
 	var need = Parts.count_parts(lo)
 	var o = owned()

@@ -69,6 +69,7 @@ const BLURBS = [
 	["PAUSE", "is", "The race is held while you're here."],
 	["PIT SHOP", "is", "Stock parts for your ship, paid in credits. Mechanics' specials are only sold at outposts."],
 	["SELL", "is", "Parts your current build isn't using, sold back for half what they cost."],
+	["CARDS", "is", "Program cards to wire into your components' sub-grids (click a placed part in the garage). Each placed card uses a copy; take it out and it's free again."],
 	["MARKET", "is", "Sell materials from your bank for credits. Docking unloads your hold into the bank."],
 	["SOUND", "is", "Volume from 0 to 10. Left and right to change."],
 	["CONTROLS", "is", "Pick an action, then press the key you want for it."],
