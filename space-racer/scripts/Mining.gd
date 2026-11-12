@@ -213,7 +213,7 @@ func leave() -> void:
 
 func _build_outpost(pi: int) -> void:
 	var def = PLANETS[pi]
-	var pad = def.pos + Vector2(0, def.radius + 16.0)
+	var pad = def.pos + Vector2(0, def.radius + STATION_HEIGHT)
 	outposts.append({"pad": pad, "planet": pi})
 	var n = Node3D.new()
 	n.position = Vector3(pad.x, pad.y, 0.0)
@@ -228,8 +228,9 @@ func _build_outpost(pi: int) -> void:
 	MeshKit.part(n, MeshKit.cyl(0.08, 0.08, 4.0, 6), steel, Vector3(-5.6, 4.6, -0.5))
 	for x in [-3.6, -1.8, 0.0, 1.8, 3.6]:
 		MeshKit.part(n, MeshKit.box(Vector3(0.3, 0.08, 0.3)), lamp, Vector3(x, -0.12, 1.1), Vector3.ZERO, Vector3.ONE, false)
-	for x in [-3.0, 3.0]:
-		MeshKit.part(n, MeshKit.box(Vector3(0.3, 18.0, 0.3)), steel, Vector3(x, -9.6, -1.0))
+	# Out in orbit now: a keel and a lamp underneath instead of legs.
+	MeshKit.part(n, MeshKit.box(Vector3(4.0, 1.2, 1.6)), dark, Vector3(0, -1.2, -0.5))
+	MeshKit.part(n, MeshKit.box(Vector3(0.4, 0.4, 0.4)), lamp, Vector3(0, -2.0, -0.5), Vector3.ZERO, Vector3.ONE, false)
 
 func _build_depot(at: Vector2) -> void:
 	depots.append(at)
@@ -368,7 +369,7 @@ func _process(delta):
 		if _undock_cd <= 0.0 and miner.vel.length() < 6.0:
 			for i in outposts.size():
 				if miner.pos.distance_to(outposts[i].pad + Vector2(0, 1.0)) < 3.0:
-					_dock(i)
+					_start_docking(i)
 					break
 	_update_pickups(delta)
 	traders.step(delta)
@@ -421,10 +422,18 @@ func _dock(i: int = -1) -> void:
 
 # ---------------------------------------------------------------- trips
 
+const STATION_HEIGHT = 55.0   # outposts float this far above their planet's surface
 const TRIP_UP = 2.6
+const TRIP_DOCK = 1.1
 const TRIP_DOWN = 1.8
 
 # Up out of the planet's crust, through the surface, to its outpost pad.
+# Coming in slow over a pad: a short glide onto it, nose up, then docked.
+func _start_docking(i: int) -> void:
+	trip = {"kind": "dock", "t": 0.0, "from": miner.pos, "to": outposts[i].pad + Vector2(0, 1.0), "planet": i, "heading": miner.heading}
+	miner.vel = Vector2.ZERO
+	Sfx.play("wire")
+
 func _start_arrival(planet: int) -> void:
 	at_outpost = planet
 	docked = false
@@ -448,6 +457,23 @@ func _trip_step(delta: float) -> bool:
 	if trip.is_empty():
 		return false
 	trip.t += delta
+	if trip.kind == "dock":
+		var kd = clampf(trip.t / TRIP_DOCK, 0.0, 1.0)
+		var ed = kd * kd * (3.0 - 2.0 * kd)
+		miner.pos = trip.from.lerp(trip.to, ed)
+		miner.vel = Vector2.ZERO
+		miner.heading = lerp_angle(trip.heading, PI * 0.5, ed)
+		miner._throttle = 0.3
+		miner._animate(delta)
+		var tgt = Vector3(miner.pos.x, miner.pos.y, 0.0)
+		cam.position = cam.position.lerp(tgt + Vector3(0, -4.0, zoom), minf(1.0, 3.0 * delta))
+		cam.look_at(cam.position + Vector3(0, 0.12, -1.0), Vector3.UP)
+		if kd >= 1.0:
+			var i = trip.planet
+			trip = {}
+			Sfx.play("clunk")
+			_dock(i)
+		return true
 	var up = trip.kind == "up"
 	var dur = TRIP_UP if up else TRIP_DOWN
 	var k = clampf(trip.t / dur, 0.0, 1.0)
@@ -551,8 +577,11 @@ func launch() -> void:
 	_undock_cd = 2.5
 	trader_cool = 3.0
 	main.menu.hide_menu()
-	miner.vel = Vector2(0, 7.0)
-	miner.pos = station_pad + Vector2(0, 2.0)
+	# Out through the bottom, nose to the planet, so its pull takes you away
+	# from the station rather than back onto the pad.
+	miner.pos = station_pad + Vector2(0, -4.0)
+	miner.vel = Vector2(0, -6.0)
+	miner.heading = -PI * 0.5
 
 # Wrecked: the ship comes apart, the hold stays in your wreck where you died
 # (go back for it; die again first and that wreck is gone), the tow home

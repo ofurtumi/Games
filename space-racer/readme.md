@@ -135,6 +135,10 @@ ship comes apart, your cargo stays in **your wreck** where you died (go back
 for it), you're towed to the last outpost and the repairs come out of the
 bank.
 
+Outposts float 55 m above their planets. Come in slowly over the pad and
+the ship glides in and docks; Launch drops you out underneath, nose to the
+planet, so its pull takes you clear of the station.
+
 ### Exploring
 
 Hover slowly next to something to work it (a ring fills around the ship).
