@@ -80,18 +80,31 @@ func to_world2(local: Vector3) -> Vector2:
 	var left = Vector2(-f.y, f.x)
 	return pos + f * local.z + left * local.x
 
+# Crashes: bumps are cheap, speed is not. Damage grows with the square of
+# the speed into the rock, so a full-speed planetfall goes through the shield
+# and the hull (12 m/s: ~13, 20: ~41, 30: ~94, 40: ~166; armour cuts it).
+const IMPACT_SAFE = 6.0
+
+static func impact_damage(v: float) -> float:
+	var d = maxf(0.0, v - IMPACT_SAFE)
+	return 1.5 * d + 0.1 * d * d
+
 func take_hit(amount: float) -> void:
 	hit_flash = 1.0
 	if amount > 1.0:
 		Sfx.play("hit", clampf(-10.0 + amount * 0.5, -10.0, 4.0))
 	if not exposed:
 		shield -= amount
-		if shield <= 0.0:
-			shield = 0.0
-			exposed = true
-			mining.main.notify("SHIELD DOWN", Color(1.0, 0.3, 0.3))
-			Sfx.play("shield_down")
-		return
+		if shield > 0.0:
+			return
+		# Whatever the shield couldn't take goes into the hull.
+		amount = -shield
+		shield = 0.0
+		exposed = true
+		mining.main.notify("SHIELD DOWN", Color(1.0, 0.3, 0.3))
+		Sfx.play("shield_down")
+		if amount <= 0.0:
+			return
 	hull -= amount
 	if hull <= 0.0:
 		mining.wrecked()
@@ -216,8 +229,12 @@ func _collide() -> void:
 						worst = maxf(worst, -vn)
 					if t.get_kind(c) == t.LAVA:
 						mining.lava_contact = true
-	if worst > 6.0:
-		take_hit((worst - 6.0) * 2.0 * stats.impact)
+	if worst > IMPACT_SAFE:
+		var d = worst - IMPACT_SAFE
+		take_hit(impact_damage(worst) * stats.impact)
+		if d > 10.0:
+			mining.main.shake = maxf(mining.main.shake, clampf(d / 35.0, 0.0, 0.9))
+			mining.main.fx.burst(Vector3(pos.x, pos.y, 1.0), Color(1.0, 0.75, 0.4), int(clampf(d, 6, 30)), 8.0, 1.2, 0.1, 0.4, 0.0)
 
 func _hazards(delta: float) -> void:
 	var pl = mining.nearest_planet(pos)

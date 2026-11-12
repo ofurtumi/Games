@@ -403,7 +403,11 @@ func _collide() -> void:
 						worst = -vn
 						hit_at = Vector3(px, 0.7, pz)
 	if worst > IMPACT_SAFE:
-		take_hit((worst - IMPACT_SAFE) * IMPACT_DAMAGE * stats.impact)
+		# Glancing scrapes are cheap; head-on at speed takes the shield.
+		var d = worst - IMPACT_SAFE
+		take_hit((d * IMPACT_DAMAGE + 0.06 * d * d) * stats.impact)
+		if not rival and d > 12.0:
+			main.shake = maxf(main.shake, clampf(d / 40.0, 0.0, 0.7))
 		fx.burst(hit_at, Color(1.0, 0.75, 0.4), int(clampf(worst, 4, 16)), 7.0, 1.2, 0.08, 0.35)
 
 func take_hit(amount: float) -> void:

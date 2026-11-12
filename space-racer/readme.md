@@ -44,7 +44,11 @@ and the materials earned, then Keep driving, Restart or Main menu.
 station: Cinder (home, lava pockets), Rime (big, light gravity, gas pockets,
 crystal-rich), Moss (small, heavy gravity, lots of gas, hot). Each planet has
 crust, mantle, a deep layer that needs a tier-3 drill (core shards), and a
-core. The deeper you go the hotter it gets (drains shield, then hull). Fuel is
+core. The deeper you go the hotter it gets (drains shield, then hull).
+Crashing costs by the square of your speed into the rock: a bump at 12 m/s
+is about 13, 30 m/s about 94, and full speed into a planet goes through the
+shield and the hull and wrecks you (armour cuts it). In races a head-on hit
+at speed takes most of a shield. Fuel is
 a fixed tank (bigger with boost tanks); heavy, high-thrust builds burn it
 fast, and lasers, strafing and drilling burn some too (ECONOMY in the
 garage). Depots around the system refill fuel and rockets and repair you.
