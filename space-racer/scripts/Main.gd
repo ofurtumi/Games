@@ -437,6 +437,7 @@ func repair_slot(frame: String, c: Vector2i) -> bool:
 		notify("SLOT REPAIRED  -  %d FREE LEFT" % save_data.repair_credits, Color(0.5, 1.0, 0.6), "repair")
 		Sfx.play("clunk")
 		save_game()
+		_show_repair(frame)
 		return true
 	if not can_afford(cost):
 		notify("NOT ENOUGH  -  " + _price_text(cost).to_upper(), Color(1.0, 0.4, 0.3), "repair")
@@ -450,7 +451,16 @@ func repair_slot(frame: String, c: Vector2i) -> bool:
 	notify("SLOT REPAIRED", Color(0.5, 1.0, 0.6), "repair")
 	Sfx.play("clunk")
 	save_game()
+	_show_repair(frame)
 	return true
+
+# The model on the turntable (and in the expedition) loses the scorch mark.
+func _show_repair(frame: String) -> void:
+	if loadout.get("frame", "") != frame:
+		return
+	ship.equip(ship.loadout)
+	if mining != null:
+		mining.miner.equip(loadout)
 
 # A frame you've just got hold of comes in battered: about half its slots
 # broken (the same ones every time for a given frame).

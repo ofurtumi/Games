@@ -45,6 +45,18 @@ static func build(lo: Dictionary, stats: Dictionary) -> Node3D:
 	root.set_meta("sockets", {"nose": Vector3(0, 0.2, b.end.z), "length": b.size.z, "width": b.size.x, "bounds": b})
 	return root
 
+# Your own ships show their broken slots: a copy of the loadout carrying
+# them (`main` is null for rivals and traders, whose frames are whole).
+static func with_damage(lo: Dictionary, main) -> Dictionary:
+	if main == null or not main.has_method("broken_cells"):
+		return lo
+	var b = main.broken_cells(lo.frame)
+	if b.is_empty():
+		return lo
+	var out = lo.duplicate()
+	out.broken = b
+	return out
+
 # ---------------------------------------------------------------- hull
 
 static func _hull(lo: Dictionary) -> Dictionary:
@@ -112,6 +124,10 @@ static func _hull(lo: Dictionary) -> Dictionary:
 			"nose":
 				if c.y < sz.y * 0.3:
 					col = paint.secondary
+		if lo.get("broken", {}).has(c):
+			# Scorched and buckled: dark, a little rust, varying cell to cell.
+			var n = fposmod(sin(c.x * 12.9898 + c.y * 78.233) * 43758.5453, 1.0)
+			col = Color(0.13, 0.1, 0.08).lerp(Color(0.4, 0.2, 0.1), n * 0.6)
 		var vs = [c, c + Vector2i(1, 0), c + Vector2i(1, 1), c + Vector2i(0, 1)]
 		var t = []
 		var bot = []

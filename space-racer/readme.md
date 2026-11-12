@@ -204,7 +204,8 @@ You own parts in quantities and a build can only use what you own. A new
 game starts you in the **Rustbucket**: a Basic frame with only the parts to
 fly it (a Core engine, two Thrusters, a Pilot drill, one Shield plate) and
 seven of its sixteen slots broken. Broken slots show scorched and cracked in
-the garage; click one to repair it for materials from the bank (6 rock 2
+the garage and dark and rusted on the ship itself (in races, the garage and
+the expedition); click one to repair it for materials from the bank (6 rock 2
 metal for the first, a little more for each after, crystal too once you've
 done five). The Basic frame is the only one you start with: the Dart and
 Advanced frames have to be earned, and frames towed home from derelicts

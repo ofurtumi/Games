@@ -90,7 +90,7 @@ func equip(lo: Dictionary) -> void:
 	for tr in trails:
 		tr.queue_free()
 	trails.clear()
-	model = ShipBuilder.build(lo, stats)
+	model = ShipBuilder.build(ShipBuilder.with_damage(lo, null if rival or main == null else main), stats)
 	add_child(model)
 	rig = model.get_meta("rig")
 	sockets = model.get_meta("sockets")

@@ -46,7 +46,7 @@ func equip(lo: Dictionary) -> void:
 	for t in trails:
 		t.queue_free()
 	trails.clear()
-	model = ShipBuilder.build(lo, stats)
+	model = ShipBuilder.build(ShipBuilder.with_damage(lo, mining.main if mining != null else null), stats)
 	add_child(model)
 	rig = model.get_meta("rig")
 	for nz in rig.nozzles:
