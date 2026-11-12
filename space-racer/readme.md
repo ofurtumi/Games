@@ -65,6 +65,10 @@ the mouse wheel sets the base zoom.
 | Crystal | cyan veins in the mantle | Auger | chunks, as metal |
 | Core | magenta veins in the deep layer, and the core itself | Maw (veins), Phase drill (the core) | chunks, as metal |
 
+Drills are long bits that stick out of the nose (about 1.2 m for a Pilot
+drill, 1.7 m for a Maw) and dig round the bit, a hole wide enough for the
+ship to follow, so rock goes before your hull meets it.
+
 Veins are the same colour as the material's chip in the HUD on every
 planet. Under the layer name the HUD lists what that layer holds and the
 drill it takes (in red, NEED ..., if yours can't cut it). Chunks only come

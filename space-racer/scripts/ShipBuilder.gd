@@ -247,8 +247,9 @@ static func _part(root: Node3D, lo: Dictionary, p: Dictionary, hull: Dictionary,
 				front = maxf(front, along)
 				back = minf(back, along)
 			var span = 1 + int(round((front - back) / C))
-			var r = (cells.size() / span) * C * 0.55
-			var length = span * C + 0.35
+			var out = Parts.DRILL_OUT[mini(def.get("tier", 1), Parts.DRILL_OUT.size() - 1)]
+			var r = (cells.size() / span) * C * 0.55 * 1.8
+			var length = span * C + out
 			var spin = Node3D.new()
 			# Cone runs along the node's +Z, so aim -Z backwards.
 			spin.basis = Basis.looking_at(-dir, Vector3.UP)

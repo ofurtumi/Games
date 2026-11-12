@@ -17,6 +17,9 @@ extends RefCounted
 # the nose, +X is the left side when the ship points up the screen.
 
 const CELL = 0.38   # metres per grid cell
+# How far a drill's bit sticks out past its own cells, by tier (metres). The
+# bite is centred out there on the bit, not round the ship.
+const DRILL_OUT = [0.0, 1.2, 1.4, 1.7, 1.6]
 
 const MECHANICS = {
 	"": {"name": "Stock", "accent": Color(0.85, 0.85, 0.85)},
@@ -577,8 +580,10 @@ static func stats(lo: Dictionary) -> Dictionary:
 				centre /= d.shape.size()
 				var dir = Vector3(-fwd.x, 0.0, -fwd.y)
 				var span = 3.0 if d.tier == 3 else 2.0
+				var out = DRILL_OUT[mini(d.tier, DRILL_OUT.size() - 1)]
 				s.drills.append({"tier": d.tier, "power": d.power, "dir": dir, "prog": program_of(p),
-					"pos": centre + dir * (span * CELL * 0.5 + 0.35), "radius": 0.35 + d.shape.size() * 0.12, "forward": fwd == Vector2i(0, -1)})
+					"pos": centre + dir * (span * CELL * 0.5 + out * 0.6), "radius": 0.5 + d.shape.size() * 0.15 + out * 0.2, "forward": fwd == Vector2i(0, -1),
+					"out": out})
 				if d.tier > s.drill_tier:
 					s.drill_tier = d.tier
 					s.drill_power = d.power
