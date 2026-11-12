@@ -21,6 +21,7 @@ const Sfx = preload("res://scripts/Sfx.gd")
 
 const BAND = Rect2(390, 12, 780, 104)
 const PartInfo = preload("res://scripts/PartInfo.gd")
+const MATS = preload("res://scripts/GtMenu.gd").MATS
 
 var main
 var lo = {}
@@ -543,6 +544,7 @@ func _draw():
 			var q = sc - minc
 			draw_rect(Rect2(r.end.x - 70 + q.x * 6, r.position.y + 3 + q.y * 6, 5, 5), Color.WHITE if sel else Color(0.3, 0.32, 0.36))
 	_draw_slots()
+	_draw_repairs()
 	var prs = _paint_rects()
 	var paint = lo.paint
 	var labels = ["HULL", "TRIM", paint.pattern.to_upper(), "GLOW"]
@@ -595,6 +597,39 @@ func _draw_status(err: String, over: int = -1) -> void:
 
 func _draw_info() -> void:
 	PartInfo.draw(self, BAND, _info_id(), 166.0)
+
+# Bottom left: what's in the bank, and what it buys in repairs on this frame.
+func _draw_repairs() -> void:
+	var bank = main.inventory
+	var broken = _broken().size()
+	var h = 74.0 + (96.0 if broken > 0 else 0.0)
+	var r = Rect2(-20, size.y - h - 24.0, 390, h)
+	Ui.segment(self, r, Color(0.03, 0.035, 0.045, 0.88), 10.0)
+	Ui.segment(self, Rect2(r.position.x, r.end.y - 4, r.size.x, 4), Ui.HILITE, 0.0)
+	var y = r.position.y + 32.0
+	Ui.text(self, Vector2(30, y), "BANK", 14, Ui.DIM, true)
+	var x = 92.0
+	for m in MATS:
+		draw_rect(Rect2(x, y - 12, 12, 12), m[1])
+		Ui.text(self, Vector2(x + 17, y), str(bank.get(m[0], 0)), 18, Color.WHITE, true)
+		x += 68.0
+	if broken == 0:
+		Ui.text(self, Vector2(30, y + 30), "NO BROKEN SLOTS", 14, Ui.DIM, true)
+		return
+	var free = main.save_data.get("repair_credits", 0)
+	var cost = main.repair_cost(lo.frame)
+	var can = main.repairs_affordable(lo.frame)
+	y += 32.0
+	Ui.text(self, Vector2(30, y), "BROKEN SLOTS", 14, Ui.DIM, true)
+	Ui.text(self, Vector2(30, y), str(broken), 16, Color(1.0, 0.55, 0.35), true, HORIZONTAL_ALIGNMENT_RIGHT, 310)
+	y += 26.0
+	Ui.text(self, Vector2(30, y), "NEXT REPAIR", 14, Ui.DIM, true)
+	var next = "FREE  (%d LEFT)" % free if free > 0 else main._price_text(cost).to_upper()
+	var ok = free > 0 or main.can_afford(cost)
+	Ui.text(self, Vector2(30, y), next, 16, Color(0.5, 1.0, 0.6) if ok else Color(1.0, 0.4, 0.3), true, HORIZONTAL_ALIGNMENT_RIGHT, 310)
+	y += 26.0
+	Ui.text(self, Vector2(30, y), "YOU CAN REPAIR", 14, Ui.DIM, true)
+	Ui.text(self, Vector2(30, y), "%d / %d" % [can, broken], 16, Color.WHITE if can > 0 else Color(1.0, 0.4, 0.3), true, HORIZONTAL_ALIGNMENT_RIGHT, 310)
 
 func _draw_slots() -> void:
 	var slots = main.save_data.get("slots", [])

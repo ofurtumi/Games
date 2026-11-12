@@ -211,15 +211,17 @@ outposts and from Nine Fingers.
 ## Owning parts
 
 You own parts in quantities and a build can only use what you own. A new
-game starts you in the **Rustbucket**: a Basic frame with only the parts to
+game starts you in the **Rustbucket** (the starter frame) with only the parts to
 fly it (a Core engine, two Thrusters, one Shield plate, no drill: the nose
 slots are empty) and seven of its sixteen slots broken. Broken slots are dead
 weight (scrap still bolted on), so every repair also makes the ship lighter
 and quicker. Broken slots show scorched and cracked in
 the garage and dark and rusted on the ship itself (in races, the garage and
-the expedition); click one to repair it for materials from the bank (6 rock 2
+the expedition); the garage's bottom-left panel shows your bank, the broken
+count, the next repair's price (green if you can pay it) and how many you can
+repair right now; click one to repair it for materials from the bank (6 rock 2
 metal for the first, a little more for each after, crystal too once you've
-done five). The Basic frame is the only one you start with: the Dart and
+done five). The Rustbucket is the only frame you start with: the Dart and
 Advanced frames have to be earned, and frames towed home from derelicts
 arrive with about half their slots broken. Your first win on each planet
 pays three free slot repairs (used before materials, without raising the

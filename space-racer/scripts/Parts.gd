@@ -29,7 +29,7 @@ const MECHANICS = {
 }
 
 const FRAMES = {
-	"basic": {"name": "Basic frame", "mech": "", "mass": 0.5, "rows": [
+	"basic": {"name": "Rustbucket", "mech": "", "mass": 0.5, "rows": [
 		"..#..",
 		"..#..",
 		".###.",
@@ -380,7 +380,7 @@ const PATTERNS = ["stripe", "twin", "nose", "none"]
 static func _p(id: String, x: int, y: int, rot: int = 0) -> Dictionary:
 	return {"id": id, "cell": Vector2i(x, y), "rot": rot}
 
-# A new pilot's ship: a Basic frame with only the slots these parts sit on
+# A new pilot's ship: the Rustbucket frame with only the slots these parts sit on
 # (and the empty nose, where a drill goes) still working, and just the parts
 # to fly it. No drill: that comes after the first race.
 const CAREER_KIT = {"engine_1": 1, "thruster": 2, "shield": 1}

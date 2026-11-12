@@ -373,7 +373,7 @@ func owned() -> Dictionary:
 
 # ---------------------------------------------------------------- career
 
-# A new pilot: the Rustbucket (a Basic frame with most slots broken) and
+# A new pilot: the Rustbucket (the starter frame, most slots broken) and
 # just the parts on it. Everything else is earned.
 func new_game() -> void:
 	save_data = {"career": 1, "story": 0, "owned": Parts.CAREER_KIT.duplicate(), "inventory": {}}
@@ -490,6 +490,30 @@ func repair_cost(frame: String) -> Dictionary:
 	if n >= 5:
 		cost.crystal = n - 4
 	return cost
+
+# How many of a frame's broken slots you could fix right now: free repairs
+# first, then as many as the bank covers at the rising price.
+func repairs_affordable(frame: String) -> int:
+	var left = save_data.get("broken", {}).get(frame, []).size()
+	var free = mini(save_data.get("repair_credits", 0), left)
+	var bank = inventory.duplicate()
+	var n = save_data.get("repaired", {}).get(frame, 0)
+	var paid = 0
+	while free + paid < left:
+		var cost = {"rock": 6 + 4 * n, "metal": 2 + 2 * n}
+		if n >= 5:
+			cost.crystal = n - 4
+		var ok = true
+		for k in cost:
+			if bank.get(k, 0) < cost[k]:
+				ok = false
+		if not ok:
+			break
+		for k in cost:
+			bank[k] -= cost[k]
+		n += 1
+		paid += 1
+	return free + paid
 
 func repair_slot(frame: String, c: Vector2i) -> bool:
 	var b = save_data.get("broken", {}).get(frame, [])
