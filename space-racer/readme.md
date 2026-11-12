@@ -226,6 +226,10 @@ a laser, a rocket or a ramp in front of them.
 
 ## Component sub-grids
 
+A card you place wires itself onto the end of the chain (core > first card >
+second...), so cards go in series in the order you put them down; drag
+wires or right-click them away to branch or reorder.
+
 **How cards combine** (the editor spells it out: with nothing hovered, the
 info panel lists WHAT IT DOES step by step for the wiring as it stands):
 mods change the shot they're on, up to the next payload. A payload goes

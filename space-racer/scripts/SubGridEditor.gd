@@ -7,7 +7,8 @@ extends Control
 # shot down each branch, payloads go off where it lands and launch whatever
 # is wired after them.
 #
-# Click a palette node, then a cell, to place it. Drag from a port to a node
+# Click a palette node, then a cell, to place it (it wires itself onto the end
+# of the chain, so cards go in series in the order you place them). Drag from a port to a node
 # to wire it. Right-click a node or a wire to remove it. Esc or DONE closes.
 
 const Parts = preload("res://scripts/Parts.gd")
@@ -236,6 +237,26 @@ func _node_at(c: Vector2i) -> int:
 			return i
 	return -2
 
+# A new card joins the end of the chain: follow the core's first output to
+# the last card and wire that to it, if it has an output free. Cards placed
+# one after another make a series in the order you put them down; drag
+# wires (or right-click them away) to do anything else.
+func _auto_wire(i: int) -> void:
+	var cur = -1
+	var seen = []
+	while true:
+		var outs = Parts.wires_from(sub, cur)
+		if outs.is_empty() or seen.has(cur):
+			break
+		seen.append(cur)
+		cur = outs[0]
+	if cur == i:
+		return
+	var free = Parts.node_outs("" if cur == -1 else sub.nodes[cur].id) - Parts.wires_from(sub, cur).size()
+	if free > 0 and not _has_input(i):
+		sub.wires.append([cur, i])
+		Sfx.play("wire")
+
 func _has_input(i: int) -> bool:
 	for w in sub.wires:
 		if w[1] == i:
@@ -322,6 +343,7 @@ func _gui_input(event):
 					garage.main.notify("NO " + Parts.NODES[placing].name.to_upper() + " CARDS LEFT  -  BUY MORE AT AN OUTPOST", Color(1.0, 0.4, 0.3), "cards")
 					return
 				sub.nodes.append({"id": placing, "cell": c})
+				_auto_wire(sub.nodes.size() - 1)
 				Sfx.play("clunk", -4.0, 1.4)
 		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and drag_from != -2:
 			var c = Vector2i(((pos - _origin()) / CELL).floor())
