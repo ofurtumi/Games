@@ -96,6 +96,12 @@ func _input(event):
 		get_viewport().set_input_as_handled()
 
 func _draw():
+	Ui.begin()
+	_draw_screen()
+	Ui.scanlines(self, Rect2(Vector2.ZERO, size))
+	Ui.end()
+
+func _draw_screen():
 	_labels = []
 	draw_rect(Rect2(Vector2.ZERO, size), FOG)
 	if mining == null:

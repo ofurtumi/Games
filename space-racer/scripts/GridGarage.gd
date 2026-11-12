@@ -58,6 +58,7 @@ func _ready():
 	name_edit.add_theme_color_override("font_color", Ui.INK)
 	name_edit.text_changed.connect(func(tx): lo.name = tx; main.loadout.name = tx)
 	name_edit.text_submitted.connect(func(_tx): name_edit.release_focus())
+	_style_name()
 	add_child(name_edit)
 	demo = PartDemo.new()
 	add_child(demo)
@@ -71,6 +72,27 @@ func _ready():
 	add_child(demo_rect)
 	editor = SubGridEditorScript.new()
 	add_child(editor)
+
+# The build's name box follows the Interface setting.
+var _named_style = ""
+func _style_name() -> void:
+	if _named_style == Ui.style:
+		return
+	_named_style = Ui.style
+	var term = Ui.style == "terminal"
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Ui.T_PANEL if term else Ui.PAPER
+	sb.skew = Vector2.ZERO if term else Vector2(0.25, 0)
+	sb.content_margin_left = 16
+	if term:
+		sb.border_color = Ui.T_EDGE
+		sb.set_border_width_all(1)
+	name_edit.add_theme_stylebox_override("normal", sb)
+	name_edit.add_theme_stylebox_override("focus", sb)
+	name_edit.add_theme_color_override("font_color", Ui.T_GREEN if term else Ui.INK)
+	Ui.begin()
+	name_edit.add_theme_font_override("font", Ui.font(true) if term else Ui.font(true))
+	Ui.end()
 
 func open(m) -> void:
 	main = m
@@ -425,6 +447,12 @@ func _facing(p: Dictionary) -> Vector2i:
 
 func _draw_part(p: Dictionary, fill: Color, edge: Color) -> void:
 	var cells = Parts.cells_of(p)
+	var glyph = Color(0, 0, 0, 0.55)
+	if Ui.terminal():
+		# Phosphor parts: the maker's colour as a faint tint, green edges.
+		fill = Color(Ui.T_PANEL.lerp(Color(fill, 1.0), 0.3), fill.a)
+		edge = Color(Ui.T_GREEN, edge.a)
+		glyph = Color(Ui.T_GREEN, 0.8)
 	for c in cells:
 		draw_rect(_cell_rect(c).grow(-2), fill)
 	for c in cells:
@@ -447,7 +475,7 @@ func _draw_part(p: Dictionary, fill: Color, edge: Color) -> void:
 			draw_line(a, b, edge, 2.0)
 	var kind = Parts.PARTS[p.id].kind
 	for c in cells:
-		_glyph(_cell_rect(c), kind, _facing(p), Color(0, 0, 0, 0.55))
+		_glyph(_cell_rect(c), kind, _facing(p), glyph)
 	# Wired: a little node-and-wire mark in the corner.
 	if p.has("id") and Parts.sub_size(p.id) != Vector2i.ZERO and not Parts.live_nodes(Parts.sub_of(p)).is_empty():
 		var r = _cell_rect(cells[0])
@@ -465,6 +493,13 @@ func _info_id() -> String:
 	return selected
 
 func _draw():
+	Ui.begin()
+	_draw_screen()
+	Ui.scanlines(self, Rect2(Vector2.ZERO, size))
+	Ui.end()
+
+func _draw_screen():
+	_style_name()
 	if main == null:
 		return
 	var frame = Parts.frame_cells(lo.frame)
@@ -482,7 +517,9 @@ func _draw():
 	for y in sz.y:
 		for x in sz.x:
 			var c = Vector2i(x, y)
-			draw_rect(_cell_rect(c).grow(-1), Color(0.78, 0.8, 0.83) if frame.has(c) else Color(1, 1, 1, 0.04))
+			draw_rect(_cell_rect(c).grow(-1), Ui.fill(Color(0.78, 0.8, 0.83)) if frame.has(c) else Color(1, 1, 1, 0.04))
+			if frame.has(c) and Ui.terminal():
+				draw_rect(_cell_rect(c).grow(-1), Ui.T_EDGE, false, 1.0)
 	# Broken slots: scorched, cracked, and a wrench when you point at one.
 	var broken = _broken()
 	for c in broken:
@@ -585,9 +622,9 @@ func _draw_status(err: String, over: int = -1) -> void:
 	for i in 2:
 		Ui.segment(self, rr[i], Ui.PAPER, 8.0)
 		var c = rr[i].get_center()
-		draw_arc(c, 10, PI * 0.2, PI * 1.6, 12, Ui.INK, 3.0)
+		draw_arc(c, 10, PI * 0.2, PI * 1.6, 12, Ui.ink(Ui.INK), 3.0)
 		var tip = c + Vector2(cos(PI * (1.6 if i == 1 else 0.2)), sin(PI * (1.6 if i == 1 else 0.2))) * 10
-		draw_circle(tip, 4, Ui.INK)
+		draw_circle(tip, 4, Ui.ink(Ui.INK))
 	# Current facing, as an arrow between the buttons.
 	var mid = Rect2(470, 716, 56, 40)
 	Ui.segment(self, mid, Ui.INK, 8.0)

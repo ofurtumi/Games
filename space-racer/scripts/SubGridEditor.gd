@@ -324,6 +324,12 @@ func _draw_node(i: int, live: bool) -> void:
 		draw_circle(_out_port(i, k), 3.5, col)
 
 func _draw():
+	Ui.begin()
+	_draw_screen()
+	Ui.scanlines(self, Rect2(Vector2.ZERO, size))
+	Ui.end()
+
+func _draw_screen():
 	if pid == "":
 		return
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.55))

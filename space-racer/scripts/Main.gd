@@ -25,6 +25,7 @@ const TerminalScript = preload("res://scripts/Terminal.gd")
 const Controls = preload("res://scripts/Controls.gd")
 const OverlayScript = preload("res://scripts/Overlay.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
+const Ui = preload("res://scripts/Ui.gd")
 const TitleCardScript = preload("res://scripts/TitleCard.gd")
 const Contracts = preload("res://scripts/Contracts.gd")
 const PILOTS = ["VEGA", "KORR", "MIRA", "TOLV", "ASH", "BRYN", "OKO", "RHEA", "SOLE", "IDRA"]
@@ -146,6 +147,7 @@ func _ready():
 	Controls.apply(save_data.get("keys", {}))
 	add_child(Sfx.new())
 	apply_sound()
+	Ui.style = save_data.get("ui_style", "terminal")
 	_build_world()
 	terrain = TerrainScript.new()
 	terrain.name = "Terrain"
@@ -868,6 +870,7 @@ func open_menu() -> void:
 		{"label": "Controls", "action": func(): open_controls(open_menu)},
 		_rivals_row(),
 		{"label": "Sound", "action": func(): open_sound(open_menu)},
+		_interface_row(),
 		{"label": "Main menu", "action": func(): close_menu(); show_title()},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], close_menu)
@@ -1142,6 +1145,7 @@ func show_title() -> void:
 		{"label": "Controls", "action": func(): open_controls(show_title)},
 		_rivals_row(),
 		{"label": "Sound", "action": func(): open_sound(show_title)},
+		_interface_row(),
 		{"label": "Reset save", "action": _confirm_reset},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], Callable())
@@ -1387,6 +1391,15 @@ func wins(planet: int) -> int:
 
 func rival_heat(planet: int) -> float:
 	return (rival_level() - 1) + mini(wins(planet), 3) * 0.5
+
+# Terminal (green phosphor) or Classic (blue and white) menus.
+func _interface_row() -> Dictionary:
+	var flip = func():
+		Ui.style = "classic" if Ui.style == "terminal" else "terminal"
+		save_data.ui_style = Ui.style
+		Sfx.play("ui_move")
+		save_game()
+	return {"label": "Interface", "value": func(): return Ui.style.capitalize(), "action": flip, "left": flip, "right": flip}
 
 func _rivals_row() -> Dictionary:
 	return {"label": "Rivals", "value": func(): return RIVAL_LEVELS[rival_level()],

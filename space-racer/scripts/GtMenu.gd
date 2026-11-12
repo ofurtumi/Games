@@ -156,6 +156,14 @@ func _gt_row_rect(i: int) -> Rect2:
 	return Rect2(x, _rows_top() + i * (ROW_H + ROW_GAP), w, ROW_H)
 
 func _draw():
+	Ui.begin()
+	if Ui.terminal() and dim_backdrop and crt.is_empty():
+		draw_rect(Rect2(Vector2.ZERO, size), Color(Ui.T_BG, 0.82))
+	_draw_screen()
+	Ui.scanlines(self, Rect2(Vector2.ZERO, size))
+	Ui.end()
+
+func _draw_screen():
 	if not crt.is_empty():
 		StationCRT.draw(self, size, crt, rows, selected, t, _val)
 		return

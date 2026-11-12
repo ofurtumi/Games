@@ -650,6 +650,7 @@ func open_menu() -> void:
 				"desc": "Rebind keys."},
 			{"label": "Sound", "place": "comms", "action": func(): main.open_sound(open_menu),
 				"desc": "Volume."},
+			main._interface_row().merged({"place": "comms", "desc": "Terminal (green screens) or Classic menus."}),
 			{"label": "Quit", "place": "airlock", "action": func(): main.save_game(); get_tree().quit(),
 				"desc": "Save and leave the game."},
 		], launch)
@@ -663,6 +664,7 @@ func open_menu() -> void:
 			{"label": "Tow home", "value": "lose cargo", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
 			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
+			main._interface_row(),
 			{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
 		], main.menu.hide_menu)
 

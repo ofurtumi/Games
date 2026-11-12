@@ -13,6 +13,11 @@ Rivals, Sound, Reset save, Quit. **Reset save** (after an "are you sure")
 copies the save aside as `space_racer_save.backup-<date>.txt` and starts a
 fresh career; controls and sound settings stay.
 
+**Interface** (title, pause, outpost and expedition menus): **Terminal**
+(the default: green phosphor on dark, monospace, scanlines, for every menu,
+the garage, the wiring editor and the map) or **Classic** (the blue and white
+slabs). The race and expedition HUDs stay classic either way.
+
 **A new game** shows only **Start**. Rix, your contact, messages you on an
 old green terminal: they found a rusty ship, will you win the Cinder cup with
 it? Accept and you drop onto the Cinder grid; refuse and it's game over (back
