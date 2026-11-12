@@ -24,6 +24,7 @@ const ACTIONS = [
 	["garage", "Garage", KEY_G, 0],
 	["builder", "Track builder", KEY_B, 0],
 	["camera", "Camera", KEY_C, 0],
+	["map", "Map (expedition)", KEY_M, 0],
 ]
 
 static func default_key(action: String) -> int:

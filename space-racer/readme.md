@@ -130,7 +130,17 @@ bank.
 ### Exploring
 
 Hover slowly next to something to work it (a ring fills around the ship).
-Nothing gets a marker until you've been near it, and some of it is buried.
+Sites only show on the map once you've been near them, and some are buried.
+
+**Map** (M, or Map on the outpost and expedition menus; the game waits while
+it's open): space you've flown through is charted (lit, within about 160 m
+of your path, kept in the save); the rest is fog. Outposts, fuel depots and
+traders you haven't been near show as pulsing amber **?** signals, even in
+the fog; once you've been within 70 m they're dots with names. Planets are
+outlines, named once you've been near; found wrecks, hulls and the market
+are dots. WASD / arrows / drag to move, wheel or +/- to zoom, Space to jump
+back to your ship, M or Esc to close. There are no off-screen arrows on the
+HUD any more.
 
 - **Wrecks** (smoking): materials, fuel, a rocket reload, sometimes a
   blueprint. On surfaces, drifting in space, and buried in pockets you have
@@ -154,7 +164,7 @@ a hull) and patrol around Moss and Magma. They sit on station until you come
 close, then chase, fire slow red bolts and ram; get far enough away and they
 go back. Every tool hurts them (lasers, missiles, bombs, the wrecking-ball
 drill) and homing missiles go for them before ore. Dead drones drop metal
-and crystal; chasing ones get a red `!` marker. A cleared post fills again
+and crystal. A cleared post fills again
 four minutes later, while you're well away from it.
 
 Race tracks have them too: drone turrets hovering over the kerb (two on
@@ -167,8 +177,8 @@ a downed one is back 40 s later once you're 60 m away.
 the pads. Pull up slowly next to one to deal: material swaps, a refuel for
 metal, and one part at 75% of the shop price. They restock at every outpost
 they stop at: three swaps from a pool of eight at rates up to a quarter
-better or worse than usual, and a different part. Within 500 m they get a
-TRADER marker.
+better or worse than usual, and a different part. They're signals on the
+map until you've met them.
 
 ## Controls
 
@@ -292,7 +302,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

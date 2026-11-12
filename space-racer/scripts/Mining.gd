@@ -16,7 +16,7 @@ extends Node3D
 # Exploration sites (see _build_sites): crashed ships to salvage (materials,
 # fuel, rockets, sometimes a blueprint), fuel canisters, derelict hulls to tow
 # to an outpost (unlocks that frame), and a black market that sells
-# blueprints. Hover slowly next to a site to work it. Sites only get a marker
+# blueprints. Hover slowly next to a site to work it. Sites only show on the map
 # once you've been near them; buried ones are found by digging.
 
 const Parts = preload("res://scripts/Parts.gd")
@@ -29,6 +29,8 @@ const Sfx = preload("res://scripts/Sfx.gd")
 const Contracts = preload("res://scripts/Contracts.gd")
 const DronesScript = preload("res://scripts/Drones.gd")
 const TradersScript = preload("res://scripts/Traders.gd")
+const MapScript = preload("res://scripts/Map.gd")
+const Controls = preload("res://scripts/Controls.gd")
 
 # Each planet has an outpost above its north pole run by one mechanic, who
 # sells program cards and parts for materials.
@@ -92,9 +94,10 @@ var salvage_site = null
 var _market_cool = false
 var _dead_left = 0.0
 var drones
-var marker_rects = []   # where the marker labels went last frame (tests)
-var hud_panels = []
-var marker_arrows = []
+var map                  # the M map (Map.gd)
+const EXPLORE_CELL = 50.0  # fog of war resolution, metres
+const REVEAL = 160.0       # how far around you space gets charted
+const SEEN_NEAR = 70.0     # how close counts as having visited something
 var traders
 var trader_cool = 0.0
 var _trade_t = 0.0
@@ -177,6 +180,8 @@ func setup(m) -> void:
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.draw.connect(_draw_hud)
 	layer.add_child(hud)
+	map = MapScript.new()
+	layer.add_child(map)
 	_enter_env()
 	if arrive >= 0:
 		_start_arrival(arrive)
@@ -257,6 +262,10 @@ func _service_depots() -> void:
 func _unhandled_input(event):
 	if main.mode != "mining" or main.menu_open():
 		return
+	if event.is_action_pressed("map"):
+		open_map()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom = maxf(14.0, zoom - 3.0)
@@ -330,6 +339,7 @@ func _process(delta):
 	if _trip_step(delta):
 		hud.queue_redraw()
 		return
+	_explore()
 	if _dead_left > 0.0:
 		_dead_left -= delta / maxf(Engine.time_scale, 0.05)
 		if _dead_left <= 0.0:
@@ -399,6 +409,7 @@ func _dock(i: int = -1) -> void:
 	miner.pos = station_pad + Vector2(0, 1.0)
 	miner.vel = Vector2.ZERO
 	miner.weapons.refill()
+	_explore()
 	cam.position = Vector3(miner.pos.x, miner.pos.y - 4.0, 30.0)
 	if gained.size() > 0:
 		main.notify("UNLOADED  " + "  ".join(gained), Color(0.5, 0.9, 1.0))
@@ -462,6 +473,51 @@ func _trip_step(delta: float) -> bool:
 			main.race_on(PLANETS[t.planet].palette, true)
 	return true
 
+# ---------------------------------------------------------------- map
+
+func open_map() -> void:
+	main.menu.hide_menu()
+	map.open(self)
+
+# Space you've flown through, as a set of EXPLORE_CELL cells (saved).
+func explored() -> Dictionary:
+	if not main.save_data.has("explored"):
+		main.save_data.explored = {}
+	return main.save_data.explored
+
+func seen(key: String) -> bool:
+	return main.save_data.get("seen", {}).has(key)
+
+func mark_seen(key: String) -> void:
+	var s = main.save_data.get("seen", {})
+	s[key] = true
+	main.save_data.seen = s
+
+# Chart the space around the ship and note anything you're close to.
+func _explore() -> void:
+	var ex = explored()
+	var c0 = Vector2i(floori(miner.pos.x / EXPLORE_CELL), floori(miner.pos.y / EXPLORE_CELL))
+	var r = ceili(REVEAL / EXPLORE_CELL)
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var c = c0 + Vector2i(dx, dy)
+			if ex.has(c):
+				continue
+			if (Vector2(c) + Vector2(0.5, 0.5)).distance_to(miner.pos / EXPLORE_CELL) * EXPLORE_CELL <= REVEAL:
+				ex[c] = true
+	for i in outposts.size():
+		if miner.pos.distance_to(outposts[i].pad) < SEEN_NEAR:
+			mark_seen("outpost:%d" % i)
+	for i in depots.size():
+		if miner.pos.distance_to(depots[i]) < SEEN_NEAR:
+			mark_seen("depot:%d" % i)
+	for tr in traders.traders:
+		if miner.pos.distance_to(tr.pos) < SEEN_NEAR:
+			mark_seen("trader:" + tr.name)
+	for i in planets.size():
+		if miner.pos.distance_to(planets[i].centre) < planets[i].def.radius + 120.0:
+			mark_seen("planet:%d" % i)
+
 func launch() -> void:
 	docked = false
 	_undock_cd = 2.5
@@ -503,6 +559,7 @@ func open_menu() -> void:
 		var mech = Parts.MECHANICS[def.mech].name
 		main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
 			{"label": "Launch", "action": launch},
+			{"label": "Map", "action": open_map},
 			{"label": "Contracts", "value": func(): return "%d / %d active" % [main.contracts().size(), Contracts.MAX_ACTIVE], "action": open_contracts},
 			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
 			{"label": "Blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
@@ -515,6 +572,7 @@ func open_menu() -> void:
 	else:
 		main.menu.show_menu("EXPEDITION", [
 			{"label": "Resume", "action": main.menu.hide_menu},
+			{"label": "Map", "action": open_map},
 			{"label": "Tow home", "value": "lose cargo", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
 			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
@@ -714,77 +772,8 @@ func _draw_hud() -> void:
 	if tow != null:
 		Ui.segment(hud, Rect2(vp.x * 0.5 - 150, 18, 300, 34), Color(0.03, 0.035, 0.045, 0.8))
 		Ui.text(hud, Vector2(vp.x * 0.5 - 150, 42), "TOWING  " + _site_label(tow), 17, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, 300)
-	# Off-screen markers: planets and the station.
-	var marks = []
-	for o in outposts:
-		marks.append([o.pad, "OUTPOST", Parts.MECHANICS[PLANETS[o.planet].mech].accent])
-	for d in depots:
-		marks.append([d, "DEPOT", Color(0.3, 1.0, 0.4)])
-	for s in sites:
-		if s.found and not s.done and s != tow:
-			marks.append([s.pos, _site_label(s), SITE_COLORS[s.type]])
-	for t in traders.traders:
-		if t.pos.distance_to(miner.pos) < 500.0:
-			marks.append([t.pos, "TRADER", Color(0.6, 0.85, 1.0)])
-	for d in drones.drones:
-		if d.hp > 0.0 and d.state == "chase":
-			marks.append([d.pos, "!", Color(1.0, 0.25, 0.2)])
-	for p2 in planets:
-		if miner.pos.distance_to(p2.centre) > p2.def.radius * 1.6:
-			marks.append([p2.centre, p2.def.name.to_upper(), p2.terrain.planet.rock.lightened(0.3)])
-	# Keep them off the panels and off each other: closest first; a label that
-	# would overlap slides along the edge, and if there's no room the arrow
-	# goes alone.
-	var panels = [Rect2(0, 0, 370, 140), Rect2(vp.x - 400, 0, 400, cy + 10), Rect2(vp.x - 380, vp.y - 185, 380, 185)]
-	marks.sort_custom(func(x, y): return miner.pos.distance_squared_to(x[0]) < miner.pos.distance_squared_to(y[0]))
-	var placed = []
-	marker_rects = []
-	hud_panels = panels
-	# Arrows first, then labels round them.
-	var arrows = []
-	for mk in marks:
-		var sp = cam.unproject_position(Vector3(mk[0].x, mk[0].y, 0.0))
-		var inside = Rect2(Vector2.ZERO, vp).grow(-40).has_point(sp)
-		if inside and not cam.is_position_behind(Vector3(mk[0].x, mk[0].y, 0.0)):
-			continue
-		var c = vp * 0.5
-		var d = (sp - c)
-		var k = minf((vp.x * 0.5 - 50) / maxf(absf(d.x), 1.0), (vp.y * 0.5 - 50) / maxf(absf(d.y), 1.0))
-		var at = marker_spot(c + d * minf(k, 1.0), vp, panels)
-		var dir = (sp - at).normalized()
-		var n = Vector2(-dir.y, dir.x)
-		hud.draw_colored_polygon(PackedVector2Array([at + dir * 12, at - dir * 6 + n * 9, at - dir * 6 - n * 9]), mk[2])
-		arrows.append([mk, at])
-		placed.append(Rect2(at - Vector2(12, 12), Vector2(24, 24)))
-	var blocked = placed.duplicate()
-	for ar in arrows:
-		var mk = ar[0]
-		var at = ar[1]
-		# On the top/bottom edges the label goes under/over the arrow and slides
-		# sideways; on the side edges it goes inward and slides up and down.
-		var top_bottom = at.y < 140.0 or at.y > vp.y - 140.0
-		var base: Vector2
-		var along: Vector2
-		if top_bottom:
-			base = at + Vector2(-60, 16 if at.y < vp.y * 0.5 else -34)
-			along = Vector2(126, 0)
-		else:
-			base = at + Vector2(18 if at.x < vp.x * 0.5 else -138, -9)
-			along = Vector2(0, 20)
-		var spot = null
-		for step in [0, 1, -1, 2, -2, 3, -3]:
-			var r = Rect2(base + along * step, Vector2(120, 18))
-			if not Rect2(Vector2.ZERO, vp).encloses(r) or panels.any(func(p): return p.intersects(r)) or blocked.any(func(p): return p.intersects(r)):
-				continue
-			spot = r
-			break
-		if spot == null:
-			continue
-		blocked.append(spot)
-		marker_rects.append(spot)
-		var dist = int(miner.pos.distance_to(mk[0]))
-		Ui.text(hud, spot.position + Vector2(0, 14), "%s %dm" % [mk[1], dist], 13, mk[2], true, HORIZONTAL_ALIGNMENT_CENTER, 120)
-	marker_arrows = placed
+	# Where things are lives on the map now (M).
+	Ui.text(hud, Vector2(28, vp.y - 30), Controls.key_name("map", main.save_data.get("keys", {})).to_upper() + "  MAP", 14, Ui.DIM, true)
 	# Banners.
 	var ny = vp.y * 0.24
 	for msg in main.messages:
@@ -796,21 +785,6 @@ func _draw_hud() -> void:
 		Ui.text(hud, Vector2(r.position.x, r.position.y + 29), msg.text, 22, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, bw)
 		ny += 50
 
-# A marker that lands on a HUD panel moves to the nearest side of it that's
-# still on screen.
-static func marker_spot(at: Vector2, vp: Vector2, panels: Array) -> Vector2:
-	for p in panels:
-		if not p.grow(14).has_point(at):
-			continue
-		var g = p.grow(24)
-		var best = at
-		var bd = INF
-		for q in [Vector2(at.x, g.end.y), Vector2(at.x, g.position.y), Vector2(g.position.x, at.y), Vector2(g.end.x, at.y)]:
-			if Rect2(Vector2.ZERO, vp).grow(-20).has_point(q) and q.distance_to(at) < bd:
-				bd = q.distance_to(at)
-				best = q
-		at = best
-	return at
 
 func draw_rect_on(r: Rect2, c: Color) -> void:
 	hud.draw_rect(r, c)

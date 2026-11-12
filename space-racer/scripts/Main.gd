@@ -744,7 +744,8 @@ func notify(text: String, color: Color, key: String = "") -> void:
 		messages.pop_front()
 
 func menu_open() -> bool:
-	return menu.visible or editor.visible or grid_garage.visible or (terminal != null and terminal.visible)
+	return menu.visible or editor.visible or grid_garage.visible or (terminal != null and terminal.visible) \
+		or (mining != null and mining.map != null and mining.map.visible)
 
 func _unhandled_input(event):
 	if shot_path != "":
