@@ -1061,6 +1061,7 @@ func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void
 		var o = offer
 		var row = {"label": o.name,
 			"value": func(): return "OWNED" if main.unlocks().has(o.name) else _price_text({"credits": Parts.to_credits(o.price)}),
+			"can": func(): return not main.unlocks().has(o.name) and _can_pay({"credits": Parts.to_credits(o.price)}),
 			"action": func(): _buy(o, offers, title)}
 		# A card for the tool sub-grid, or a whole part: say which.
 		for id in Parts.NODES:
@@ -1144,6 +1145,7 @@ func open_shop(mech: String, title: String) -> void:
 		var pr = Parts.credit_price(pid)
 		rows.append({"label": Parts.PARTS[pid].name,
 			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)], "part": pid,
+			"can": func(): return _can_pay(pr),
 			"action": func(): _buy_part(pid, mech, title)})
 	var back = open_menu if docked else main.menu.hide_menu
 	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % _spares().values().reduce(func(a, b): return a + b, 0),

@@ -8,7 +8,8 @@ extends Control
 # action (Callable), left/right (Callable), alt_left/alt_right (Callable,
 # with Shift), swatch (Color or Callable), part (a part id: its card shows
 # along the bottom while the row is selected), note ({title, text}: a card
-# for something that isn't a part)}. Every menu gets a line under its title
+# for something that isn't a part), can (bool or Callable: in shops, lit with
+# a green edge when you can afford it, greyed out when you can't)}. Every menu gets a line under its title
 # saying what it's for (BLURBS, by title; set `blurb` to override).
 
 const Ui = preload("res://scripts/Ui.gd")
@@ -159,8 +160,15 @@ func _draw():
 		var rr = _row_rect(i)
 		var sel = i == selected
 		Ui.segment(self, Rect2(rr.position + Vector2(4, 4), rr.size), Color(0, 0, 0, 0.35))
-		Ui.segment(self, rr, Ui.HILITE if sel else Ui.PAPER)
+		var can = _val(r.get("can", null))
+		var fill = Ui.HILITE if sel else Ui.PAPER
 		var ink = Color.WHITE if sel else Ui.INK
+		if can == false:
+			fill = Color(0.3, 0.36, 0.5) if sel else Color(0.52, 0.54, 0.58)
+			ink = Color(0.85, 0.87, 0.9) if sel else Color(0.3, 0.32, 0.36)
+		Ui.segment(self, rr, fill)
+		if can == true:
+			Ui.segment(self, Rect2(rr.position.x + 6, rr.position.y + 6, 6, rr.size.y - 12), Color(0.35, 0.95, 0.45), 2.0)
 		Ui.text(self, rr.position + Vector2(18, 27), r.label, 20, ink, sel)
 		var value = _val(r.get("value", ""))
 		var vx = rr.end.x - 20

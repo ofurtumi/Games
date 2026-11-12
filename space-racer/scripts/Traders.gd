@@ -111,16 +111,16 @@ func open_deals(t: Dictionary) -> void:
 	for sw in t.swaps:
 		var give = sw[0]
 		var take = sw[1]
-		rows.append({"label": "Swap  " + mining._price_text(give), "value": "> " + mining._price_text(take),
+		rows.append({"label": "Swap  " + mining._price_text(give), "value": "> " + mining._price_text(take), "can": func(): return mining._can_pay(give),
 			"action": func(): _swap(t, give, take)})
 	var fuel_price = {"credits": 15}
-	rows.append({"label": "Refuel", "value": mining._price_text(fuel_price), "action": func():
+	rows.append({"label": "Refuel", "value": mining._price_text(fuel_price), "can": func(): return mining._can_pay(fuel_price), "action": func():
 		if mining._can_pay(fuel_price):
 			mining._pay(fuel_price)
 			mining.miner.fuel = mining.miner.stats.fuel
 			preload("res://scripts/Sfx.gd").play("coins")})
 	var part_price = {"credits": int(Parts.credit_price(t.part).credits * 0.75)}
-	rows.append({"label": Parts.PARTS[t.part].name, "value": "%d owned   %s" % [main.owned().get(t.part, 0), mining._price_text(part_price)], "part": t.part,
+	rows.append({"label": Parts.PARTS[t.part].name, "value": "%d owned   %s" % [main.owned().get(t.part, 0), mining._price_text(part_price)], "part": t.part, "can": func(): return mining._can_pay(part_price),
 		"action": func(): _buy(t, part_price)})
 	rows.append({"label": "Leave", "action": func(): close(t)})
 	main.menu.show_menu("TRADER  " + t.name, rows, func(): close(t), main.menu.title == "TRADER  " + t.name)

@@ -616,10 +616,12 @@ func open_cards(back: Callable) -> void:
 		var row = {"label": nd.name, "note": {"title": nd.name + "  ·  " + nd.type + " card  ·  for " + ", ".join(nd.get("for", [])), "text": nd.get("desc", "")}}
 		if Parts.is_locked(nd, unlocks()):
 			row.value = "blueprint needed"
+			row.can = false
 		else:
 			var pr = Parts.card_price(nid)
 			row.value = func(): return "%d owned  %d in use   %s" % [cards().get(nid, 0), used.get(nid, 0), _price_text(pr)]
 			row.action = func(): _buy_card(nid, back)
+			row.can = func(): return can_afford(pr)
 		rows.append(row)
 	rows.append({"label": "Back", "action": back})
 	menu.show_menu("CARDS", rows, back, menu.title == "CARDS")
@@ -887,6 +889,7 @@ func open_pit(back: Callable) -> void:
 		var pr = Parts.credit_price(pid)
 		rows.append({"label": Parts.PARTS[pid].name,
 			"value": func(): return "%d owned   %s" % [owned().get(pid, 0), _price_text(pr)], "part": pid,
+			"can": func(): return can_afford(pr),
 			"action": func(): _pit_buy(pid, back)})
 	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % spare_parts().values().reduce(func(a, b): return a + b, 0),
 		"action": func(): _pit_sell_menu(back)})

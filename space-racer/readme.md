@@ -280,6 +280,8 @@ Prices are in materials and scale with size, tier and maker. Locked parts
 need their blueprint before they show up. Loading a preset or saved build
 you don't own the parts for is refused and tells you what's missing.
 Shops, the black market and traders show your hold and bank top right.
+In every shop (and the card counter, blueprints and traders) what you can
+afford right now is lit with a green edge and what you can't is greyed out.
 Shop rows show the selected part's card on the right, the same one the
 garage shows: maker, what it does, its numbers and its placement rule.
 Under it an overview panel (Tab switches): **Ship** draws your frame with
