@@ -33,8 +33,7 @@ func setup(m) -> void:
 	_bolt_mesh = MeshKit.sphere(0.22, 6, 3)
 	_bolt_mat = MeshKit.add_mat(Color(1.0, 0.25, 0.15, 0.95))
 
-# New posts for the current track (after it's built or the race restarts).
-func reset() -> void:
+func clear() -> void:
 	for d in drones:
 		if d.node != null:
 			d.node.queue_free()
@@ -42,6 +41,10 @@ func reset() -> void:
 		b.node.queue_free()
 	drones.clear()
 	bolts.clear()
+
+# New posts for the current track (after it's built or the race restarts).
+func reset() -> void:
+	clear()
 	var track = main.track
 	if track.pts.size() < 10:
 		return

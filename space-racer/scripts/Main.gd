@@ -739,6 +739,7 @@ func show_title() -> void:
 	for rv in rivals:
 		rv.queue_free()
 	rivals.clear()
+	_title_track(true)
 	ship.autopilot = true
 	ship.set_process(true)
 	hud.visible = false
@@ -756,7 +757,27 @@ func show_title() -> void:
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], Callable())
 
+# Behind the title the ship laps on its own, so the track is cleared of
+# anything that would wreck it (mines, barriers, walls, ramps, drones).
+# Leaving the title puts the real track back.
+const TITLE_SKIP = ["mine", "barrier", "wall", "ramp"]
+var _title_full_bp = null
+
+func _title_track(on: bool) -> void:
+	if on and _title_full_bp == null:
+		_title_full_bp = track.blueprint.duplicate(true)
+		var clean = track.blueprint.duplicate(true)
+		clean.features = clean.features.filter(func(f): return not TITLE_SKIP.has(f.type))
+		build_blueprint(clean, false)
+		hazards.reset()
+		hazards.clear()
+	elif not on and _title_full_bp != null:
+		var bp = _title_full_bp
+		_title_full_bp = null
+		build_blueprint(bp, false)
+
 func _leave_title() -> void:
+	_title_track(false)
 	title_on = false
 	title_card.visible = false
 	menu.dim_backdrop = true
@@ -1337,11 +1358,13 @@ func _race(delta: float) -> void:
 			last_lap = lap_time
 			if best_lap < 0.0 or lap_time < best_lap:
 				best_lap = lap_time
-			notify("LAP %d  %.2fs" % [lap, lap_time], Color(1.0, 0.95, 0.5))
-			session.laps += 1
-			if session.best < 0.0 or lap_time < session.best:
-				session.best = lap_time
-			_award_medals(lap_time)
+			# Laps behind the title are the autopilot's: no banners, no medals.
+			if not title_on:
+				notify("LAP %d  %.2fs" % [lap, lap_time], Color(1.0, 0.95, 0.5))
+				session.laps += 1
+				if session.best < 0.0 or lap_time < session.best:
+					session.best = lap_time
+				_award_medals(lap_time)
 			if race_laps > 0 and lap >= race_laps and race_over <= 0.0:
 				_finish_race()
 			lap += 1
