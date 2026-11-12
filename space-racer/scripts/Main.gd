@@ -904,12 +904,31 @@ func open_order(id: String) -> void:
 	for i in outposts_selling(id):
 		if i == here:
 			continue
-		rows.append({"label": MiningScript.PLANETS[i].name + " outpost", "value": "sells it  " + _price_text(pr), "part": id, "can": false})
+		var src = i
+		if here >= 0:
+			# Docked: have it sent. A courier flies it over; pirates may not agree.
+			var total = {"credits": pr.credits + MiningScript.CouriersScript.fee(id)}
+			rows.append({"label": "Courier from " + MiningScript.PLANETS[i].name, "value": _price_text(pr) + " + %d fee" % MiningScript.CouriersScript.fee(id),
+				"part": id, "can": func(): return can_afford(total), "action": func(): _order_courier(id, src, here)})
+		else:
+			rows.append({"label": MiningScript.PLANETS[i].name + " outpost", "value": "sells it  " + _price_text(pr), "part": id, "can": false})
 	if rows.is_empty():
 		rows.append({"label": "Not sold anywhere you've been", "value": "explore", "part": id, "can": false})
 	rows.append({"label": "Back", "action": menu.hide_menu})
 	menu.show_menu("ORDER  " + def.name.to_upper(), rows, menu.hide_menu)
 	menu.wallet = func(): return {"bank": inventory}
+
+func _order_courier(id: String, from: int, to: int) -> void:
+	var total = Parts.credit_price(id).credits + MiningScript.CouriersScript.fee(id)
+	if credits() < total:
+		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
+		return
+	inventory.credits -= total
+	mining.couriers.send(id, from, to)
+	notify("COURIER ON ITS WAY  -  " + Parts.PARTS[id].name.to_upper(), Color(1.0, 0.82, 0.25))
+	Sfx.play("coins")
+	save_game()
+	menu.hide_menu()
 
 func _order_buy(id: String) -> void:
 	var pr = Parts.credit_price(id)

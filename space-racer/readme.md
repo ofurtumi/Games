@@ -296,8 +296,13 @@ afford right now is lit with a green edge and what you can't is greyed out.
 Shop rows show the selected part's card on the right, the same one the
 garage shows: maker, what it does, its numbers and its placement rule.
 In the garage, clicking a part you have none of to hand opens an **order**:
-Buy here if this outpost (or the pit, for stock parts) sells it, and which
-outposts you've visited sell it otherwise.
+Buy here if this outpost (or the pit, for stock parts) sells it; docked
+anywhere else, **Courier from** any outpost you've visited that sells it, for
+the price plus a fee (a quarter, at least 20 cr). A small yellow courier
+flies it over (it's on your map, and keeps flying while you wait at the
+station). About one in three gets jumped by pirates on the way: Rix tells you
+where, and the courier wreck (on your map, guarded by two drones) still has
+your part in it. Salvage it to get it back. Orders are saved.
 Under the shop's part card is an overview panel (Tab switches): **Ship** draws your frame with
 what's fitted (broken slots scorched), lists the parts and gives top speed,
 accel, shield and drill; **Parts owned** lists everything you own with
@@ -358,7 +363,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `ShopOverview.gd` shops' ship / parts panel · `StationCRT.gd` outpost terminal · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `ShopOverview.gd` shops' ship / parts panel · `StationCRT.gd` outpost terminal · `Couriers.gd` part deliveries · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

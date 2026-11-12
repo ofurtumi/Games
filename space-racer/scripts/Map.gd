@@ -135,6 +135,10 @@ func _draw():
 			_dot(tr.pos, Color(0.6, 0.85, 1.0), "TRADER " + tr.name, 5.0)
 		else:
 			_signal(tr.pos, 1.3)
+	# Your couriers, in flight.
+	for o in mining.couriers.orders():
+		if o.state == "flying":
+			_dot(o.pos, Color(1.0, 0.82, 0.25), "COURIER  " + mining.Parts.PARTS[o.part].name.to_upper(), 4.0)
 	# You.
 	var me = to_screen(mining.miner.pos)
 	var f = Vector2(cos(mining.miner.heading), -sin(mining.miner.heading))

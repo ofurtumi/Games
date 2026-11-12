@@ -30,6 +30,7 @@ const Contracts = preload("res://scripts/Contracts.gd")
 const DronesScript = preload("res://scripts/Drones.gd")
 const TradersScript = preload("res://scripts/Traders.gd")
 const MapScript = preload("res://scripts/Map.gd")
+const CouriersScript = preload("res://scripts/Couriers.gd")
 const Controls = preload("res://scripts/Controls.gd")
 
 # Each planet has an outpost above its north pole run by one mechanic, who
@@ -95,6 +96,7 @@ var _market_cool = false
 var _dead_left = 0.0
 var drones
 var map                  # the M map (Map.gd)
+var couriers             # parts on their way to you (Couriers.gd)
 const EXPLORE_CELL = 50.0  # fog of war resolution, metres
 const REVEAL = 160.0       # how far around you space gets charted
 const SEEN_NEAR = 70.0     # how close counts as having visited something
@@ -172,6 +174,9 @@ func setup(m) -> void:
 	traders = TradersScript.new()
 	add_child(traders)
 	traders.setup(self)
+	couriers = CouriersScript.new()
+	add_child(couriers)
+	couriers.setup(self)
 	var layer = CanvasLayer.new()
 	layer.layer = 2
 	add_child(layer)
@@ -334,6 +339,9 @@ func _process(delta):
 	for pl in planets:
 		pl.terrain.focus = pl.local(miner.pos)
 		pl.terrain.view_r = view
+	# Couriers keep flying while you wait at the station.
+	if main.mode == "mining" and not _trip_step_active():
+		couriers.step(delta)
 	if main.menu_open() or main.mode != "mining":
 		hud.queue_redraw()
 		return
@@ -452,6 +460,9 @@ func depart_to_race(planet: int) -> void:
 	var pl = planets[planet]
 	trip = {"kind": "down", "t": 0.0, "from": miner.pos, "to": pl.centre + Vector2(0, pl.def.radius * 0.9), "planet": planet}
 	Sfx.play("launch")
+
+func _trip_step_active() -> bool:
+	return not trip.is_empty()
 
 func _trip_step(delta: float) -> bool:
 	if trip.is_empty():
@@ -947,7 +958,7 @@ func _site(pos: Vector2, type: String, data: Dictionary) -> void:
 
 func _site_label(s: Dictionary) -> String:
 	match s.type:
-		"wreck": return "YOUR WRECK" if s.data.get("own", false) else "WRECK"
+		"wreck": return "YOUR WRECK" if s.data.get("own", false) else ("COURIER WRECK" if s.data.has("courier") else "WRECK")
 		"hull": return Parts.FRAMES[s.data.frame].name.to_upper()
 		"cache": return "FUEL"
 		"market": return "NINE FINGERS"
@@ -989,6 +1000,8 @@ func _work_site(s: Dictionary) -> void:
 			s.done = true
 			if s == _own_wreck:
 				_own_wreck = null
+			if s.data.has("courier"):
+				couriers.recovered(s.data.courier)
 			var loot = s.data.get("loot", {"metal": 2 + randi() % 5, "crystal": randi() % 3})
 			var bits = []
 			for k in loot:
@@ -998,7 +1011,8 @@ func _work_site(s: Dictionary) -> void:
 				bits.append("+%d %s" % [loot[k], k])
 			miner.fuel = minf(miner.stats.fuel, miner.fuel + miner.stats.fuel * 0.3)
 			miner.weapons.refill()
-			main.notify("SALVAGED  " + "  ".join(bits), SITE_COLORS.wreck)
+			if not bits.is_empty():
+				main.notify("SALVAGED  " + "  ".join(bits), SITE_COLORS.wreck)
 			main.contract_event("salvage", {})
 			Sfx.play("coins")
 			if s.data.has("blueprint"):
