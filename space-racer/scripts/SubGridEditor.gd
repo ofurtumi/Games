@@ -145,6 +145,54 @@ func _live_stats() -> Dictionary:
 	lo.parts[idx].erase("cards")
 	return Parts.stats(lo)
 
+# The program as numbered steps in plain words: what the shot does, where
+# each payload goes off and what flies on after it.
+const PAYLOAD_WORDS = {
+	"bomb": "BOMB goes off: a blast that breaks up to hard rock",
+	"mini": "a small blast",
+	"dig": "EXCAVATE goes off: a smaller blast that breaks deep rock",
+	"cluster": "CLUSTER goes off: a small blast and 5 homing bomblets (the bomblets are fixed; cards after it don't change them)",
+	"gravity": "GRAVITY WELL opens: a few seconds of pull",
+	"quench": "QUENCH goes off: lava and gas around it turn to rock",
+}
+
+static func explain(prog: Dictionary, kind: String, depth: int = 0, lead: String = "") -> Array:
+	var out = []
+	var pad = " ".repeat(lead.length())   # continuation lines line up under the step
+	var mods = []
+	for k in ["fast", "homing", "phase", "timer", "orbit"]:
+		if prog.get(k, false):
+			mods.append(Parts.NODES[k].name.to_lower())
+	var with = (", " + ", ".join(mods)) if not mods.is_empty() else ""
+	var forks = prog.get("forks", [])
+	if not forks.is_empty():
+		out.append(lead + ("fires, then SPLITS into %d shots" % forks.size()) + with)
+		for i in forks.size():
+			out.append_array(explain(forks[i], kind, depth, pad + "  branch %d: " % (i + 1)))
+		return out
+	var what = {"laser": "beam", "rocket": "missile", "dropper": "bomb", "drill": "drill"}.get(kind, "shot")
+	if depth == 0:
+		out.append(lead + "fires a " + what + with)
+	else:
+		out.append(lead + "a new shot flies on from there" + with)
+	var pay = prog.get("payload", "")
+	if pay == "":
+		if kind == "laser":
+			out.append(pad + "  burns along the beam (nothing wired after the core)")
+			return out
+		pay = "bomb" if depth == 0 else "mini"
+		out.append(pad + "  lands: " + PAYLOAD_WORDS[pay] + " (nothing wired: the default)")
+	else:
+		out.append(pad + "  lands: " + PAYLOAD_WORDS.get(pay, pay))
+	var kids = prog.get("children", [])
+	if not kids.is_empty():
+		if depth >= 3:
+			out.append(pad + "  (the chain stops here: three hops at most)")
+		else:
+			for c in kids:
+				out.append_array(explain(c, kind, depth + 1, pad + "  then "))
+	return out
+
 func _describe(prog: Dictionary) -> String:
 	var bits = []
 	for k in ["homing", "phase", "fast", "timer", "orbit"]:
@@ -402,6 +450,23 @@ func _draw_info(pal: Array, live: Array) -> void:
 		Ui.text(self, Vector2(x, y + 32), def.name.to_upper(), 24, Color.WHITE, true)
 		draw_multiline_string(font, Vector2(x, y + 66), Parts.DESC.get(pid, ""), HORIZONTAL_ALIGNMENT_LEFT, wrap, 17, -1, Color(0.85, 0.87, 0.9))
 		draw_multiline_string(font, Vector2(x, y + 150), "%d node%s wired to the core" % [live.size(), "" if live.size() == 1 else "s"], HORIZONTAL_ALIGNMENT_LEFT, wrap, 15, -1, Ui.DIM)
+		if Parts.node_family(pid) == "tool" and Parts.PARTS[pid].kind != "drill":
+			# What the wiring does, step by step.
+			var p = garage.lo.parts[idx].duplicate(true)
+			p.sub = sub
+			p.erase("cards")
+			var steps = explain(Parts.program_of(p), Parts.PARTS[pid].kind)
+			Ui.text(self, Vector2(x, y + 186), "WHAT IT DOES", 13, Ui.DIM, true)
+			var ly = y + 206
+			var n = 1
+			for line in steps:
+				if ly > _demo_area().position.y - 18:
+					break
+				var shown = ("%d. " % n + line) if not line.begins_with(" ") else ("  " + line)
+				draw_multiline_string(font, Vector2(x, ly), shown, HORIZONTAL_ALIGNMENT_LEFT, wrap, 14, -1, Color(0.88, 0.9, 0.93))
+				ly += 20 * maxi(1, ceili(font.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x / maxf(wrap, 1.0)))
+				if not line.begins_with(" "):
+					n += 1
 		return
 	var nd = Parts.NODES[id]
 	var col = TYPE_COLORS[nd.type]
@@ -411,8 +476,12 @@ func _draw_info(pal: Array, live: Array) -> void:
 	Ui.text(self, Vector2(x + 12, y - 1), chip, 13, Color.WHITE, true)
 	Ui.text(self, Vector2(x, y + 36), nd.name.to_upper(), 26, Color.WHITE, true)
 	draw_multiline_string(font, Vector2(x, y + 72), nd.desc, HORIZONTAL_ALIGNMENT_LEFT, wrap, 18, -1, Color(0.88, 0.9, 0.93))
-	var how = {"mod": "Changes the shot as it passes through.", "split": "Wire both outputs: one shot goes down each branch.",
-		"payload": "Goes off where the shot lands. Anything wired after it launches from there.", "upgrade": "Counts once it's wired to the core."}[nd.type]
+	var how = {"mod": "Changes the shot it's on, up to the next payload. Wired after a payload, it changes the new shot that flies on from there.",
+		"split": "One shot becomes two. Each branch keeps the mods so far, then goes its own way. Wire both outputs.",
+		"payload": "Goes off where its shot lands, at its own size: two payloads in a row are two blasts along the path, not one bigger one. Anything wired after it launches a new shot from that spot, flying on (three hops at most).",
+		"upgrade": "Counts once it's wired to the core."}[nd.type]
+	if id == "cluster":
+		how += " Cluster's own bomblets are fixed: cards after it don't change them."
 	draw_multiline_string(font, Vector2(x, y + 150), how, HORIZONTAL_ALIGNMENT_LEFT, wrap, 15, -1, Ui.DIM)
 	if hover_node >= 0 and not live.has(hover_node):
 		Ui.text(self, Vector2(x, y + 210), "NOT WIRED TO THE CORE", 14, Color(1.0, 0.45, 0.35), true)

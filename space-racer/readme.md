@@ -224,6 +224,17 @@ a laser, a rocket or a ramp in front of them.
 
 ## Component sub-grids
 
+**How cards combine** (the editor spells it out: with nothing hovered, the
+info panel lists WHAT IT DOES step by step for the wiring as it stands):
+mods change the shot they're on, up to the next payload. A payload goes
+off where its shot lands, at its own size: two payloads in a row are two
+blasts along the path, not one bigger blast. Anything wired after a payload
+launches a new shot from that spot, flying on (mods there change that new
+shot), three hops at most. Cluster's five bomblets are fixed: cards after
+Cluster don't change them, they launch one new shot from where it went off.
+A split fans the shot into branches that keep the mods so far. Nothing
+wired: a plain bomb.
+
 **Program cards cost.** The nodes you place are cards you own in copies:
 each placed card uses one (the palette shows free / owned; with none free it
 won't place), taking it out frees it again. A new pilot has one Fast and one
