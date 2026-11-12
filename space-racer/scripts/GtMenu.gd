@@ -72,6 +72,7 @@ const BLURBS = [
 	["CARDS", "is", "Program cards to wire into your components' sub-grids (click a placed part in the garage). Each placed card uses a copy; take it out and it's free again."],
 	["MARKET", "is", "Sell materials from your bank for credits. Docking unloads your hold into the bank."],
 	["SOUND", "is", "Volume from 0 to 10. Left and right to change."],
+	["PICKUPS", "is", "What goes in your hold. Switch a material off when you have enough of it: drilled rock is dropped, ore is left floating."],
 	["CONTROLS", "is", "Pick an action, then press the key you want for it."],
 	["RESET SAVE?", "is", "Starts a fresh career. A copy of this save is kept next to it."],
 	["ABANDON?", "is", "Drops the contract. Nothing you've done on it is paid."],

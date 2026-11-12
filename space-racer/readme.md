@@ -140,6 +140,10 @@ bank.
 Hover slowly next to something to work it (a ring fills around the ship).
 Sites only show on the map once you've been near them, and some are buried.
 
+**Pickups** (outpost and expedition menus) switches each material on or
+off: switched off, drilled rock isn't kept and ore chunks are left floating
+(for a minute), and its chip on the HUD's hold is struck through.
+
 **Map** (M, or Map on the outpost and expedition menus; the game waits while
 it's open): space you've flown through is charted (lit, within about 160 m
 of your path, kept in the save); the rest is fog. Outposts, fuel depots and

@@ -473,6 +473,34 @@ func _trip_step(delta: float) -> bool:
 			main.race_on(PLANETS[t.planet].palette, true)
 	return true
 
+# ---------------------------------------------------------------- pickups
+
+# Which materials you collect. Switched off: drilled rock isn't kept and ore
+# chunks are left floating (they stay a minute if you change your mind).
+func wants(mat: String) -> bool:
+	return not main.save_data.get("pickup_off", {}).get(mat, false)
+
+func _filter_text() -> String:
+	var off = main.save_data.get("pickup_off", {}).keys().filter(func(k): return main.save_data.pickup_off[k])
+	return "all" if off.is_empty() else "no " + ", ".join(off)
+
+func _toggle_pickup(mat: String) -> void:
+	var f = main.save_data.get("pickup_off", {})
+	f[mat] = not f.get(mat, false)
+	main.save_data.pickup_off = f
+	Sfx.play("ui_move")
+	main.save_game()
+
+func open_pickups(back: Callable) -> void:
+	var rows = []
+	for m in ["rock", "metal", "crystal", "core"]:
+		var mat = m
+		rows.append({"label": m.capitalize(), "value": func(): return "COLLECT" if wants(mat) else "LEAVE",
+			"swatch": MAT_COLORS[m], "action": func(): _toggle_pickup(mat),
+			"left": func(): _toggle_pickup(mat), "right": func(): _toggle_pickup(mat)})
+	rows.append({"label": "Back", "action": back})
+	main.menu.show_menu("PICKUPS", rows, back, main.menu.title == "PICKUPS")
+
 # ---------------------------------------------------------------- map
 
 func open_map() -> void:
@@ -560,6 +588,7 @@ func open_menu() -> void:
 		main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
 			{"label": "Launch", "action": launch},
 			{"label": "Map", "action": open_map},
+			{"label": "Pickups", "value": _filter_text, "action": func(): open_pickups(open_menu)},
 			{"label": "Contracts", "value": func(): return "%d / %d active" % [main.contracts().size(), Contracts.MAX_ACTIVE], "action": open_contracts},
 			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
 			{"label": "Market", "value": func(): return "%d cr" % main.credits(), "action": func(): main.open_exchange(open_menu)},
@@ -575,6 +604,7 @@ func open_menu() -> void:
 		main.menu.show_menu("EXPEDITION", [
 			{"label": "Resume", "action": main.menu.hide_menu},
 			{"label": "Map", "action": open_map},
+			{"label": "Pickups", "value": _filter_text, "action": func(): open_pickups(open_menu)},
 			{"label": "Tow home", "value": "lose cargo", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
 			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
@@ -610,6 +640,8 @@ func _on_cell_destroyed(p: Vector3, k: int, pl) -> void:
 	if mat == "":
 		return
 	if mat == "rock":
+		if not wants("rock"):
+			return
 		if _cargo_used() < miner.stats.cargo:
 			cargo["rock"] = cargo.get("rock", 0) + 1
 		else:
@@ -659,10 +691,11 @@ func _update_pickups(delta: float) -> void:
 		pk.age += delta
 		var to = miner.pos - pk.pos
 		var d = to.length()
-		var room = _cargo_used() < miner.stats.cargo
+		# Filtered-out materials are left where they fall.
+		var room = _cargo_used() < miner.stats.cargo and wants(pk.mat)
 		if room and d < miner.stats.magnet and pk.age > 0.3:
 			pk.vel = pk.vel.lerp(to.normalized() * (12.0 + 30.0 / maxf(d, 0.5)), minf(1.0, 6.0 * delta))
-		elif not room and d < miner.stats.magnet:
+		elif not room and wants(pk.mat) and d < miner.stats.magnet:
 			hold_full()
 			pk.vel *= 1.0 - 2.0 * delta
 		else:
@@ -752,8 +785,11 @@ func _draw_hud() -> void:
 		var s = str(cargo.get(m, 0))
 		var w = Ui.font(true).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
 		cx -= w + 34
-		draw_rect_on(Rect2(cx, 30, 12, 12), MAT_COLORS[m])
-		Ui.text(hud, Vector2(cx + 18, 43), s, 20, Color.WHITE, true)
+		var on = wants(m)
+		draw_rect_on(Rect2(cx, 30, 12, 12), MAT_COLORS[m] if on else Color(MAT_COLORS[m], 0.25))
+		if not on:
+			hud.draw_line(Vector2(cx - 2, 44), Vector2(cx + 14, 28), Color(1.0, 0.35, 0.3), 2.0)
+		Ui.text(hud, Vector2(cx + 18, 43), s, 20, Color.WHITE if on else Ui.DIM, true)
 	# Active contracts, top right under the hold.
 	var cy = 96.0
 	for c in main.contracts():
