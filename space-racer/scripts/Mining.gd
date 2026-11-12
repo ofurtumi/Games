@@ -1229,6 +1229,14 @@ func open_shop(mech: String, title: String) -> void:
 			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)], "part": pid,
 			"can": func(): return _can_pay(pr),
 			"action": func(): _buy_part(pid, mech, title)})
+	# Presets for parts sold here: the part and the cards it needs, in one go.
+	for pr in main.presets():
+		if not Parts.shop_stock(mech).has(pr.part) or Parts.is_locked(Parts.PARTS[pr.part], main.unlocks()):
+			continue
+		var p = pr
+		rows.append({"label": "Preset: " + pr.name, "part": pr.part, "value": func(): return main._preset_value(p, true),
+			"can": func(): return not main.preset_shortfall(p).has("locked") and main.credits() >= main.preset_cost(p, true),
+			"action": func(): main.buy_preset(p, true); open_shop(mech, title)})
 	var back = open_menu if docked else main.menu.hide_menu
 	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % _spares().values().reduce(func(a, b): return a + b, 0),
 		"action": func(): open_sell(mech, title)})

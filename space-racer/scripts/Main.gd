@@ -625,9 +625,79 @@ func open_cards(back: Callable) -> void:
 			row.action = func(): _buy_card(nid, back)
 			row.can = func(): return can_afford(pr)
 		rows.append(row)
+	# Your presets: buy exactly the cards one needs.
+	for pr in presets():
+		var p = pr
+		rows.append({"label": "Preset: " + pr.name, "value": func(): return _preset_value(p, false),
+			"can": func(): return not preset_shortfall(p).has("locked") and preset_cost(p) > 0 and credits() >= preset_cost(p),
+			"note": {"title": pr.name, "text": "Buys the cards you're missing to wire this onto one more component (what your build holds stays put)."},
+			"action": func(): buy_preset(p); open_cards(back)})
 	rows.append({"label": "Back", "action": back})
 	menu.show_menu("CARDS", rows, back, menu.title == "CARDS")
 	menu.wallet = func(): return {"bank": inventory}
+
+# Saved component wirings (the sub-grid editor's presets).
+func presets() -> Array:
+	return save_data.get("programs", [])
+
+# Cards you'd need to buy to wire a preset onto one more component, with
+# what your build already holds left where it is. {} when you're set;
+# "locked" if a card in it still needs its blueprint.
+func preset_shortfall(pr: Dictionary) -> Dictionary:
+	var need = {}
+	for nd in pr.sub.nodes:
+		need[nd.id] = need.get(nd.id, 0) + 1
+	var used = Parts.count_cards(loadout)
+	var short = {}
+	for id in need:
+		if Parts.is_locked(Parts.NODES[id], unlocks()):
+			return {"locked": id}
+		var free = cards().get(id, 0) - used.get(id, 0)
+		if need[id] > free:
+			short[id] = need[id] - free
+	return short
+
+func preset_cost(pr: Dictionary, with_part: bool = false) -> int:
+	var short = preset_shortfall(pr)
+	var n = Parts.credit_price(pr.part).credits if with_part else 0
+	for id in short:
+		if id != "locked":
+			n += Parts.card_price(id).credits * short[id]
+	return n
+
+# Buy what a preset needs (and its part, from a shop). Returns true if it did.
+func buy_preset(pr: Dictionary, with_part: bool = false) -> bool:
+	var short = preset_shortfall(pr)
+	if short.has("locked"):
+		notify("BLUEPRINT NEEDED  -  " + Parts.NODES[short.locked].name.to_upper(), Color(1.0, 0.4, 0.3))
+		return false
+	var cost = preset_cost(pr, with_part)
+	if cost == 0:
+		notify("YOU HAVE EVERYTHING FOR " + pr.name.to_upper(), Color.WHITE)
+		return false
+	if credits() < cost:
+		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
+		return false
+	inventory.credits -= cost
+	for id in short:
+		cards()[id] = cards().get(id, 0) + short[id]
+	if with_part:
+		owned()[pr.part] = owned().get(pr.part, 0) + 1
+	notify("BOUGHT FOR " + pr.name.to_upper() + "  -%d CR" % cost, Color.WHITE)
+	Sfx.play("coins")
+	save_game()
+	return true
+
+func _preset_value(pr: Dictionary, with_part: bool) -> String:
+	var short = preset_shortfall(pr)
+	if short.has("locked"):
+		return "blueprint needed"
+	var n = 0
+	for id in short:
+		n += short[id]
+	if n == 0 and not with_part:
+		return "all set"
+	return ("part + " if with_part else "") + "%d card%s   %d cr" % [n, "" if n == 1 else "s", preset_cost(pr, with_part)]
 
 func _buy_card(id: String, back: Callable) -> void:
 	var pr = Parts.card_price(id)

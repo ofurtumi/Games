@@ -235,7 +235,11 @@ wiring as a named preset (in the save). The list shows the presets that fit
 the component you're editing (same family, cards it allows, fits its grid):
 click one to load it there, so a wiring moves from one tool to another, or
 onto a new one; it needs the cards free (this part's own are freed first).
-Right-click a preset to forget it.
+Right-click a preset to forget it. The **Cards** counter lists your presets
+too: one click buys exactly the cards you're missing to wire one onto
+another component (what your build holds stays put); an outpost's shop lists
+the presets whose part it sells and buys the part and its cards together.
+A preset with a card you haven't got the blueprint for says so.
 
 **How cards combine** (the editor spells it out: with nothing hovered, the
 info panel lists WHAT IT DOES step by step for the wiring as it stands):
