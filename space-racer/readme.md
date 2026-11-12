@@ -218,6 +218,19 @@ Amplifier (magnets, tanks, scoops). Movement also has warp parts: Dash jet
 and Blink drive. Many nodes are locked: find them in wrecks or buy them at
 outposts and from Nine Fingers.
 
+## Credits
+
+Materials are what you dig; **credits** (cr) are what you spend. Every
+outpost has a **Market** that buys materials from your bank (rock 2 cr,
+metal 6, crystal 15, core 45 each; docking unloads your hold into the bank),
+and the pit shop has one too. Shops, the pit, blueprints and traders' parts
+and refuels are priced in credits (a part's price is its material cost at
+those rates); selling a part back pays half in credits. Race prizes (200 /
+100 / 50 / 20 cr), medals (gold 120, silver 70, bronze 50) and contracts pay
+credits, and a wreck's tow costs 60 cr. Trader swaps stay material for
+material, and slot repairs stay in rock and metal: you fix it yourself. The
+wallet panel in the shops and the race HUD show your credits.
+
 ## Owning parts
 
 You own parts in quantities and a build can only use what you own. A new

@@ -102,7 +102,7 @@ var traders
 var trader_cool = 0.0
 var _trade_t = 0.0
 var _own_wreck = null
-const REPAIR_BILL = {"metal": 8, "rock": 10}
+const REPAIR_BILL = {"credits": 60}
 var pickups = []
 var _env_saved = {}
 var _pickup_mesh: Mesh
@@ -562,6 +562,7 @@ func open_menu() -> void:
 			{"label": "Map", "action": open_map},
 			{"label": "Contracts", "value": func(): return "%d / %d active" % [main.contracts().size(), Contracts.MAX_ACTIVE], "action": open_contracts},
 			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
+			{"label": "Market", "value": func(): return "%d cr" % main.credits(), "action": func(): main.open_exchange(open_menu)},
 			{"label": "Blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
 			{"label": "Race here", "value": def.name, "action": func(): depart_to_race(outposts[at_outpost].planet)},
@@ -1002,10 +1003,7 @@ func _update_tow(delta: float) -> void:
 			return
 
 func _price_text(price: Dictionary) -> String:
-	var bits = []
-	for k in price:
-		bits.append("%d %s" % [price[k], k])
-	return "  ".join(bits)
+	return main._price_text(price)
 
 func _can_pay(price: Dictionary) -> bool:
 	for k in price:
@@ -1025,7 +1023,7 @@ func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void
 	for offer in offers:
 		var o = offer
 		var row = {"label": o.name,
-			"value": func(): return "OWNED" if main.unlocks().has(o.name) else _price_text(o.price),
+			"value": func(): return "OWNED" if main.unlocks().has(o.name) else _price_text({"credits": Parts.to_credits(o.price)}),
 			"action": func(): _buy(o, offers, title)}
 		# A card for the tool sub-grid, or a whole part: say which.
 		for id in Parts.NODES:
@@ -1044,10 +1042,11 @@ func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void
 func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS") -> void:
 	if main.unlocks().has(o.name):
 		return
-	if not _can_pay(o.price):
-		main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+	var cr = {"credits": Parts.to_credits(o.price)}
+	if not _can_pay(cr):
+		main.notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
 		return
-	_pay(o.price)
+	_pay(cr)
 	main.unlock(o.name)
 	Sfx.play("coins")
 	open_market(offers, title)
@@ -1101,7 +1100,7 @@ func open_shop(mech: String, title: String) -> void:
 		if Parts.is_locked(Parts.PARTS[id], main.unlocks()):
 			continue
 		var pid = id
-		var pr = Parts.price(pid)
+		var pr = Parts.credit_price(pid)
 		rows.append({"label": Parts.PARTS[pid].name,
 			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)], "part": pid,
 			"action": func(): _buy_part(pid, mech, title)})
@@ -1120,14 +1119,9 @@ func wallet() -> Dictionary:
 func _spares() -> Dictionary:
 	return main.spare_parts()
 
-# Half the shop price, into the bank.
+# Half the shop price, in credits.
 static func sell_price(id: String) -> Dictionary:
-	var out = {}
-	var pr = Parts.price(id)
-	for k in pr:
-		if pr[k] / 2 > 0:
-			out[k] = pr[k] / 2
-	return out
+	return {"credits": Parts.credit_price(id).credits / 2}
 
 func open_sell(mech: String, title: String) -> void:
 	var rows = []
@@ -1157,9 +1151,9 @@ func _sell_part(id: String, mech: String, title: String) -> void:
 	open_sell(mech, title)
 
 func _buy_part(id: String, mech: String, title: String) -> void:
-	var pr = Parts.price(id)
+	var pr = Parts.credit_price(id)
 	if not _can_pay(pr):
-		main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+		main.notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
 		return
 	_pay(pr)
 	var o = main.owned()

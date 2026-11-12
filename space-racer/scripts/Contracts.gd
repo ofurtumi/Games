@@ -16,18 +16,9 @@ const VALUE = {"rock": 1, "metal": 2, "crystal": 4, "core": 12}
 const LAYERS = [[0.3, "MANTLE"], [0.6, "DEEP LAYER"]]
 const MAX_ACTIVE = 3
 
-# Pay roughly `value` worth, in materials other than `avoid`.
+# Pay `value` worth in credits (contract value units are about 3 credits).
 static func _pay(rng: RandomNumberGenerator, value: int, avoid: String = "") -> Dictionary:
-	var out = {}
-	var picks = ["metal", "crystal", "core"].filter(func(m): return m != avoid)
-	var left = value
-	while left > 0:
-		var m = picks[rng.randi() % picks.size()]
-		if VALUE[m] > left and m != "metal":
-			m = "metal"
-		out[m] = out.get(m, 0) + 1
-		left -= VALUE[m]
-	return out
+	return {"credits": int(round(value * 3 * rng.randf_range(0.95, 1.1) / 5.0)) * 5}
 
 static func make(rng: RandomNumberGenerator, here: int, unlocks: Array) -> Dictionary:
 	var kinds = ["haul", "haul", "race", "salvage", "survey", "mine", "bounty"]
@@ -97,7 +88,7 @@ static func progress(c: Dictionary) -> String:
 static func reward_text(c: Dictionary) -> String:
 	var bits = []
 	for k in c.reward:
-		bits.append("%d %s" % [c.reward[k], k])
+		bits.append(("%d cr" % c.reward[k]) if k == "credits" else ("%d %s" % [c.reward[k], k]))
 	if c.has("blueprint"):
 		bits.append(c.blueprint.to_upper())
 	return "  ".join(bits)

@@ -191,7 +191,8 @@ func _draw():
 func _draw_wallet(w: Dictionary, ta: float) -> void:
 	var x0 = size.x - 470 + (1.0 - ta) * 500.0
 	var parts = [["HOLD", w.get("hold")], ["BANK", w.get("bank")]].filter(func(p): return p[1] != null)
-	var h = 24 + parts.size() * 40
+	var cr = w.get("bank", {}).get("credits", 0)
+	var h = 24 + parts.size() * 40 + 40
 	var y = origin.y + 12 - h
 	Ui.segment(self, Rect2(x0, y, 520, h), Ui.INK)
 	Ui.segment(self, Rect2(x0, y + h - 4, 520, 4), Ui.HILITE, 0)
@@ -205,6 +206,9 @@ func _draw_wallet(w: Dictionary, ta: float) -> void:
 			Ui.text(self, Vector2(cx + 18, ly), str(part[1].get(m[0], 0)), 20, Color.WHITE, true)
 			cx += 82
 		line += 1
+	var cy = y + 40 + line * 40
+	Ui.text(self, Vector2(x0 + 30, cy), "CREDITS", 16, Ui.DIM, true)
+	Ui.text(self, Vector2(x0 + 118, cy), "%d cr" % cr, 22, Color(1.0, 0.82, 0.25), true)
 
 func _activate(i: int) -> void:
 	if i < 0 or i >= rows.size():

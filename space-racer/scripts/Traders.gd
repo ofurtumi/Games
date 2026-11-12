@@ -113,15 +113,13 @@ func open_deals(t: Dictionary) -> void:
 		var take = sw[1]
 		rows.append({"label": "Swap  " + mining._price_text(give), "value": "> " + mining._price_text(take),
 			"action": func(): _swap(t, give, take)})
-	var fuel_price = {"metal": 3}
+	var fuel_price = {"credits": 15}
 	rows.append({"label": "Refuel", "value": mining._price_text(fuel_price), "action": func():
 		if mining._can_pay(fuel_price):
 			mining._pay(fuel_price)
 			mining.miner.fuel = mining.miner.stats.fuel
 			preload("res://scripts/Sfx.gd").play("coins")})
-	var part_price = {}
-	for k in Parts.price(t.part):
-		part_price[k] = maxi(1, int(Parts.price(t.part)[k] * 0.75))
+	var part_price = {"credits": int(Parts.credit_price(t.part).credits * 0.75)}
 	rows.append({"label": Parts.PARTS[t.part].name, "value": "%d owned   %s" % [main.owned().get(t.part, 0), mining._price_text(part_price)], "part": t.part,
 		"action": func(): _buy(t, part_price)})
 	rows.append({"label": "Leave", "action": func(): close(t)})

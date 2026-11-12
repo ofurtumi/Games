@@ -32,9 +32,9 @@ const PILOTS = ["VEGA", "KORR", "MIRA", "TOLV", "ASH", "BRYN", "OKO", "RHEA", "S
 # Lap times that earn materials, as average speed over the lap (m/s). Each
 # medal pays out once per track.
 const MEDALS = [
-	{"name": "gold", "speed": 26.0, "color": Color(1.0, 0.82, 0.25), "reward": {"crystal": 5, "metal": 6}},
-	{"name": "silver", "speed": 21.0, "color": Color(0.8, 0.83, 0.88), "reward": {"metal": 6, "crystal": 2}},
-	{"name": "bronze", "speed": 16.0, "color": Color(0.8, 0.5, 0.28), "reward": {"rock": 15, "metal": 3}},
+	{"name": "gold", "speed": 26.0, "color": Color(1.0, 0.82, 0.25), "reward": {"credits": 120}},
+	{"name": "silver", "speed": 21.0, "color": Color(0.8, 0.83, 0.88), "reward": {"credits": 70}},
+	{"name": "bronze", "speed": 16.0, "color": Color(0.8, 0.5, 0.28), "reward": {"credits": 50}},
 ]
 const OUTLINE_SHADER = preload("res://assets/shaders/screen_outline.gdshader")
 
@@ -107,7 +107,7 @@ var countdown = 0.0
 var _count_shown = -1
 var title_on = false
 var title_card
-const RACE_REWARDS = [{"crystal": 6, "metal": 10, "core": 1}, {"metal": 8, "crystal": 3}, {"metal": 5, "rock": 10}, {"rock": 8}]
+const RACE_REWARDS = [{"credits": 200}, {"credits": 100}, {"credits": 50}, {"credits": 20}]
 # Who you race on each planet (by palette).
 const RIVALS = {
 	# [preset, frame, tool kit ([part, wired nodes]), colour, aggression]
@@ -719,7 +719,7 @@ func _award_medals(t: float) -> void:
 			var bits = []
 			for k in m.reward:
 				inventory[k] = inventory.get(k, 0) + m.reward[k]
-				bits.append("+%d %s" % [m.reward[k], k])
+				bits.append("+" + _price_text({k: m.reward[k]}))
 				session.earned[k] = session.earned.get(k, 0) + m.reward[k]
 			session.medals.append(m.name)
 			notify("%s  %s" % [m.name.to_upper(), "  ".join(bits)], m.color)
@@ -822,12 +822,13 @@ func open_pit(back: Callable) -> void:
 		if Parts.is_locked(Parts.PARTS[id], unlocks()):
 			continue
 		var pid = id
-		var pr = Parts.price(pid)
+		var pr = Parts.credit_price(pid)
 		rows.append({"label": Parts.PARTS[pid].name,
 			"value": func(): return "%d owned   %s" % [owned().get(pid, 0), _price_text(pr)], "part": pid,
 			"action": func(): _pit_buy(pid, back)})
 	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % spare_parts().values().reduce(func(a, b): return a + b, 0),
 		"action": func(): _pit_sell_menu(back)})
+	rows.append({"label": "Sell materials", "value": "market", "action": func(): open_exchange(func(): open_pit(back))})
 	rows.append({"label": "Back", "action": back})
 	menu.show_menu("PIT SHOP", rows, back, menu.title == "PIT SHOP")
 	menu.wallet = func(): return {"bank": inventory}
@@ -835,11 +836,44 @@ func open_pit(back: Callable) -> void:
 func _price_text(price: Dictionary) -> String:
 	var bits = []
 	for k in price:
-		bits.append("%d %s" % [price[k], k])
+		bits.append(("%d cr" % price[k]) if k == "credits" else ("%d %s" % [price[k], k]))
 	return "  ".join(bits)
 
+func credits() -> int:
+	return inventory.get("credits", 0)
+
+# ---------------------------------------------------------------- market
+
+# Sell materials from the bank for credits, at Parts.MAT_VALUE each. Outposts
+# and the pit both have one.
+func open_exchange(back: Callable) -> void:
+	var rows = []
+	for m in ["rock", "metal", "crystal", "core"]:
+		var mat = m
+		var v = Parts.MAT_VALUE[m]
+		rows.append({"label": "Sell 10 " + m, "value": func(): return "%d in bank   +%d cr" % [inventory.get(mat, 0), v * mini(10, inventory.get(mat, 0))],
+			"action": func(): _sell_mat(mat, 10, back)})
+		rows.append({"label": "Sell all " + m, "value": func(): return "+%d cr" % (v * inventory.get(mat, 0)),
+			"action": func(): _sell_mat(mat, inventory.get(mat, 0), back)})
+	rows.append({"label": "Back", "action": back})
+	menu.show_menu("MARKET", rows, back, menu.title == "MARKET")
+	menu.blurb = "Sell materials from your bank for credits (rock %d, metal %d, crystal %d, core %d each). Docking unloads your hold into the bank. Keep some rock and metal for repairs." % [Parts.MAT_VALUE.rock, Parts.MAT_VALUE.metal, Parts.MAT_VALUE.crystal, Parts.MAT_VALUE.core]
+	menu.wallet = func(): return {"bank": inventory}
+
+func _sell_mat(m: String, n: int, back: Callable) -> void:
+	n = mini(n, inventory.get(m, 0))
+	if n <= 0:
+		notify("NO " + m.to_upper() + " IN THE BANK", Color(1.0, 0.4, 0.3), "market")
+		return
+	inventory[m] -= n
+	inventory.credits = credits() + n * Parts.MAT_VALUE[m]
+	notify("SOLD %d %s  +%d CR" % [n, m.to_upper(), n * Parts.MAT_VALUE[m]], Color(1.0, 0.82, 0.25), "market")
+	Sfx.play("coins")
+	save_game()
+	open_exchange(back)
+
 func _pit_buy(id: String, back: Callable) -> void:
-	var pr = Parts.price(id)
+	var pr = Parts.credit_price(id)
 	if not can_afford(pr):
 		notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
 		return
@@ -1402,7 +1436,7 @@ func _finish_race() -> void:
 	var bits = []
 	for k in reward:
 		inventory[k] = inventory.get(k, 0) + reward[k]
-		bits.append("+%d %s" % [reward[k], k])
+		bits.append("+" + _price_text({k: reward[k]}))
 
 	var names = ["1ST", "2ND", "3RD", "4TH"]
 	Sfx.play("lap")
@@ -1456,7 +1490,7 @@ func show_session() -> void:
 		rows.append({"label": m.name.capitalize(), "value": "%s   %s" % [Hud.laptime(t), state], "swatch": m.color})
 	var bits = []
 	for k in session.get("earned", {}):
-		bits.append("+%d %s" % [session.earned[k], k])
+		bits.append("+" + _price_text({k: session.earned[k]}))
 	rows.append({"label": "Earned", "value": "  ".join(bits) if not bits.is_empty() else "-"})
 	var done = session.get("laps", 0) >= PRACTICE_LAPS
 	if not done:

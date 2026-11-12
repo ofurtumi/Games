@@ -711,7 +711,22 @@ const STARTER_KIT = {"engine_1": 1, "thruster": 3, "drill_1": 1, "brake": 2, "sh
 # Which mechanics' parts each planet's outpost stocks (plus stock parts).
 const SHOP_MECHS = {"grind": ["grind", "aegis"], "vex": ["vex"], "lode": ["lode", "aegis"], "arc": ["arc", "grind"], "nine": ["nine"]}
 
-# Price in materials: bigger, higher-tier and specialist parts cost more.
+# Credits: what the outposts' markets pay per unit of each material, and the
+# rate every price in credits is figured at.
+const MAT_VALUE = {"rock": 2, "metal": 6, "crystal": 15, "core": 45}
+
+static func to_credits(materials: Dictionary) -> int:
+	var n = 0
+	for k in materials:
+		n += materials[k] * MAT_VALUE.get(k, 1 if k == "credits" else 0)
+	return n
+
+# What a part costs in a shop, in credits.
+static func credit_price(id: String) -> Dictionary:
+	return {"credits": to_credits(price(id))}
+
+# Material cost: bigger, higher-tier and specialist parts cost more (the
+# credit price is figured from this).
 static func price(id: String) -> Dictionary:
 	var d = PARTS[id]
 	var cells = d.shape.size()

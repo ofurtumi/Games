@@ -102,8 +102,9 @@ func _draw():
 		Ui.segment(self, Rect2(bx + 230 + i * 14, by + 121, 9, 6), Color(1.0, 0.35, 0.2) if i < ship.weapons.bombs else Color(1, 1, 1, 0.15), 2.0)
 	_minimap(Rect2(16, vp.y - 246, 230, 230))
 
-	# Cargo, top right: colour chip + count.
+	# Cargo, top right: colour chip + count, credits under.
 	var cx = vp.x - 40
+	Ui.text(self, Vector2(vp.x - 240, 72), "%d cr" % main.credits(), 18, Color(1.0, 0.82, 0.25), true, HORIZONTAL_ALIGNMENT_RIGHT, 200)
 	for m in ["crystal", "metal", "rock"]:
 		var s = str(main.inventory.get(m, 0))
 		var w = Ui.font(true).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
