@@ -135,6 +135,13 @@ ship comes apart, your cargo stays in **your wreck** where you died (go back
 for it), you're towed to the last outpost and the repairs come out of the
 bank.
 
+Docked, the outpost is an old green **CRT terminal**: its sections down the
+left (Launch, Map, Contracts, Shop, Cards, Market, Blueprints, Pickups,
+Garage, Race here, Controls, Sound, Quit) and a vector plan of the station on
+the right, where the highlighted section's room lights up (the parts shop,
+the job board, the drafting office, the drop chute down to the track...),
+with a line saying what it's for along the bottom. Esc launches.
+
 Outposts float 55 m above their planets. Come in slowly over the pad and
 the ship glides in and docks; Launch drops you out underneath, nose to the
 planet, so its pull takes you clear of the station.
@@ -348,7 +355,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `ShopOverview.gd` shops' ship / parts panel · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `Map.gd` expedition map · `ShopOverview.gd` shops' ship / parts panel · `StationCRT.gd` outpost terminal · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

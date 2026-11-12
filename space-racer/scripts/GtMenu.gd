@@ -17,6 +17,7 @@ const BACKDROP = preload("res://assets/shaders/menu_backdrop.gdshader")
 const Sfx = preload("res://scripts/Sfx.gd")
 const PartInfo = preload("res://scripts/PartInfo.gd")
 const ShopOverview = preload("res://scripts/ShopOverview.gd")
+const StationCRT = preload("res://scripts/StationCRT.gd")
 
 const ROW_H = 40.0
 const ROW_GAP = 6.0
@@ -42,6 +43,7 @@ var blurb = "":         # the line(s) under the title; show_menu picks it from B
 var _blurb_lines = []
 var overview: Callable   # shops set this: returns ShopOverview data; cleared by show_menu
 var overview_mode = "ship"
+var crt = {}             # set (after show_menu) to draw this menu as a station's CRT terminal
 
 const BLURB_SIZE = 15
 const BLURB_LINE = 20.0
@@ -115,6 +117,7 @@ func show_menu(menu_title: String, menu_rows: Array, back: Callable, keep_select
 	rows = menu_rows
 	wallet = Callable()
 	overview = Callable()
+	crt = {}
 	blurb = blurb_for(menu_title)
 	on_back = back
 	if not keep_selection:
@@ -141,12 +144,20 @@ func _val(v):
 	return v.call() if v is Callable else v
 
 func _row_rect(i: int) -> Rect2:
+	if not crt.is_empty():
+		return StationCRT.row_rect(size, i)
+	return _gt_row_rect(i)
+
+func _gt_row_rect(i: int) -> Rect2:
 	var appear = Ui.ease_out((t - 0.12 - i * STAGGER) / SLIDE)
 	var x = origin.x - (1.0 - appear) * (ROW_W + origin.x + 60.0)
 	var w = ROW_W + (24.0 if i == selected else 0.0)
 	return Rect2(x, _rows_top() + i * (ROW_H + ROW_GAP), w, ROW_H)
 
 func _draw():
+	if not crt.is_empty():
+		StationCRT.draw(self, size, crt, rows, selected, t, _val)
+		return
 	var ta = Ui.ease_out(t / SLIDE)
 	if title != "":
 		var tr = Rect2(-40 + (ta - 1.0) * 700.0, origin.y - 92, ROW_W + 160, 58)
