@@ -18,7 +18,9 @@ menu has Main menu too.
 **Race**: one track on a planet's surface. Gates in order, shield rebuilt at
 each gate. Lap under the bronze/silver/gold times (shown under BEST, scaled to
 the track's length) for materials, once per medal per track.
-In practice, **End session** on the pause menu shows the run so far: laps,
+Practice is five laps (the run's results come up after the fifth); races
+against the locals are three laps on Cinder, four on Rime and Moss, five on
+Magma. In practice, **End session** on the pause menu shows the run so far: laps,
 best and last lap, each medal's time (NEW, WON or how far off your best is)
 and the materials earned, then Keep driving, Restart or Main menu.
 

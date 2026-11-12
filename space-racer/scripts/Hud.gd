@@ -58,7 +58,7 @@ func _draw():
 		Ui.text(self, Vector2(320, 80), "P%d" % main.place_of(ship), 44, Color(1.0, 0.85, 0.3), true, HORIZONTAL_ALIGNMENT_CENTER, 110)
 		Ui.text(self, Vector2(320, 40), "/ %d" % (main.rivals.size() + 1), 14, Ui.DIM, true, HORIZONTAL_ALIGNMENT_CENTER, 110)
 	else:
-		Ui.text(self, Vector2(28, 44), "LAP %d" % main.lap, 16, Ui.DIM, true)
+		Ui.text(self, Vector2(28, 44), "PRACTICE  LAP %d / %d" % [mini(main.lap, main.PRACTICE_LAPS), main.PRACTICE_LAPS], 16, Ui.DIM, true)
 	Ui.text(self, Vector2(28, 80), laptime(main.lap_time), 38, Color.WHITE, true)
 	Ui.segment(self, Rect2(-20, 96, 250, 28), PANEL)
 	Ui.text(self, Vector2(28, 116), "BEST  " + laptime(main.best_lap), 15, Color(0.95, 0.85, 0.4))

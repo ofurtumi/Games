@@ -94,7 +94,9 @@ var _slowmo_left = 0.0   # real seconds of slow motion left
 var _last_real = 0
 var _respawn_left = 0.0
 var rivals = []
-var race_laps = 0          # 0 = open practice (medals); >0 = a race against rivals
+var race_laps = 0          # 0 = practice (medals, PRACTICE_LAPS); >0 = a race against rivals
+const RACE_LAPS = [3, 4, 4, 5]   # Cinder, Rime, Moss, Magma
+const PRACTICE_LAPS = 5
 var race_over = 0.0
 var session = {"laps": 0, "best": -1.0, "medals": [], "earned": {}}  # this practice run: laps, best, medals and materials won
 var race_time = 0.0
@@ -984,7 +986,7 @@ func race_on(palette: int) -> void:
 	planet_index = palette
 	track_seed = 500 + palette * 37
 	_new_planet()
-	race_laps = 3
+	race_laps = RACE_LAPS[palette % RACE_LAPS.size()]
 	race_origin = "expedition"
 	_spawn_rivals(palette)
 	start_countdown()
@@ -1256,12 +1258,14 @@ func show_session() -> void:
 	for k in session.get("earned", {}):
 		bits.append("+%d %s" % [session.earned[k], k])
 	rows.append({"label": "Earned", "value": "  ".join(bits) if not bits.is_empty() else "-"})
-	rows.append({"label": "Keep driving", "action": close_menu})
+	var done = session.get("laps", 0) >= PRACTICE_LAPS
+	if not done:
+		rows.append({"label": "Keep driving", "action": close_menu})
 	rows.append({"label": "Restart", "action": func(): menu.hide_menu(); _reset_race(); start_countdown()})
 	rows.append({"label": "Main menu", "action": func(): menu.hide_menu(); show_title()})
 	var head = "NEW MEDAL" if not session.get("medals", []).is_empty() else ("BEST  " + Hud.laptime(best) if best >= 0.0 else "NO LAPS")
-	menu.show_menu("PRACTICE  ·  " + head, rows, close_menu)
-	menu.selected = rows.size() - 3
+	menu.show_menu("PRACTICE  ·  " + head, rows, Callable() if done else close_menu)
+	menu.selected = rows.size() - (2 if done else 3)
 
 func _close_results() -> void:
 	menu.hide_menu()
@@ -1482,6 +1486,11 @@ func _race(delta: float) -> void:
 				_award_medals(lap_time)
 			if race_laps > 0 and lap >= race_laps and race_over <= 0.0:
 				_finish_race()
+			elif race_laps == 0 and not title_on and session.laps >= PRACTICE_LAPS:
+				# Practice is five laps; then the run's results.
+				Sfx.play("coins")
+				ship.set_process(false)
+				show_session()
 			lap += 1
 			lap_time = 0.0
 		next_cp = (next_cp + 1) % track.checkpoints.size()
