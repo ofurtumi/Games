@@ -7,8 +7,9 @@ track, swappable builds. Godot 4.7, everything built in code.
 ## Starting up
 
 The game opens on a title screen with your ship lapping the track behind it:
-Race (practice laps and medals), Expedition, Garage, Track Builder,
-Controls, Quit. Races start on a 3 · 2 · 1 · GO countdown with everyone held
+Race (the cup on your current planet, against its locals), Time trial (five
+practice laps for medals), Expedition, Garage, Track Builder, Controls,
+Rivals, Sound, Quit. A new game's first race is the Cinder cup. Races start on a 3 · 2 · 1 · GO countdown with everyone held
 on the line. Planet races end on a results screen with every pilot's place
 and time, your prize, and Race again / Expedition / Main menu. The pause
 menu has Main menu too.
@@ -66,7 +67,9 @@ place pays materials. Fuel-only depots sit between the planets.
 ### Rivals
 
 The locals race with tools, and each planet's crew has its own kit:
-- **Cinder**: a cutting laser, a bomb bay, a missile pod.
+- **Cinder**: the home cup holders, three Corvettes on Dart frames (a fast
+  laser, homing Dart tubes, a bomb bay). A new pilot's Rustbucket is a third
+  slower and half as quick off the line: they're the goal.
 - **Rime**: a fast laser, homing Dart tubes with a dash jet, a laser.
 - **Moss**: homing missiles, a laser with a dash jet, timed bombs.
 - **Magma**: armoured Basalts with missiles and bombs, and a Lance.

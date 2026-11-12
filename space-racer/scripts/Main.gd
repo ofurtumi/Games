@@ -109,8 +109,9 @@ const RACE_REWARDS = [{"crystal": 6, "metal": 10, "core": 1}, {"metal": 8, "crys
 # Who you race on each planet (by palette).
 const RIVALS = {
 	# [preset, frame, tool kit ([part, wired nodes]), colour, aggression]
-	0: [["Stock", "basic", [["laser", []]], Color(0.85, 0.2, 0.2), 0.7], ["Sapper", "basic", [["dropper", []]], Color(0.3, 0.6, 0.95), 0.8],
-		["Grinder", "advanced", [["rocket", ["bomb"]]], Color(0.95, 0.75, 0.2), 0.7]],
+	# Cinder: the home cup holders, far ahead of a new pilot's Rustbucket.
+	0: [["Corvette", "dart", [["laser", ["fast"]]], Color(0.95, 0.75, 0.2), 0.8], ["Corvette", "dart", [["rocket_s", ["homing"]]], Color(0.85, 0.2, 0.2), 0.8],
+		["Corvette", "dart", [["dropper", ["bomb"]]], Color(0.95, 0.95, 0.95), 0.7]],
 	1: [["Corvette", "dart", [["laser", ["fast"]]], Color(0.2, 0.9, 1.0), 1.0], ["Corvette", "dart", [["rocket_s", ["homing"]], ["dash", []]], Color(0.95, 0.95, 0.95), 1.0],
 		["Stock", "basic", [["laser", []]], Color(0.6, 0.3, 0.9), 0.9]],
 	2: [["Scavenger", "advanced", [["rocket", ["homing", "bomb"]]], Color(0.3, 0.75, 0.45), 1.1], ["Scavenger", "advanced", [["laser", []], ["dash", []]], Color(0.85, 0.6, 0.2), 1.1],
@@ -858,7 +859,9 @@ func show_title() -> void:
 	title_card.t = 0.0
 	menu.dim_backdrop = false
 	menu.show_menu("", [
-		{"label": "Race", "action": func(): _leave_title(); start_practice()},
+		{"label": "Race", "value": func(): return Contracts.PLANET_NAMES[planet_index % 4] + " CUP",
+			"action": func(): _leave_title(); race_on(planet_index % 4)},
+		{"label": "Time trial", "action": func(): _leave_title(); start_practice()},
 		{"label": "Expedition", "action": func(): _leave_title(); enter_mining()},
 		{"label": "Garage", "action": func(): _leave_title(); open_garage()},
 		{"label": "Track Builder", "action": func(): _leave_title(); open_editor()},
@@ -987,6 +990,8 @@ func race_on(palette: int) -> void:
 	track_seed = 500 + palette * 37
 	_new_planet()
 	race_laps = RACE_LAPS[palette % RACE_LAPS.size()]
+	if wins(palette % 4) == 0:
+		notify(Contracts.PLANET_NAMES[palette % 4] + " CUP  -  BEAT THE LOCALS", Color(1.0, 0.82, 0.25), "cup")
 	race_origin = "expedition"
 	_spawn_rivals(palette)
 	start_countdown()
