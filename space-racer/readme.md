@@ -58,8 +58,10 @@ a fixed tank (bigger with boost tanks); heavy, high-thrust builds burn it
 fast, and lasers, strafing and drilling burn some too (ECONOMY in the
 garage). Depots around the system refill fuel and rockets and repair you.
 Cargo only counts once you dock at the home station. Wreck the ship and the
-tow home costs the cargo. The camera pulls back the longer you keep moving;
-the mouse wheel sets the base zoom.
+tow home costs the cargo. The camera is on auto at first:
+about 40 m when you're slow, pulling back gently to about 95 m flat out.
+Scroll (about 14% a notch) and it's yours: it stays where you put it until
+you pick Camera: Auto in the expedition menu (saved).
 
 ### Mining: what, where, when
 
@@ -227,11 +229,12 @@ a laser, a rocket or a ramp in front of them.
 **How cards combine** (the editor spells it out: with nothing hovered, the
 info panel lists WHAT IT DOES step by step for the wiring as it stands):
 mods change the shot they're on, up to the next payload. A payload goes
-off where its shot lands, at its own size: two payloads in a row are two
-blasts along the path, not one bigger blast. Anything wired after a payload
-launches a new shot from that spot, flying on (mods there change that new
-shot), three hops at most. Cluster's five bomblets are fixed: cards after
-Cluster don't change them, they launch one new shot from where it went off.
+off where its shot lands. The same payload wired straight on merges into
+one bigger one (Bomb > Bomb: 40% wider blast per extra, up to four;
+Cluster > Cluster: five more bomblets; Gravity well: pulls longer). A
+different card after a payload launches a new shot from that spot, flying
+on (mods there change that new shot), three hops at most. Cluster's own
+bomblets aren't changed by other cards after it.
 A split fans the shot into branches that keep the mods so far. Nothing
 wired: a plain bomb.
 

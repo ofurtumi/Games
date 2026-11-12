@@ -151,7 +151,7 @@ const PAYLOAD_WORDS = {
 	"bomb": "BOMB goes off: a blast that breaks up to hard rock",
 	"mini": "a small blast",
 	"dig": "EXCAVATE goes off: a smaller blast that breaks deep rock",
-	"cluster": "CLUSTER goes off: a small blast and 5 homing bomblets (the bomblets are fixed; cards after it don't change them)",
+	"cluster": "CLUSTER goes off: a small blast and 5 homing bomblets (other cards after it don't change them)",
 	"gravity": "GRAVITY WELL opens: a few seconds of pull",
 	"quench": "QUENCH goes off: lava and gas around it turn to rock",
 }
@@ -184,6 +184,9 @@ static func explain(prog: Dictionary, kind: String, depth: int = 0, lead: String
 		out.append(pad + "  lands: " + PAYLOAD_WORDS[pay] + " (nothing wired: the default)")
 	else:
 		out.append(pad + "  lands: " + PAYLOAD_WORDS.get(pay, pay))
+	var n = prog.get("power", 1)
+	if n > 1:
+		out[-1] += "  x%d: %s" % [n, {"cluster": "%d bomblets" % (5 * n), "gravity": "pulls %d times as long" % n}.get(prog.payload, "%d%% wider blast" % int(40 * (n - 1)))]
 	var kids = prog.get("children", [])
 	if not kids.is_empty():
 		if depth >= 3:
@@ -478,10 +481,10 @@ func _draw_info(pal: Array, live: Array) -> void:
 	draw_multiline_string(font, Vector2(x, y + 72), nd.desc, HORIZONTAL_ALIGNMENT_LEFT, wrap, 18, -1, Color(0.88, 0.9, 0.93))
 	var how = {"mod": "Changes the shot it's on, up to the next payload. Wired after a payload, it changes the new shot that flies on from there.",
 		"split": "One shot becomes two. Each branch keeps the mods so far, then goes its own way. Wire both outputs.",
-		"payload": "Goes off where its shot lands, at its own size: two payloads in a row are two blasts along the path, not one bigger one. Anything wired after it launches a new shot from that spot, flying on (three hops at most).",
+		"payload": "Goes off where its shot lands. The same payload wired straight on merges into one bigger one (Bomb > Bomb: a 40% wider blast; up to four). A different card after it launches a new shot from that spot, flying on (three hops at most).",
 		"upgrade": "Counts once it's wired to the core."}[nd.type]
 	if id == "cluster":
-		how += " Cluster's own bomblets are fixed: cards after it don't change them."
+		how += " Cluster's own bomblets are fixed: other cards after it don't change them (more Clusters in a row add bomblets)."
 	draw_multiline_string(font, Vector2(x, y + 150), how, HORIZONTAL_ALIGNMENT_LEFT, wrap, 15, -1, Ui.DIM)
 	if hover_node >= 0 and not live.has(hover_node):
 		Ui.text(self, Vector2(x, y + 210), "NOT WIRED TO THE CORE", 14, Color(1.0, 0.45, 0.35), true)

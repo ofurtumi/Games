@@ -68,8 +68,13 @@ var lava_contact = false
 var _undock_cd = 0.0
 var depots = []          # Vector2 pad positions
 var _depot_used = -1     # last depot serviced; resets once you fly off
-var zoom = 30.0
+var zoom = 40.0
 var travel = 0.0
+# Camera: on auto it pulls back a little as you get going (about 40 m slow,
+# 95 m flat out); scroll and it's yours (manual) until you pick Auto again.
+const ZOOM_MIN = 12.0
+const ZOOM_MAX = 400.0
+const ZOOM_STEP = 1.14
 # Fuel-only stops out between the planets.
 const DEPOTS = [Vector2(380, 130), Vector2(-320, 200), Vector2(110, -360), Vector2(-900, -420)]
 # Nine Fingers' stock.
@@ -188,6 +193,8 @@ func setup(m) -> void:
 	map = MapScript.new()
 	layer.add_child(map)
 	_enter_env()
+	if manual_zoom():
+		zoom = main.save_data.get("cam_zoom", 40.0)
 	if arrive >= 0:
 		_start_arrival(arrive)
 	else:
@@ -272,11 +279,25 @@ func _unhandled_input(event):
 		open_map()
 		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			zoom = maxf(14.0, zoom - 3.0)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom = minf(260.0, zoom + 5.0)
+	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		if not manual_zoom():
+			# Take over from wherever auto had got to.
+			zoom = cam.position.z
+			main.save_data.cam_manual = true
+		zoom = clampf(zoom / ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else zoom * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+		main.save_data.cam_zoom = zoom
+
+func manual_zoom() -> bool:
+	return main.save_data.get("cam_manual", false)
+
+func _camera_text() -> String:
+	return "Manual  %d m" % int(zoom) if manual_zoom() else "Auto"
+
+func _camera_auto() -> void:
+	main.save_data.cam_manual = false
+	zoom = 40.0
+	Sfx.play("ui_move")
+	main.save_game()
 
 func _build_stars() -> void:
 	var mm = MultiMesh.new()
@@ -397,7 +418,7 @@ func _process(delta):
 	else:
 		travel = maxf(0.0, travel - 60.0 * delta)
 	var target = Vector3(miner.pos.x, miner.pos.y, 0.0) + Vector3(miner.vel.x, miner.vel.y, 0.0) * 0.25
-	var dist = zoom + minf(travel * 0.15, 220.0) + speed * 0.3
+	var dist = zoom if manual_zoom() else 40.0 + minf(travel * 0.04, 45.0) + speed * 0.25
 	cam.position = cam.position.lerp(target + Vector3(0, -4.0, dist), minf(1.0, 3.0 * delta)) + main.shake_offset()
 	cam.look_at(cam.position + Vector3(0, 0.12, -1.0), Vector3.UP)
 	hud.queue_redraw()
@@ -660,6 +681,7 @@ func open_menu() -> void:
 		main.menu.show_menu("EXPEDITION", [
 			{"label": "Resume", "action": main.menu.hide_menu},
 			{"label": "Map", "action": open_map},
+			{"label": "Camera", "value": _camera_text, "action": _camera_auto},
 			{"label": "Pickups", "value": _filter_text, "action": func(): open_pickups(open_menu)},
 			{"label": "Tow home", "value": "lose cargo", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},

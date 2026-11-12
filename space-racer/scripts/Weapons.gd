@@ -317,24 +317,27 @@ func _update_shots(delta: float, h: float) -> void:
 	shots = keep
 
 func _payload(prog: Dictionary, p: Vector2, h: float, depth: int = 0, dir: Vector2 = Vector2.RIGHT) -> void:
+	# Stacked payloads (the same one wired straight on) go off bigger.
+	var n = prog.get("power", 1)
+	var big = 1.0 + 0.4 * (n - 1)
 	match prog.payload:
 		"bomb":
-			world.blast(p, 2.6, 2)
-			_self_hit(p, 3.0, 10.0)
+			world.blast(p, 2.6 * big, 2)
+			_self_hit(p, 3.0 * big, 10.0 * big)
 		"mini":
 			world.blast(p, 1.4, 2)
 		"dig":
-			world.blast(p, 2.0, 3)
-			_self_hit(p, 2.5, 8.0)
+			world.blast(p, 2.0 * big, 3)
+			_self_hit(p, 2.5 * big, 8.0 * big)
 		"cluster":
-			world.blast(p, 1.2, 1)
-			for k in 5:
-				var a = TAU * k / 5.0
+			world.blast(p, 1.2 * big, 1)
+			for k in 5 * n:
+				var a = TAU * k / (5.0 * n)
 				_spawn(p, Vector2(cos(a), sin(a)) * 12.0, {"payload": "mini", "homing": true}, "missile", 1.4, true)
 		"gravity":
-			wells.append({"pos": p, "t": 3.0})
+			wells.append({"pos": p, "t": 3.0 * n})
 		"quench":
-			world.quench(p, 3.5)
+			world.quench(p, 3.5 * big)
 			world.burst(p, Color(0.85, 0.9, 0.95), 30, 5.0, h)
 		_:
 			world.burst(p, Color(1.0, 0.7, 0.3), 12, 6.0, h)

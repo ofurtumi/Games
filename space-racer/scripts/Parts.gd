@@ -328,8 +328,16 @@ static func _chain(sub: Dictionary, starts: Array, mods: Dictionary, depth: int)
 					prog.forks.append(_chain(sub, [o], base, depth + 1))
 				return prog
 			"payload":
+				# The same payload wired straight on merges into one bigger
+				# one; anything else after it flies on as a new shot.
 				prog.payload = id
-				for o in wires_from(sub, cur):
+				prog.power = 1
+				var nx = wires_from(sub, cur)
+				while nx.size() == 1 and sub.nodes[nx[0]].id == id and prog.power < 4:
+					prog.power += 1
+					cur = nx[0]
+					nx = wires_from(sub, cur)
+				for o in nx:
 					prog.children.append(_chain(sub, [o], {}, depth + 1))
 				return prog
 		var nxt = wires_from(sub, cur)
