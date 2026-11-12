@@ -90,7 +90,7 @@ func _panel() -> Rect2:
 	var gw = gsize.x * CELL
 	var gh = gsize.y * CELL
 	var w = PAL_W + gw + 90.0 + INFO_W
-	var h = maxf(maxf(gh + 330.0, 560.0), 110.0 + _palette().size() * 36.0 + 80.0)
+	var h = maxf(maxf(gh + 330.0, 560.0), 110.0 + _palette().size() * 36.0 + 80.0 + PRESET_H)
 	return Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h)
 
 func _origin() -> Vector2:
@@ -223,6 +223,77 @@ func _describe(prog: Dictionary) -> String:
 		out += " > " + "  |  ".join(parts)
 	return out
 
+# ---------------------------------------------------------------- presets
+
+# Saved wirings, under the palette: save this one, load one into any
+# component it fits (same family, cards allowed, fits the grid), right-click
+# to forget one. Kept in the save as {name, family, part, sub}.
+const PRESET_H = 250.0
+const PRESETS_SHOWN = 6
+
+func presets() -> Array:
+	if not garage.main.save_data.has("programs"):
+		garage.main.save_data.programs = []
+	return garage.main.save_data.programs
+
+func _fits(pr: Dictionary) -> bool:
+	if pr.family != Parts.node_family(pid):
+		return false
+	for nd in pr.sub.nodes:
+		if not Parts.node_allowed(pid, nd.id) or not Rect2i(Vector2i.ZERO, gsize).has_point(nd.cell):
+			return false
+	return true
+
+func _compat() -> Array:
+	var out = []
+	for i in presets().size():
+		if _fits(presets()[i]):
+			out.append(i)
+	return out.slice(-PRESETS_SHOWN)
+
+func _presets_top() -> float:
+	var pr = _panel()
+	return pr.position.y + 110 + _palette().size() * 36 + 24
+
+func _save_rect() -> Rect2:
+	var pr = _panel()
+	return Rect2(pr.position.x + 24, _presets_top() + 14, PAL_W - 40, 30)
+
+func _preset_rect(k: int) -> Rect2:
+	var pr = _panel()
+	return Rect2(pr.position.x + 24, _presets_top() + 52 + k * 34, PAL_W - 40, 30)
+
+func _save_preset() -> void:
+	if sub.nodes.is_empty():
+		garage.main.notify("NOTHING WIRED TO SAVE", Color(1.0, 0.4, 0.3), "preset")
+		return
+	var n = presets().filter(func(p): return p.part == pid).size() + 1
+	presets().append({"name": "%s %d" % [Parts.PARTS[pid].name, n], "family": Parts.node_family(pid), "part": pid, "sub": sub.duplicate(true)})
+	while presets().size() > 24:
+		presets().pop_front()
+	garage.main.notify("PRESET SAVED  " + presets()[-1].name.to_upper(), Color.WHITE, "preset")
+	Sfx.play("ui_select")
+	garage.main.save_game()
+
+# Load a preset into this component, if you own the cards for it (this
+# part's own cards are freed first).
+func _load_preset(i: int) -> void:
+	var pr = presets()[i]
+	var need = {}
+	for nd in pr.sub.nodes:
+		need[nd.id] = need.get(nd.id, 0) + 1
+	var elsewhere = Parts.count_cards(garage.lo, idx)
+	var short = []
+	for id in need:
+		var have = garage.main.cards().get(id, 0) - elsewhere.get(id, 0)
+		if need[id] > have:
+			short.append("%d %s" % [need[id] - have, Parts.NODES[id].name])
+	if not short.is_empty():
+		garage.main.notify("MISSING CARDS  " + ", ".join(short).to_upper(), Color(1.0, 0.4, 0.3), "preset")
+		return
+	sub = pr.sub.duplicate(true)
+	Sfx.play("clunk", -4.0, 1.4)
+
 func _done_rect() -> Rect2:
 	var ir = _info_rect()
 	return Rect2(ir.position.x + 10, ir.end.y + 22, ir.size.x - 20, 42)
@@ -322,6 +393,14 @@ func _gui_input(event):
 			if _done_rect().has_point(pos):
 				close()
 				return
+			if _save_rect().has_point(pos):
+				_save_preset()
+				return
+			var comp = _compat()
+			for k in comp.size():
+				if _preset_rect(k).has_point(pos):
+					_load_preset(comp[k])
+					return
 			var pal = _palette()
 			for i in pal.size():
 				if _pal_rect(i).has_point(pos):
@@ -352,6 +431,14 @@ func _gui_input(event):
 				sub.wires.append([drag_from, target])
 				Sfx.play("wire")
 			drag_from = -2
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _compat().any(func(k): return _preset_rect(_compat().find(k)).has_point(pos)):
+			var comp = _compat()
+			for k in comp.size():
+				if _preset_rect(k).has_point(pos):
+					garage.main.notify("PRESET REMOVED  " + presets()[comp[k]].name.to_upper(), Color(0.8, 0.8, 0.8), "preset")
+					presets().remove_at(comp[k])
+					garage.main.save_game()
+					break
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			var c = Vector2i(((pos - _origin()) / CELL).floor())
 			var n = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
@@ -427,6 +514,21 @@ func _draw_screen():
 		var free = _free(pal[i])
 		Ui.text(self, r.position + Vector2(0, 21), "%d / %d" % [maxi(free, 0), garage.main.cards().get(pal[i], 0)], 13,
 			Color.WHITE if on else (Color(0.8, 0.25, 0.2) if free <= 0 else Ui.DIM), true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 10)
+	# Presets.
+	var ptop = _presets_top()
+	Ui.text(self, Vector2(_save_rect().position.x, ptop), "PRESETS", 13, Ui.DIM, true)
+	var sr = _save_rect()
+	Ui.segment(self, sr, Ui.HILITE if sr.has_point(mouse) else Color(0.2, 0.22, 0.25), 6.0)
+	Ui.text(self, sr.position + Vector2(0, 21), "+ SAVE THIS WIRING", 14, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, sr.size.x)
+	var comp = _compat()
+	for k in comp.size():
+		var p = presets()[comp[k]]
+		var r = _preset_rect(k)
+		Ui.segment(self, r, Color.WHITE if r.has_point(mouse) else Ui.PAPER, 6.0)
+		Ui.text(self, r.position + Vector2(12, 20), p.name, 14, Ui.INK, true)
+		Ui.text(self, r.position + Vector2(0, 20), "%d" % p.sub.nodes.size(), 12, Ui.DIM, true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 10)
+	if comp.is_empty():
+		Ui.text(self, _preset_rect(0).position + Vector2(4, 20), "none saved for this kind yet", 13, Ui.DIM)
 	# Grid.
 	var o = _origin()
 	draw_rect(Rect2(o - Vector2(10, 10), Vector2(gsize) * CELL + Vector2(20, 20)), Color(0.02, 0.025, 0.03))

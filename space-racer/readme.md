@@ -230,6 +230,13 @@ A card you place wires itself onto the end of the chain (core > first card >
 second...), so cards go in series in the order you put them down; drag
 wires or right-click them away to branch or reorder.
 
+**Presets**: under the palette, + SAVE THIS WIRING keeps the component's
+wiring as a named preset (in the save). The list shows the presets that fit
+the component you're editing (same family, cards it allows, fits its grid):
+click one to load it there, so a wiring moves from one tool to another, or
+onto a new one; it needs the cards free (this part's own are freed first).
+Right-click a preset to forget it.
+
 **How cards combine** (the editor spells it out: with nothing hovered, the
 info panel lists WHAT IT DOES step by step for the wiring as it stands):
 mods change the shot they're on, up to the next payload. A payload goes
