@@ -398,6 +398,22 @@ func broken_cells(frame: String) -> Dictionary:
 		out[c] = true
 	return out
 
+# Your first win on a planet: three free slot repairs, and on Cinder and
+# Rime the locals' own frame (battered, like anything you win or find).
+const PRIZE_FRAMES = {0: "advanced", 1: "dart"}
+const PRIZE_REPAIRS = 3
+
+func first_win_prize(planet: int) -> Array:
+	var out = []
+	save_data.repair_credits = save_data.get("repair_credits", 0) + PRIZE_REPAIRS
+	out.append("%d FREE REPAIRS" % PRIZE_REPAIRS)
+	var f = PRIZE_FRAMES.get(planet, "")
+	if f != "" and Parts.is_locked(Parts.FRAMES[f], unlocks()):
+		break_frame(f)
+		unlock(Parts.FRAMES[f].name)
+		out.append(Parts.FRAMES[f].name.to_upper())
+	return out
+
 # Each slot repaired on a frame makes the next one dearer.
 func repair_cost(frame: String) -> Dictionary:
 	var n = save_data.get("repaired", {}).get(frame, 0)
@@ -411,6 +427,14 @@ func repair_slot(frame: String, c: Vector2i) -> bool:
 	if not b.has(c):
 		return false
 	var cost = repair_cost(frame)
+	if save_data.get("repair_credits", 0) > 0:
+		# Won repairs go first and don't raise the price of the next.
+		save_data.repair_credits -= 1
+		b.erase(c)
+		notify("SLOT REPAIRED  -  %d FREE LEFT" % save_data.repair_credits, Color(0.5, 1.0, 0.6), "repair")
+		Sfx.play("clunk")
+		save_game()
+		return true
 	if not can_afford(cost):
 		notify("NOT ENOUGH  -  " + _price_text(cost).to_upper(), Color(1.0, 0.4, 0.3), "repair")
 		return false
@@ -1166,25 +1190,29 @@ func _finish_race() -> void:
 	ship.finish_time = race_time
 	var place = place_of(ship)
 	contract_event("race", {"planet": planet_index % 4, "place": place})
+	var trophy = []
 	if place == 1:
 		var w = save_data.get("wins", {})
 		w[str(planet_index % 4)] = w.get(str(planet_index % 4), 0) + 1
 		save_data.wins = w
+		if w[str(planet_index % 4)] == 1:
+			trophy = first_win_prize(planet_index % 4)
 	var reward = RACE_REWARDS[mini(place - 1, RACE_REWARDS.size() - 1)]
 	var bits = []
 	for k in reward:
 		inventory[k] = inventory.get(k, 0) + reward[k]
 		bits.append("+%d %s" % [reward[k], k])
+
 	var names = ["1ST", "2ND", "3RD", "4TH"]
 	Sfx.play("lap")
 	Sfx.play("coins")
 	race_over = 1.0
 	ship.autopilot = true
 	save_game()
-	show_results(names[mini(place - 1, 3)], "  ".join(bits))
+	show_results(names[mini(place - 1, 3)], "  ".join(bits), "  ".join(trophy))
 
 # GT4-style results: everyone's place and time, the prize, what next.
-func show_results(place_name: String, prize: String) -> void:
+func show_results(place_name: String, prize: String, trophy: String = "") -> void:
 	var field = [ship] + rivals
 	field.sort_custom(func(a, b):
 		var fa = a.finish_time >= 0.0
@@ -1201,12 +1229,14 @@ func show_results(place_name: String, prize: String) -> void:
 		var value = Hud.laptime(e.finish_time) if e.finish_time >= 0.0 else "+%d m" % int(lead.distance - e.distance)
 		rows.append({"label": "%d    %s" % [i + 1, e.pilot], "value": value})
 	rows.append({"label": "Prize", "value": prize})
+	if trophy != "":
+		rows.append({"label": "First win", "value": trophy})
 	rows.append({"label": "Race again", "action": _restart_race})
 	if race_origin == "expedition":
 		rows.append({"label": "Expedition", "action": func(): _close_results(); enter_mining()})
 	rows.append({"label": "Main menu", "action": func(): _close_results(); show_title()})
 	menu.show_menu("RESULTS  ·  " + place_name, rows, Callable())
-	menu.selected = field.size() + 1
+	menu.selected = field.size() + (2 if trophy != "" else 1)
 
 # Practice results: what this run came to, against the track's medals.
 func show_session() -> void:

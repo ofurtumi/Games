@@ -198,7 +198,9 @@ the garage; click one to repair it for materials from the bank (6 rock 2
 metal for the first, a little more for each after, crystal too once you've
 done five). The Basic frame is the only one you start with: the Dart and
 Advanced frames have to be earned, and frames towed home from derelicts
-arrive with about half their slots broken. (Saves from before this keep
+arrive with about half their slots broken. Your first win on each planet
+pays three free slot repairs (used before materials, without raising the
+price), and on Cinder the Advanced frame, on Rime the Dart (battered too). (Saves from before this keep
 their frames whole.) The garage list shows free / owned for each part; parts you have none of are
 greyed out. Buy more at an outpost's **Shop**: every outpost sells stock
 parts, plus its mechanics' own (Cinder: Grindhaus + Aegis, Rime: Vex, Moss:

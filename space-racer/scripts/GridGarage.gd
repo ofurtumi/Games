@@ -499,7 +499,8 @@ func _draw():
 		for c in Parts.cells_of(lo.parts[over]):
 			draw_rect(_cell_rect(c).grow(-1), Color(0.3, 0.55, 1.0), false, 3.0)
 	elif broken.has(hover):
-		err = "click to repair:  " + main._price_text(main.repair_cost(lo.frame))
+		var free = main.save_data.get("repair_credits", 0)
+		err = "click to repair:  " + ("free (%d left)" % free if free > 0 else main._price_text(main.repair_cost(lo.frame)))
 	elif selected != "" and Rect2(Vector2.ZERO, Vector2(sz)).has_point(Vector2(hover)):
 		var g = _ghost()
 		err = Parts.placement_error(lo.frame, lo.parts, g, -1, _broken())
