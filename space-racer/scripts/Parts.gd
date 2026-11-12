@@ -381,12 +381,15 @@ static func _p(id: String, x: int, y: int, rot: int = 0) -> Dictionary:
 	return {"id": id, "cell": Vector2i(x, y), "rot": rot}
 
 # A new pilot's ship: a Basic frame with only the slots these parts sit on
-# still working, and just the parts to fly it.
-const CAREER_KIT = {"engine_1": 1, "thruster": 2, "drill_1": 1, "shield": 1}
+# (and the empty nose, where a drill goes) still working, and just the parts
+# to fly it. No drill: that comes after the first race.
+const CAREER_KIT = {"engine_1": 1, "thruster": 2, "shield": 1}
+const CAREER_FREE = [Vector2i(2, 0), Vector2i(2, 1)]
+const BROKEN_MASS = 0.06   # each broken slot on your frame
 
 static func career_ship() -> Dictionary:
 	return {"name": "Rustbucket", "frame": "basic", "paint": {"primary": Color(0.62, 0.58, 0.52), "secondary": Color(0.75, 0.32, 0.12), "pattern": "stripe"},
-		"parts": [_p("drill_1", 2, 0), _p("engine_1", 2, 3), _p("thruster", 1, 5), _p("thruster", 3, 5), _p("shield", 2, 5)]}
+		"parts": [_p("engine_1", 2, 3), _p("thruster", 1, 5), _p("thruster", 3, 5), _p("shield", 2, 5)]}
 
 static func presets() -> Array:
 	return [
@@ -627,6 +630,8 @@ static func stats(lo: Dictionary) -> Dictionary:
 		s.fuel += d.get("fuel", 0.0)
 		s.scoop += d.get("scoop", 0.0)
 		s.tow += d.get("tow", 0.0)
+	# Broken slots are dead weight: scrap still bolted to the frame.
+	s.mass += lo.get("broken", {}).size() * BROKEN_MASS
 	s.thrust = minf(s.thrust_raw, s.power)
 	s.can_move = s.thrust > 0.0
 	s.accel = s.thrust / s.mass

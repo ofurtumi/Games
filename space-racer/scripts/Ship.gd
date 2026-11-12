@@ -84,13 +84,14 @@ func setup(t, tr, f, m) -> void:
 
 func equip(lo: Dictionary) -> void:
 	loadout = lo
-	stats = Parts.stats(lo)
+	var dmg = ShipBuilder.with_damage(lo, null if rival or main == null else main)
+	stats = Parts.stats(dmg)
 	if model != null:
 		model.queue_free()
 	for tr in trails:
 		tr.queue_free()
 	trails.clear()
-	model = ShipBuilder.build(ShipBuilder.with_damage(lo, null if rival or main == null else main), stats)
+	model = ShipBuilder.build(dmg, stats)
 	add_child(model)
 	rig = model.get_meta("rig")
 	sockets = model.get_meta("sockets")

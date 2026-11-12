@@ -9,7 +9,15 @@ track, swappable builds. Godot 4.7, everything built in code.
 The game opens on a title screen with your ship lapping the track behind it:
 Race (the cup on your current planet, against its locals), Time trial (five
 practice laps for medals), Expedition, Garage, Track Builder, Controls,
-Rivals, Sound, Quit. A new game's first race is the Cinder cup. Races start on a 3 · 2 · 1 · GO countdown with everyone held
+Rivals, Sound, Quit.
+
+**A new game** shows only **Start**. Rix, your contact, messages you on an
+old green terminal: they found a rusty ship, will you win the Cinder cup with
+it? Accept and you drop onto the Cinder grid; refuse and it's game over (back
+to Start). After that first race, however it goes, Rix sends a Pilot drill
+as a participation prize and points you at the outpost: **Go to outpost**
+flies you up, and on docking the garage opens with the drill in hand for the
+empty nose. Races start on a 3 · 2 · 1 · GO countdown with everyone held
 on the line. Planet races end on a results screen with every pilot's place
 and time, your prize, and Go to outpost / Race again / Main menu. **Go to
 outpost** flies you there: the ship lifts off the end of the straight and up
@@ -202,8 +210,10 @@ outposts and from Nine Fingers.
 
 You own parts in quantities and a build can only use what you own. A new
 game starts you in the **Rustbucket**: a Basic frame with only the parts to
-fly it (a Core engine, two Thrusters, a Pilot drill, one Shield plate) and
-seven of its sixteen slots broken. Broken slots show scorched and cracked in
+fly it (a Core engine, two Thrusters, one Shield plate, no drill: the nose
+slots are empty) and seven of its sixteen slots broken. Broken slots are dead
+weight (scrap still bolted on), so every repair also makes the ship lighter
+and quicker. Broken slots show scorched and cracked in
 the garage and dark and rusted on the ship itself (in races, the garage and
 the expedition); click one to repair it for materials from the bank (6 rock 2
 metal for the first, a little more for each after, crystal too once you've
@@ -278,7 +288,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `Terminal.gd` story messages · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

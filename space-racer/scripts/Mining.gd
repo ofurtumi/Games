@@ -406,6 +406,7 @@ func _dock(i: int = -1) -> void:
 	Sfx.play("gate")
 	main.save_game()
 	open_menu()
+	main.story_docked()
 
 # ---------------------------------------------------------------- trips
 

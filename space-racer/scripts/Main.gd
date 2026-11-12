@@ -21,6 +21,7 @@ const GtMenuScript = preload("res://scripts/GtMenu.gd")
 const Save = preload("res://scripts/Save.gd")
 const MiningScript = preload("res://scripts/Mining.gd")
 const RaceDronesScript = preload("res://scripts/RaceDrones.gd")
+const TerminalScript = preload("res://scripts/Terminal.gd")
 const Controls = preload("res://scripts/Controls.gd")
 const OverlayScript = preload("res://scripts/Overlay.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
@@ -86,6 +87,7 @@ var save_data = {}
 var mode = "race"   # or "mining"
 var mining = null
 var hazards               # drone turrets beside the road (RaceDrones)
+var terminal              # incoming messages (story beats)
 var rebinding = ""
 var overlay
 var shake = 0.0
@@ -184,6 +186,11 @@ func _ready():
 	add_child(top)
 	overlay = OverlayScript.new()
 	top.add_child(overlay)
+	var msg_layer = CanvasLayer.new()
+	msg_layer.layer = 6
+	add_child(msg_layer)
+	terminal = TerminalScript.new()
+	msg_layer.add_child(terminal)
 	_pickup_mesh = MeshKit.box(Vector3.ONE * 0.32)
 	hazards = RaceDronesScript.new()
 	hazards.name = "RaceDrones"
@@ -369,10 +376,12 @@ func owned() -> Dictionary:
 # A new pilot: the Rustbucket (a Basic frame with most slots broken) and
 # just the parts on it. Everything else is earned.
 func new_game() -> void:
-	save_data = {"career": 1, "owned": Parts.CAREER_KIT.duplicate(), "inventory": {}}
+	save_data = {"career": 1, "story": 0, "owned": Parts.CAREER_KIT.duplicate(), "inventory": {}}
 	loadout = Parts.career_ship()
 	save_data.loadout = loadout.duplicate(true)
 	var used = {}
+	for c in Parts.CAREER_FREE:
+		used[c] = true
 	for p in loadout.parts:
 		for c in Parts.cells_of(p):
 			used[c] = true
@@ -382,6 +391,63 @@ func new_game() -> void:
 			broken.append(c)
 	save_data.broken = {"basic": broken}
 	inventory = save_data.inventory
+
+# ---------------------------------------------------------------- story
+
+# Where a career is: 0 fresh (title offers Start), 1 took the ship (first
+# race), 2 sent the drill (head for the outpost), 3 fitted it. Saves and tests
+# without a story are past all of it.
+const CONTACT = "Rix"
+
+func story() -> int:
+	return save_data.get("story", 9)
+
+func _story_intro() -> void:
+	menu.hide_menu()
+	terminal.show_message(CONTACT, [
+		"found this old rusty ship out behind the depot. engine turns over. mostly.",
+		"",
+		"the cinder cup runs tonight. you think you can win it for the both of us?",
+	], [
+		{"label": "Accept", "action": _story_accept},
+		{"label": "Refuse", "action": _story_refuse},
+	])
+
+func _story_accept() -> void:
+	save_data.story = 1
+	save_game()
+	_leave_title()
+	race_on(0, true)
+
+func _story_refuse() -> void:
+	terminal.show_message(CONTACT, [
+		"...yeah. figured.",
+		"i'll sell it for scrap then.",
+	], [{"label": "Back", "action": show_title}], "GAME OVER")
+
+# After the first race, however it went.
+func _story_pity() -> void:
+	save_data.story = 2
+	owned()["drill_1"] = owned().get("drill_1", 0) + 1
+	save_game()
+	terminal.show_message(CONTACT, [
+		"well. that happened.",
+		"",
+		"if we're gonna win anything you'll have to upgrade that heap. i'm sending you a pilot drill. call it a participation prize.",
+		"",
+		"get up to the outpost and bolt it on in the garage. then dig us up some metal.",
+	], [{"label": "Go to outpost", "action": go_to_outpost} if trip.is_empty() and mode == "race" else {"label": "OK", "action": func(): pass}])
+
+# Docked after the pity drill: straight into the garage with it in hand.
+func story_docked() -> void:
+	if story() != 2:
+		return
+	save_data.story = 3
+	save_game()
+	menu.hide_menu()
+	open_garage()
+	grid_garage.section = "tools"
+	grid_garage.selected = "drill_1"
 
 # Saves from before the career keep the frames they started with, whole.
 func _migrate_career() -> void:
@@ -654,7 +720,7 @@ func notify(text: String, color: Color, key: String = "") -> void:
 		messages.pop_front()
 
 func menu_open() -> bool:
-	return menu.visible or editor.visible or grid_garage.visible
+	return menu.visible or editor.visible or grid_garage.visible or (terminal != null and terminal.visible)
 
 func _unhandled_input(event):
 	if shot_path != "":
@@ -868,6 +934,10 @@ func show_title() -> void:
 	title_card.visible = true
 	title_card.t = 0.0
 	menu.dim_backdrop = false
+	if story() == 0:
+		# A fresh game: nothing to do but start.
+		menu.show_menu("", [{"label": "Start", "action": _story_intro}], Callable())
+		return
 	menu.show_menu("", [
 		{"label": "Race", "value": func(): return Contracts.PLANET_NAMES[planet_index % 4] + " CUP",
 			"action": func(): _leave_title(); race_on(planet_index % 4)},
@@ -1285,6 +1355,8 @@ func _finish_race() -> void:
 	ship.autopilot = true
 	save_game()
 	show_results(names[mini(place - 1, 3)], "  ".join(bits), "  ".join(trophy))
+	if story() == 1:
+		get_tree().create_timer(1.6).timeout.connect(_story_pity)
 
 # GT4-style results: everyone's place and time, the prize, what next.
 func show_results(place_name: String, prize: String, trophy: String = "") -> void:

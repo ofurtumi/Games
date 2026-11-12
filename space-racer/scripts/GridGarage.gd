@@ -106,6 +106,7 @@ func _process(delta):
 		if key != "":
 			var trial = lo.duplicate(true)
 			trial.parts.append(_ghost())
+			trial.broken = _broken()
 			preview = Parts.stats(trial)
 	var id = _info_id()
 	demo.show_part(id)

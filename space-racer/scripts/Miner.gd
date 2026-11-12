@@ -40,13 +40,14 @@ var _fx_cd = 0.0
 var weapons
 
 func equip(lo: Dictionary) -> void:
-	stats = Parts.stats(lo)
+	var dmg = ShipBuilder.with_damage(lo, mining.main if mining != null else null)
+	stats = Parts.stats(dmg)
 	if model != null:
 		model.queue_free()
 	for t in trails:
 		t.queue_free()
 	trails.clear()
-	model = ShipBuilder.build(ShipBuilder.with_damage(lo, mining.main if mining != null else null), stats)
+	model = ShipBuilder.build(dmg, stats)
 	add_child(model)
 	rig = model.get_meta("rig")
 	for nz in rig.nozzles:
