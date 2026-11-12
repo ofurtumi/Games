@@ -964,7 +964,7 @@ func garage_closed() -> void:
 
 # ---------------------------------------------------------------- modes
 
-func enter_mining() -> void:
+func enter_mining(arrive: int = -1) -> void:
 	if mode == "mining":
 		return
 	mode = "mining"
@@ -980,11 +980,12 @@ func enter_mining() -> void:
 	pickups.clear()
 	mining = MiningScript.new()
 	mining.name = "Mining"
+	mining.arrive = arrive
 	add_child(mining)
 	mining.setup(self)
 
 # From an outpost: that planet's own track, three laps against the locals.
-func race_on(palette: int) -> void:
+func race_on(palette: int, descend: bool = false) -> void:
 	leave_mining()
 	planet_index = palette
 	track_seed = 500 + palette * 37
@@ -995,6 +996,63 @@ func race_on(palette: int) -> void:
 	race_origin = "expedition"
 	_spawn_rivals(palette)
 	start_countdown()
+	if descend:
+		# Dropping in from the sky: the count waits until you're down.
+		countdown = 0.0
+		ship.set_process(false)
+		hud.visible = false
+		trip = {"kind": "down", "t": 0.0, "focus": ship.position}
+		cam_focus = ship.position
+		overlay.fade = 1.0
+
+# ---------------------------------------------------------------- trips
+
+const LIFT_TIME = 1.8
+const DROP_TIME = 1.6
+const DROP_HEIGHT = 18.0
+var trip = {}   # {kind: "up" (off the track) / "down" (onto the grid), t}
+
+# From the results: up off the track into the sky, cut, and out of the
+# planet to its outpost.
+func go_to_outpost() -> void:
+	menu.hide_menu()
+	hud.visible = false
+	ship.set_process(false)
+	trip = {"kind": "up", "t": 0.0}
+	Sfx.play("launch")
+
+func _trip_step(delta: float) -> void:
+	trip.t += delta
+	if trip.kind == "up":
+		# Off the end of the straight and up past the camera, which stays put.
+		var k = trip.t / LIFT_TIME
+		ship.position += ship.forward() * (8.0 + 40.0 * k) * delta
+		ship.position.y = 30.0 * k * k
+		ship.model.rotation.x = lerpf(ship.model.rotation.x, -0.5, minf(1.0, 4.0 * delta))
+		for f in ship.rig.flames:
+			f.scale = Vector3(1, 1, 1.6 + randf() * 0.3)
+		overlay.fade = clampf((trip.t - (LIFT_TIME - 0.5)) / 0.5, 0.0, 1.0)
+		if trip.t >= LIFT_TIME:
+			trip = {}
+			ship.position.y = 0.0
+			ship.model.rotation.x = 0.0
+			enter_mining(planet_index % 4)
+	else:
+		# In from behind and above, the camera already on the grid.
+		var k = clampf(trip.t / DROP_TIME, 0.0, 1.0)
+		var e = 1.0 - (1.0 - k) * (1.0 - k)
+		var start = trip.focus - ship.forward() * 26.0
+		ship.position = start.lerp(trip.focus, e)
+		ship.position.y = DROP_HEIGHT * (1.0 - e)
+		overlay.fade = 1.0 - clampf(trip.t / 0.6, 0.0, 1.0)
+		if k >= 1.0:
+			ship.position = trip.focus
+			trip = {}
+			overlay.fade = 0.0
+			hud.visible = true
+			fx.burst(ship.position + Vector3(0, 0.3, 0), Color(0.8, 0.75, 0.65), 24, 7.0, 0.0, 0.2, 0.6, 2.0)
+			Sfx.play("clunk")
+			start_countdown()
 
 func _rival_loadout(spec: Array, heat: float = 0.0, extra = null) -> Dictionary:
 	var lo = _rival_base(spec)
@@ -1238,9 +1296,8 @@ func show_results(place_name: String, prize: String, trophy: String = "") -> voi
 	rows.append({"label": "Prize", "value": prize})
 	if trophy != "":
 		rows.append({"label": "First win", "value": trophy})
+	rows.append({"label": "Go to outpost", "value": Contracts.PLANET_NAMES[planet_index % 4], "action": go_to_outpost})
 	rows.append({"label": "Race again", "action": _restart_race})
-	if race_origin == "expedition":
-		rows.append({"label": "Expedition", "action": func(): _close_results(); enter_mining()})
 	rows.append({"label": "Main menu", "action": func(): _close_results(); show_title()})
 	menu.show_menu("RESULTS  ·  " + place_name, rows, Callable())
 	menu.selected = field.size() + (2 if trophy != "" else 1)
@@ -1267,10 +1324,11 @@ func show_session() -> void:
 	if not done:
 		rows.append({"label": "Keep driving", "action": close_menu})
 	rows.append({"label": "Restart", "action": func(): menu.hide_menu(); _reset_race(); start_countdown()})
+	rows.append({"label": "Go to outpost", "value": Contracts.PLANET_NAMES[planet_index % 4], "action": go_to_outpost})
 	rows.append({"label": "Main menu", "action": func(): menu.hide_menu(); show_title()})
 	var head = "NEW MEDAL" if not session.get("medals", []).is_empty() else ("BEST  " + Hud.laptime(best) if best >= 0.0 else "NO LAPS")
 	menu.show_menu("PRACTICE  ·  " + head, rows, Callable() if done else close_menu)
-	menu.selected = rows.size() - (2 if done else 3)
+	menu.selected = rows.size() - (3 if done else 4)
 
 func _close_results() -> void:
 	menu.hide_menu()
@@ -1422,6 +1480,8 @@ func _process(delta):
 			f.scale = Vector3(1, 1, 0.3 + randf() * 0.1)
 		for sp in ship.rig.spinners:
 			sp[0].rotate_object_local(sp[1], sp[2] * delta)
+	elif not trip.is_empty():
+		_trip_step(delta)
 	elif countdown > 0.0:
 		_tick_countdown(delta)
 	else:
@@ -1431,7 +1491,8 @@ func _process(delta):
 			hazards.step(delta)
 	_update_pickups(delta)
 	_update_charges(delta)
-	_update_camera(delta)
+	if trip.get("kind", "") != "up":
+		_update_camera(delta)
 	for m in messages:
 		if countdown <= 0.0:
 			m.t -= delta
@@ -1637,6 +1698,8 @@ func _update_camera(delta: float) -> void:
 	var speed = ship.vel.length()
 	var pitch = GARAGE_PITCH if garage else CAM_PITCH
 	var target = ship.position + (Vector3.ZERO if garage else ship.vel * 0.3)
+	if trip.has("focus"):
+		target = trip.focus
 	cam_focus = cam_focus.lerp(target, minf(1.0, (8.0 if garage else 4.0) * delta))
 	var dist = GARAGE_DIST if garage else get_meta("camdist", CAM_DIST) + speed * 0.35
 	var off = Vector3(0, sin(deg_to_rad(pitch)), cos(deg_to_rad(pitch))) * dist

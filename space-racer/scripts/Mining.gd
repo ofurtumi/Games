@@ -80,6 +80,8 @@ const SPACE_TOP = 70.0     # speed cap away from planets
 const AIR_TOP = 32.0       # near a planet
 var outposts = []          # {pad, planet}
 var at_outpost = 0
+var arrive = -1          # set before setup(): come up out of this planet to its outpost
+var trip = {}            # scripted flight: {kind: "up"/"down", t, from, to, planet}
 const SITE_COLORS = {"wreck": Color(0.95, 0.6, 0.35), "hull": Color(0.92, 0.92, 0.95), "cache": Color(0.25, 0.95, 0.75), "market": Color(0.75, 0.35, 1.0)}
 
 var sites = []           # {type, pos, vel, node, found, done, data}
@@ -176,7 +178,10 @@ func setup(m) -> void:
 	hud.draw.connect(_draw_hud)
 	layer.add_child(hud)
 	_enter_env()
-	_dock()
+	if arrive >= 0:
+		_start_arrival(arrive)
+	else:
+		_dock()
 
 func _enter_env() -> void:
 	var env = main.env
@@ -322,6 +327,9 @@ func _process(delta):
 	if main.menu_open() or main.mode != "mining":
 		hud.queue_redraw()
 		return
+	if _trip_step(delta):
+		hud.queue_redraw()
+		return
 	if _dead_left > 0.0:
 		_dead_left -= delta / maxf(Engine.time_scale, 0.05)
 		if _dead_left <= 0.0:
@@ -399,6 +407,60 @@ func _dock(i: int = -1) -> void:
 	main.save_game()
 	open_menu()
 
+# ---------------------------------------------------------------- trips
+
+const TRIP_UP = 2.6
+const TRIP_DOWN = 1.8
+
+# Up out of the planet's crust, through the surface, to its outpost pad.
+func _start_arrival(planet: int) -> void:
+	at_outpost = planet
+	docked = false
+	var pl = planets[planet]
+	var from = pl.centre + Vector2(0, pl.def.radius * 0.95)
+	trip = {"kind": "up", "t": 0.0, "from": from, "to": outposts[planet].pad + Vector2(0, 1.0), "planet": planet}
+	miner.pos = from
+	cam.position = Vector3(from.x, from.y - 4.0, zoom + 10.0)
+	main.overlay.fade = 1.0
+	Sfx.play("launch")
+
+# From the pad down into the planet, then the race on its surface.
+func depart_to_race(planet: int) -> void:
+	main.menu.hide_menu()
+	docked = false
+	var pl = planets[planet]
+	trip = {"kind": "down", "t": 0.0, "from": miner.pos, "to": pl.centre + Vector2(0, pl.def.radius * 0.9), "planet": planet}
+	Sfx.play("launch")
+
+func _trip_step(delta: float) -> bool:
+	if trip.is_empty():
+		return false
+	trip.t += delta
+	var up = trip.kind == "up"
+	var dur = TRIP_UP if up else TRIP_DOWN
+	var k = clampf(trip.t / dur, 0.0, 1.0)
+	var e = k * k * (3.0 - 2.0 * k)
+	var prev = miner.pos
+	miner.pos = trip.from.lerp(trip.to, e)
+	miner.vel = (miner.pos - prev) / maxf(delta, 0.001)
+	miner.heading = PI * 0.5 if up else -PI * 0.5
+	# Scripted: just the look of it (no collisions while it's in the rock).
+	miner._throttle = 1.0
+	miner._animate(delta)
+	main.overlay.fade = (1.0 - clampf(trip.t / 0.7, 0.0, 1.0)) if up else clampf((trip.t - (dur - 0.6)) / 0.6, 0.0, 1.0)
+	var target = Vector3(miner.pos.x, miner.pos.y, 0.0)
+	cam.position = cam.position.lerp(target + Vector3(0, -4.0, zoom + 10.0), minf(1.0, 3.0 * delta))
+	cam.look_at(cam.position + Vector3(0, 0.12, -1.0), Vector3.UP)
+	if k >= 1.0:
+		var t = trip
+		trip = {}
+		if up:
+			main.overlay.fade = 0.0
+			_dock(t.planet)
+		else:
+			main.race_on(PLANETS[t.planet].palette, true)
+	return true
+
 func launch() -> void:
 	docked = false
 	_undock_cd = 2.5
@@ -444,7 +506,7 @@ func open_menu() -> void:
 			{"label": "Shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP")},
 			{"label": "Blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper())},
 			{"label": "Garage", "action": func(): main.menu.hide_menu(); main.open_garage()},
-			{"label": "Race here", "value": def.name, "action": func(): main.menu.hide_menu(); main.race_on(def.palette)},
+			{"label": "Race here", "value": def.name, "action": func(): depart_to_race(outposts[at_outpost].planet)},
 			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
 			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
 			{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
@@ -569,7 +631,7 @@ func _gauge(r: Rect2, frac: float, color: Color, segs: int = 16) -> void:
 		Ui.segment(hud, Rect2(r.position.x + i * (sw + gap), r.position.y, sw, r.size.y), color if i < lit else Color(1, 1, 1, 0.1), 3.0)
 
 func _draw_hud() -> void:
-	if main.mode != "mining" or main.grid_garage.visible:
+	if main.mode != "mining" or main.grid_garage.visible or not trip.is_empty():
 		return
 	var vp = hud.size
 	var panel = Color(0.03, 0.035, 0.045, 0.78)

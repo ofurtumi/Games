@@ -11,7 +11,12 @@ Race (the cup on your current planet, against its locals), Time trial (five
 practice laps for medals), Expedition, Garage, Track Builder, Controls,
 Rivals, Sound, Quit. A new game's first race is the Cinder cup. Races start on a 3 · 2 · 1 · GO countdown with everyone held
 on the line. Planet races end on a results screen with every pilot's place
-and time, your prize, and Race again / Expedition / Main menu. The pause
+and time, your prize, and Go to outpost / Race again / Main menu. **Go to
+outpost** flies you there: the ship lifts off the end of the straight and up
+out of shot, then (in the expedition) climbs out of the planet's crust to its
+outpost and docks. An outpost's **Race here** does it the other way: down
+from the pad into the planet, then in from the sky onto the grid, and the
+count starts once you're down. No pause menu needed between modes. The pause
 menu has Main menu too.
 
 ## Modes

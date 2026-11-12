@@ -11,6 +11,7 @@ var t_banner = 0.0
 var accent = Color(0.85, 0.12, 0.08)
 var count = -1          # 3, 2, 1, 0 = GO
 var count_t = 0.0
+var fade = 0.0          # 0..1 black over everything (scene cuts)
 
 func _ready():
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -45,6 +46,8 @@ func tick(real_dt: float) -> void:
 
 func _draw():
 	var vp = size
+	if fade > 0.0:
+		draw_rect(Rect2(Vector2.ZERO, vp), Color(0, 0, 0, clampf(fade, 0.0, 1.0)))
 	if flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(0.9, 0.1, 0.05, flash * 0.55))
 	if count >= 0:
