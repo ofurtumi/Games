@@ -876,6 +876,54 @@ func open_menu() -> void:
 
 # The track's pit lane sells stock parts (no mechanics' specials, those are
 # at the outposts) and buys spares back, all through the bank.
+# ---------------------------------------------------------------- ordering
+
+# Outposts you've visited (seen on the map) whose shop stocks a part.
+func outposts_selling(id: String) -> Array:
+	var out = []
+	for i in MiningScript.PLANETS.size():
+		if not save_data.get("seen", {}).has("outpost:%d" % i):
+			continue
+		if Parts.shop_stock(MiningScript.PLANETS[i].mech).has(id):
+			out.append(i)
+	return out
+
+# From the garage: a part you have none of to hand. Buy it here if you can,
+# otherwise see where it's sold.
+func open_order(id: String) -> void:
+	var def = Parts.PARTS[id]
+	var pr = Parts.credit_price(id)
+	var rows = []
+	var here = -1
+	if mode == "mining" and mining != null and mining.docked:
+		here = mining.outposts[mining.at_outpost].planet
+	var sold_here = (here >= 0 and Parts.shop_stock(MiningScript.PLANETS[here].mech).has(id)) or (mode == "race" and def.mech == "")
+	if sold_here:
+		rows.append({"label": "Buy here", "value": _price_text(pr), "part": id, "can": func(): return can_afford(pr),
+			"action": func(): _order_buy(id)})
+	for i in outposts_selling(id):
+		if i == here:
+			continue
+		rows.append({"label": MiningScript.PLANETS[i].name + " outpost", "value": "sells it  " + _price_text(pr), "part": id, "can": false})
+	if rows.is_empty():
+		rows.append({"label": "Not sold anywhere you've been", "value": "explore", "part": id, "can": false})
+	rows.append({"label": "Back", "action": menu.hide_menu})
+	menu.show_menu("ORDER  " + def.name.to_upper(), rows, menu.hide_menu)
+	menu.wallet = func(): return {"bank": inventory}
+
+func _order_buy(id: String) -> void:
+	var pr = Parts.credit_price(id)
+	if not can_afford(pr):
+		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
+		return
+	inventory.credits -= pr.credits
+	owned()[id] = owned().get(id, 0) + 1
+	notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
+	Sfx.play("coins")
+	save_game()
+	menu.hide_menu()
+	grid_garage.selected = id
+
 # What the shops' overview panel shows: your build and what you own.
 func shop_overview() -> Dictionary:
 	return {"lo": loadout, "owned": owned(), "stats": ship.stats, "broken": broken_cells(loadout.get("frame", "basic"))}

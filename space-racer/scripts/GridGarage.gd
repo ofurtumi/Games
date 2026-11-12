@@ -261,7 +261,11 @@ func _gui_input(event):
 			var lst = _list()
 			for i in lst.size():
 				if _list_rect(i).has_point(pos):
-					if Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()) or (_free(lst[i]) <= 0 and selected != lst[i]):
+					if Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()):
+						return
+					if _free(lst[i]) <= 0 and selected != lst[i]:
+						# None to hand: where can you get one?
+						main.open_order(lst[i])
 						return
 					# Clicking the selected part again puts it down.
 					selected = "" if selected == lst[i] else lst[i]
@@ -304,7 +308,7 @@ func _gui_input(event):
 		accept_event()
 
 func _unhandled_key_input(event):
-	if not visible or not event.pressed or event.echo or editor.visible:
+	if not visible or not event.pressed or event.echo or editor.visible or main.menu.visible:
 		return
 	match event.physical_keycode:
 		KEY_R:

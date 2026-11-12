@@ -295,7 +295,10 @@ In every shop (and the card counter, blueprints and traders) what you can
 afford right now is lit with a green edge and what you can't is greyed out.
 Shop rows show the selected part's card on the right, the same one the
 garage shows: maker, what it does, its numbers and its placement rule.
-Under it an overview panel (Tab switches): **Ship** draws your frame with
+In the garage, clicking a part you have none of to hand opens an **order**:
+Buy here if this outpost (or the pit, for stock parts) sells it, and which
+outposts you've visited sell it otherwise.
+Under the shop's part card is an overview panel (Tab switches): **Ship** draws your frame with
 what's fitted (broken slots scorched), lists the parts and gives top speed,
 accel, shield and drill; **Parts owned** lists everything you own with
 owned / fitted / spare, the shop's selected part marked.
