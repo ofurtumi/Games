@@ -175,7 +175,9 @@ HUD any more.
 a hull) and patrol around Moss and Magma. They sit on station until you come
 close, then chase, fire slow red bolts and ram; get far enough away and they
 go back. Every tool hurts them (lasers, missiles, bombs, the wrecking-ball
-drill) and homing missiles go for them before ore. Dead drones drop metal
+drill) and homing missiles go for them before ore. Rock is solid to them and
+crashing hurts them on the same curve as you; chasing, they dash at 17 m/s,
+so a drone diving at you through a wall can wreck itself: bait them. Dead drones drop metal
 and crystal. A cleared post fills again
 four minutes later, while you're well away from it.
 

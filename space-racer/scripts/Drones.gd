@@ -10,6 +10,9 @@ const MeshKit = preload("res://scripts/MeshKit.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
 
 const SPEED = 13.0
+const CHASE_SPEED = 17.0   # they dash at you, and that's what wrecks them on rock
+const RADIUS = 0.8
+const MinerScript = preload("res://scripts/Miner.gd")
 const SIGHT = 26.0
 const LEASH = 60.0
 const HP = 30.0
@@ -100,12 +103,16 @@ func step(delta: float) -> void:
 				if d.cd <= 0.0 and dist < 32.0:
 					d.cd = 1.5 + randf() * 0.5
 					_fire(d, ship + mining.miner.vel * (dist / 22.0) * 0.6)
-		d.vel = d.vel.lerp((target - d.pos).limit_length(1.0) * SPEED, minf(1.0, 2.5 * delta))
+		var top = CHASE_SPEED if d.state == "chase" else SPEED
+		d.vel = d.vel.lerp((target - d.pos).limit_length(1.0) * top, minf(1.0, 2.5 * delta))
 		d.pos += d.vel * delta
-		# Rock pushes them back out.
-		for pl in mining.planets_near(d.pos, 2.0):
-			if pl.terrain.is_solid(pl.terrain.world_to_cell(pl.local(d.pos))):
-				d.pos += (d.pos - pl.centre).normalized() * 8.0 * delta
+		# Rock is solid to them too, and hitting it hurts like it hurts you:
+		# bait one into a wall.
+		var crash = _collide(d)
+		if crash > MinerScript.IMPACT_SAFE:
+			damage(d, MinerScript.impact_damage(crash))
+			if d.hp <= 0.0:
+				continue
 		# Ramming.
 		if dist < mining.miner.stats.radius + 0.9:
 			mining.miner.take_hit(6.0)
@@ -117,6 +124,33 @@ func step(delta: float) -> void:
 		d.node.rotation.z = atan2(d.vel.y, d.vel.x) - PI * 0.5 if d.vel.length() > 0.5 else d.node.rotation.z
 		d.eye.visible = d.state == "chase" or fmod(Time.get_ticks_msec() * 0.001, 1.0) < 0.5
 	_bolts(delta, ship)
+
+# Circle against the planets' cells: pushed out, bounced, and the hardest
+# speed into the rock this frame returned.
+func _collide(d: Dictionary) -> float:
+	var worst = 0.0
+	for pl in mining.planets_near(d.pos, RADIUS + 2.0):
+		var t = pl.terrain
+		var half = t.cell * 0.5
+		var c0 = t.world_to_cell(pl.local(d.pos))
+		for dj in range(-2, 3):
+			for di in range(-2, 3):
+				var c = c0 + Vector2i(di, dj)
+				if not t.is_solid(c):
+					continue
+				var cc = pl.cell_world(c)
+				var q = Vector2(clampf(d.pos.x, cc.x - half, cc.x + half), clampf(d.pos.y, cc.y - half, cc.y + half))
+				var off = d.pos - q
+				var dist = off.length()
+				if dist >= RADIUS:
+					continue
+				var n = off / dist if dist > 0.0001 else (d.pos - pl.centre).normalized()
+				d.pos += n * (RADIUS - dist)
+				var vn = d.vel.dot(n)
+				if vn < 0.0:
+					d.vel -= n * vn * 1.4
+					worst = maxf(worst, -vn)
+	return worst
 
 func _fire(d: Dictionary, at: Vector2) -> void:
 	var node = MeshInstance3D.new()
