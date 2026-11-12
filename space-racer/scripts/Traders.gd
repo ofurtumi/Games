@@ -122,7 +122,7 @@ func open_deals(t: Dictionary) -> void:
 	var part_price = {}
 	for k in Parts.price(t.part):
 		part_price[k] = maxi(1, int(Parts.price(t.part)[k] * 0.75))
-	rows.append({"label": Parts.PARTS[t.part].name, "value": "%d owned   %s" % [main.owned().get(t.part, 0), mining._price_text(part_price)],
+	rows.append({"label": Parts.PARTS[t.part].name, "value": "%d owned   %s" % [main.owned().get(t.part, 0), mining._price_text(part_price)], "part": t.part,
 		"action": func(): _buy(t, part_price)})
 	rows.append({"label": "Leave", "action": func(): close(t)})
 	main.menu.show_menu("TRADER  " + t.name, rows, func(): close(t), main.menu.title == "TRADER  " + t.name)

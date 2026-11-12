@@ -33,34 +33,36 @@ const KINDS = {
 	LAVA: {"hardness": 99, "hp": 1e9},
 }
 
+# Ore veins share the HUD's material colours on every planet (metal orange,
+# crystal cyan, core magenta) so a vein looks like the chunk it drops.
 const PLANETS = [
 	{
 		"name": "Cinder", "rock": Color(0.36, 0.21, 0.15), "hard": Color(0.2, 0.14, 0.13), "bedrock": Color(0.1, 0.08, 0.08),
-		"ore_a": Color(1.0, 0.5, 0.12), "ore_a_name": "copper", "ore_b": Color(1.0, 0.85, 0.3), "ore_b_name": "sunstone",
+		"ore_a": Color(1.0, 0.6, 0.25), "ore_a_name": "copper", "ore_b": Color(0.5, 0.9, 1.0), "ore_b_name": "sunstone",
 		"ground": Color(0.3, 0.2, 0.15), "track": Color(0.17, 0.16, 0.16), "line": Color(0.2, 0.9, 1.0),
 		"sun": Color(1.0, 0.86, 0.72), "ambient": Color(0.55, 0.38, 0.32), "sky": Color(0.05, 0.02, 0.03),
-		"deep": Color(0.24, 0.1, 0.08), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.55, 0.15), "gas": Color(0.55, 0.6, 0.25), "lava": Color(1.0, 0.35, 0.05), "back": Color(0.12, 0.06, 0.05),
+		"deep": Color(0.24, 0.1, 0.08), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.45, 0.95), "gas": Color(0.55, 0.6, 0.25), "lava": Color(1.0, 0.35, 0.05), "back": Color(0.12, 0.06, 0.05),
 	},
 	{
 		"name": "Rime", "rock": Color(0.5, 0.58, 0.68), "hard": Color(0.3, 0.37, 0.5), "bedrock": Color(0.12, 0.14, 0.2),
-		"ore_a": Color(0.2, 0.5, 1.0), "ore_a_name": "cobalt", "ore_b": Color(0.55, 1.0, 1.0), "ore_b_name": "frost crystal",
+		"ore_a": Color(1.0, 0.6, 0.25), "ore_a_name": "cobalt", "ore_b": Color(0.5, 0.9, 1.0), "ore_b_name": "frost crystal",
 		"ground": Color(0.42, 0.48, 0.56), "track": Color(0.16, 0.17, 0.2), "line": Color(1.0, 0.45, 0.2),
 		"sun": Color(0.82, 0.9, 1.0), "ambient": Color(0.4, 0.48, 0.62), "sky": Color(0.02, 0.03, 0.06),
-		"deep": Color(0.16, 0.2, 0.32), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(0.6, 0.9, 1.0), "gas": Color(0.5, 0.65, 0.45), "lava": Color(1.0, 0.4, 0.1), "back": Color(0.1, 0.12, 0.18),
+		"deep": Color(0.16, 0.2, 0.32), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.45, 0.95), "gas": Color(0.5, 0.65, 0.45), "lava": Color(1.0, 0.4, 0.1), "back": Color(0.1, 0.12, 0.18),
 	},
 	{
 		"name": "Moss", "rock": Color(0.32, 0.42, 0.26), "hard": Color(0.18, 0.23, 0.17), "bedrock": Color(0.08, 0.1, 0.08),
-		"ore_a": Color(0.45, 1.0, 0.3), "ore_a_name": "verdite", "ore_b": Color(0.85, 0.35, 1.0), "ore_b_name": "amethine",
+		"ore_a": Color(1.0, 0.6, 0.25), "ore_a_name": "verdite", "ore_b": Color(0.5, 0.9, 1.0), "ore_b_name": "amethine",
 		"ground": Color(0.24, 0.28, 0.2), "track": Color(0.16, 0.17, 0.15), "line": Color(1.0, 0.85, 0.2),
 		"sun": Color(1.0, 0.97, 0.85), "ambient": Color(0.38, 0.45, 0.38), "sky": Color(0.02, 0.04, 0.03),
-		"deep": Color(0.14, 0.12, 0.2), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(0.75, 1.0, 0.4), "gas": Color(0.65, 0.75, 0.2), "lava": Color(1.0, 0.4, 0.1), "back": Color(0.07, 0.09, 0.06),
+		"deep": Color(0.14, 0.12, 0.2), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.45, 0.95), "gas": Color(0.65, 0.75, 0.2), "lava": Color(1.0, 0.4, 0.1), "back": Color(0.07, 0.09, 0.06),
 	},
 	{
 		"name": "Magma", "rock": Color(0.2, 0.17, 0.16), "hard": Color(0.12, 0.1, 0.1), "bedrock": Color(0.06, 0.05, 0.05),
-		"ore_a": Color(0.95, 0.75, 0.3), "ore_a_name": "brass", "ore_b": Color(1.0, 0.35, 0.2), "ore_b_name": "fire opal",
+		"ore_a": Color(1.0, 0.6, 0.25), "ore_a_name": "brass", "ore_b": Color(0.5, 0.9, 1.0), "ore_b_name": "fire opal",
 		"ground": Color(0.16, 0.12, 0.11), "track": Color(0.12, 0.11, 0.11), "line": Color(1.0, 0.5, 0.15),
 		"sun": Color(1.0, 0.75, 0.55), "ambient": Color(0.55, 0.3, 0.22), "sky": Color(0.08, 0.02, 0.01),
-		"deep": Color(0.3, 0.08, 0.04), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.85, 0.3), "gas": Color(0.6, 0.55, 0.25), "lava": Color(1.0, 0.45, 0.08), "back": Color(0.1, 0.03, 0.02),
+		"deep": Color(0.3, 0.08, 0.04), "ore_c": Color(0.95, 0.3, 0.9), "core": Color(1.0, 0.45, 0.95), "gas": Color(0.6, 0.55, 0.25), "lava": Color(1.0, 0.45, 0.08), "back": Color(0.1, 0.03, 0.02),
 	},
 ]
 

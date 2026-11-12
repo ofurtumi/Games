@@ -20,10 +20,7 @@ const SubGridEditorScript = preload("res://scripts/SubGridEditor.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
 
 const BAND = Rect2(390, 12, 780, 104)
-const STAT_LABELS = [["power", "Power"], ["thrust", "Thrust"], ["tier", "Tier"], ["shield", "Shield +"],
-	["regen", "Regen +"], ["grip", "Grip +"], ["turn", "Turn +"], ["brake", "Brakes +"], ["magnet", "Magnet +"],
-	["boost", "Boost +"], ["fuel", "Fuel +"], ["charges", "Charges "], ["jump", "Hop +"], ["dps", "Damage "],
-	["range", "Range "], ["ammo", "Rockets "]]
+const PartInfo = preload("res://scripts/PartInfo.gd")
 
 var main
 var lo = {}
@@ -568,40 +565,7 @@ func _draw_status(err: String, over: int = -1) -> void:
 		Ui.segment(self, sr, Color(0.03, 0.035, 0.045, 0.8), 8.0)
 
 func _draw_info() -> void:
-	var id = _info_id()
-	Ui.segment(self, BAND, Color(0.03, 0.035, 0.045, 0.9), 10.0)
-	if id == "":
-		return
-	var def = Parts.PARTS[id]
-	var mech = Parts.MECHANICS[def.mech]
-	Ui.segment(self, Rect2(BAND.position, Vector2(BAND.size.x, 4)), mech.accent, 0.0)
-	var x = BAND.position.x + 166
-	var y = BAND.position.y
-	Ui.text(self, Vector2(x, y + 32), def.name.to_upper(), 22, Color.WHITE, true)
-	var nw = Ui.font(true).get_string_size(def.name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
-	Ui.text(self, Vector2(x + nw + 14, y + 32), mech.name, 15, mech.accent, true)
-	Ui.text(self, Vector2(x, y + 56), Parts.DESC.get(id, ""), 15, Color(0.85, 0.87, 0.9))
-	var bits = []
-	for sl in STAT_LABELS:
-		if def.has(sl[0]):
-			var v = def[sl[0]]
-			var sep = "" if sl[1].ends_with("+") or sl[1].ends_with(" ") else " "
-			bits.append(sl[1] + sep + (str(v) if v is int else ("%.2f" % v).rstrip("0").rstrip(".")))
-	bits.append("Mass %.2f" % def.mass)
-	Ui.text(self, Vector2(x, y + 82), "   ".join(bits), 13, Ui.DIM, true)
-	var rule = ""
-	if def.get("edge", false):
-		rule = "EDGE ONLY"
-	elif def.get("facing", false):
-		rule = "FACES OPEN SPACE"
-	elif def.get("nose", false):
-		rule = "NEEDS OPEN SPACE AHEAD"
-	elif def.has("exhaust"):
-		rule = "NEEDS A FREE CELL BEHIND"
-	if rule != "":
-		var rw = Ui.font(true).get_string_size(rule, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 24
-		Ui.segment(self, Rect2(BAND.end.x - rw - 20, y + 66, rw, 24), Color(0.95, 0.7, 0.2), 6.0)
-		Ui.text(self, Vector2(BAND.end.x - rw - 8, y + 83), rule, 13, Ui.INK, true)
+	PartInfo.draw(self, BAND, _info_id(), 166.0)
 
 func _draw_slots() -> void:
 	var slots = main.save_data.get("slots", [])

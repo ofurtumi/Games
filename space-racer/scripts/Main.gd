@@ -611,7 +611,7 @@ func open_pit(back: Callable) -> void:
 		var pid = id
 		var pr = Parts.price(pid)
 		rows.append({"label": Parts.PARTS[pid].name,
-			"value": func(): return "%d owned   %s" % [owned().get(pid, 0), _price_text(pr)],
+			"value": func(): return "%d owned   %s" % [owned().get(pid, 0), _price_text(pr)], "part": pid,
 			"action": func(): _pit_buy(pid, back)})
 	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % spare_parts().values().reduce(func(a, b): return a + b, 0),
 		"action": func(): _pit_sell_menu(back)})
@@ -643,7 +643,7 @@ func _pit_sell_menu(back: Callable) -> void:
 	var spares = spare_parts()
 	for id in spares:
 		var pid = id
-		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(MiningScript.sell_price(pid))],
+		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(MiningScript.sell_price(pid))], "part": pid,
 			"action": func(): _pit_sell(pid, back)})
 	var up = func(): open_pit(back)
 	rows.append({"label": "Back", "action": up})

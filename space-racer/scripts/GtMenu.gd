@@ -6,11 +6,13 @@ extends Control
 #
 # show_menu(title, rows, on_back). Row: {label, value (String or Callable),
 # action (Callable), left/right (Callable), alt_left/alt_right (Callable,
-# with Shift), swatch (Color or Callable)}.
+# with Shift), swatch (Color or Callable), part (a part id: its card shows
+# along the bottom while the row is selected)}.
 
 const Ui = preload("res://scripts/Ui.gd")
 const BACKDROP = preload("res://assets/shaders/menu_backdrop.gdshader")
 const Sfx = preload("res://scripts/Sfx.gd")
+const PartInfo = preload("res://scripts/PartInfo.gd")
 
 const ROW_H = 40.0
 const ROW_GAP = 6.0
@@ -112,6 +114,11 @@ func _draw():
 			draw_rect(sq, ink, false, 1.5)
 	if wallet.is_valid():
 		_draw_wallet(wallet.call(), ta)
+	if selected < rows.size() and rows[selected].has("part"):
+		# Right side, under the wallet, clear of the rows however long the list.
+		var bw = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
+		var band = Rect2(size.x - bw + (1.0 - ta) * 1000.0, origin.y + 40.0, bw + 20.0, 104)
+		PartInfo.draw(self, band, rows[selected].part, 36.0)
 
 # What you can spend, top right: hold and bank, a chip and a count per ore.
 func _draw_wallet(w: Dictionary, ta: float) -> void:

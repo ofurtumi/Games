@@ -176,6 +176,8 @@ func _drill(delta: float) -> void:
 					if cw.distance_to(tip) > d.radius + 0.35 or (cw - pos).dot(dir) < 0.2:
 						continue
 					var res = t.damage(c, d.power * delta, d.tier)
+					if res < 0:
+						mining.drill_blocked(t.get_kind(c))
 					if res >= 0:
 						drilling = true
 						if randf() < 14.0 * delta:

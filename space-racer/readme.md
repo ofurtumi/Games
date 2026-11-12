@@ -34,6 +34,23 @@ Cargo only counts once you dock at the home station. Wreck the ship and the
 tow home costs the cargo. The camera pulls back the longer you keep moving;
 the mouse wheel sets the base zoom.
 
+### Mining: what, where, when
+
+| Material | Where | Drill | How it's collected |
+|---|---|---|---|
+| Rock | everywhere | Pilot drill (crust), Auger (mantle), Maw (deep) | straight into the hold as you drill |
+| Metal | orange veins in the crust | Pilot drill | drops chunks: fly close and the magnet pulls them in |
+| Crystal | cyan veins in the mantle | Auger | chunks, as metal |
+| Core | magenta veins in the deep layer, and the core itself | Maw (veins), Phase drill (the core) | chunks, as metal |
+
+Veins are the same colour as the material's chip in the HUD on every
+planet. Under the layer name the HUD lists what that layer holds and the
+drill it takes (in red, NEED ..., if yours can't cut it). Chunks only come
+in while the hold has room, and drift off after a minute. Drilling something
+too hard says which drill it needs, and a full hold says so; the first ore you
+break tells you how to pick it up. The hold only becomes yours (the bank)
+when you dock at an outpost or the home station.
+
 ### The system
 
 Four planets several hundred metres apart (Cinder, Rime, Moss, Magma), each
@@ -184,6 +201,8 @@ Prices are in materials and scale with size, tier and maker. Locked parts
 need their blueprint before they show up. Loading a preset or saved build
 you don't own the parts for is refused and tells you what's missing.
 Shops, the black market and traders show your hold and bank top right.
+Shop rows show the selected part's card on the right, the same one the
+garage shows: maker, what it does, its numbers and its placement rule.
 **Sell parts** (bottom of every shop) sells spares, the parts your current
 build isn't using, for half the shop price into the bank.
 Between races, **Pit shop** on the pause menu sells the stock parts (no
@@ -240,7 +259,7 @@ Master, Effects and Engines from 0 to 10 with left / right; it's saved.
 `ShipBuilder.gd` loadout to model · `Ship.gd` handling, drill, collisions,
 shield · `Terrain.gd` destructible block grid + planet palettes ·
 `Track.gd` control nodes to spline, carving, gates/pads/mines ·
-`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
+`Contracts.gd` outpost jobs · `Drones.gd` hostile drones · `PartInfo.gd` part card (garage and shops) · `RaceDrones.gd` track drone turrets · `Traders.gd` friendly traders · `TitleCard.gd` title logo · `Sfx.gd` synthesised sound · `ToolDemo.gd` garage test range ·
 `SubGridEditor.gd` component sub-grids · `Weapons.gd` runs tool programs
 (shared by both modes) · `Worlds.gd` the
 race/mining adapters it talks to · `Overlay.gd` death flash and banners ·

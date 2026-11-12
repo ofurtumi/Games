@@ -43,6 +43,12 @@ const PLANETS = [
 		"mech": "arc", "offers": [{"name": "Quench", "price": {"metal": 10, "core": 1}}, {"name": "Homing", "price": {"crystal": 8}}]},
 ]
 const LAYERS = [[0.28, "CRUST"], [0.55, "MANTLE"], [0.84, "DEEP"], [2.0, "CORE"]]
+# What each layer holds and the drill tier it takes (the HUD shows it under
+# the layer name): rock everywhere, metal veins in the crust, crystal in the
+# mantle, core ore in the deep layer, and solid core at the centre.
+const LAYER_FINDS = {"SURFACE": [["rock", "metal"], 1], "CRUST": [["rock", "metal"], 1], "MANTLE": [["rock", "crystal"], 2],
+	"DEEP": [["rock", "core"], 3], "CORE": [["core"], 4]}
+const DRILL_NAMES = ["", "Pilot drill", "Auger", "Maw", "Phase drill"]
 const MAT_COLORS = {"rock": Color(0.7, 0.6, 0.5), "metal": Color(1.0, 0.6, 0.25), "crystal": Color(0.5, 0.9, 1.0), "core": Color(0.95, 0.3, 0.9)}
 
 var main
@@ -483,12 +489,40 @@ func _on_cell_destroyed(p: Vector3, k: int, pl) -> void:
 	if mat == "rock":
 		if _cargo_used() < miner.stats.cargo:
 			cargo["rock"] = cargo.get("rock", 0) + 1
+		else:
+			hold_full()
 		return
+	if not main.save_data.get("ore_hint", false):
+		# The first ore you break: say how it's collected.
+		main.save_data.ore_hint = true
+		hint("ore", "%s  -  FLY CLOSE TO PICK IT UP" % mat.to_upper(), MAT_COLORS[mat], 0.0)
 	if not _pickup_mats.has(mat):
 		_pickup_mats[mat] = MeshKit.mat(MAT_COLORS[mat], 0.6)
 	for n in 1 + randi() % 2:
 		var node = MeshKit.part(self, _pickup_mesh, _pickup_mats[mat], Vector3(w.x, w.y, 0.8), Vector3.ZERO, Vector3.ONE, false)
 		pickups.append({"node": node, "pos": w, "vel": Vector2(randf_range(-3, 3), randf_range(-3, 3)), "mat": mat, "age": 0.0})
+
+# Banners for the two silent stops: a drill too weak for what it's on, and a
+# full hold. Each one at most every few seconds.
+var _hint_cd = {}
+
+func hint(key: String, text: String, color: Color, every: float = 4.0) -> void:
+	var now = Time.get_ticks_msec() * 0.001
+	if now < _hint_cd.get(key, 0.0):
+		return
+	_hint_cd[key] = now + every
+	main.notify(text, color, key)
+
+func drill_blocked(kind: int) -> void:
+	var t = TerrainScript
+	if kind == t.BEDROCK or kind == t.LAVA or kind == t.EMPTY:
+		return
+	var need = t.KINDS[kind].hardness
+	if need < DRILL_NAMES.size():
+		hint("drill", "TOO HARD  -  NEEDS %s" % DRILL_NAMES[need].to_upper(), Color(1.0, 0.45, 0.3))
+
+func hold_full() -> void:
+	hint("hold", "HOLD FULL  -  DOCK TO UNLOAD", Color(1.0, 0.45, 0.3))
 
 func _cargo_used() -> int:
 	var n = 0
@@ -505,6 +539,9 @@ func _update_pickups(delta: float) -> void:
 		var room = _cargo_used() < miner.stats.cargo
 		if room and d < miner.stats.magnet and pk.age > 0.3:
 			pk.vel = pk.vel.lerp(to.normalized() * (12.0 + 30.0 / maxf(d, 0.5)), minf(1.0, 6.0 * delta))
+		elif not room and d < miner.stats.magnet:
+			hold_full()
+			pk.vel *= 1.0 - 2.0 * delta
 		else:
 			pk.vel *= 1.0 - 2.0 * delta
 		pk.pos += pk.vel * delta
@@ -552,10 +589,24 @@ func _draw_hud() -> void:
 	Ui.text(hud, Vector2(28, 82), layer, 32, Color.WHITE, true)
 	if depth_m > 0.0:
 		Ui.text(hud, Vector2(210, 82), "%dm" % int(depth_m), 22, Color(0.95, 0.85, 0.4), true)
+	var hy = 104
+	if LAYER_FINDS.has(layer):
+		# What's down here and whether your drill can cut it.
+		var f = LAYER_FINDS[layer]
+		var ok = st.drill_tier >= f[1]
+		Ui.segment(hud, Rect2(-20, hy, 360, 30), panel)
+		var fx = 28.0
+		for m in f[0]:
+			draw_rect_on(Rect2(fx, hy + 9, 12, 12), MAT_COLORS[m])
+			Ui.text(hud, Vector2(fx + 18, hy + 21), m.to_upper(), 14, Color.WHITE, true)
+			fx += 30.0 + Ui.font(true).get_string_size(m.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		Ui.text(hud, Vector2(28, hy + 21), ("" if ok else "NEED ") + DRILL_NAMES[f[1]].to_upper(), 14,
+			Ui.DIM if ok else Color(1.0, 0.35, 0.3), true, HORIZONTAL_ALIGNMENT_RIGHT, 290)
+		hy += 38
 	if miner.heat > 0.0:
 		var a = 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.012)
-		Ui.segment(hud, Rect2(-20, 104, 200, 30), Color(0.8, 0.15, 0.05, a))
-		Ui.text(hud, Vector2(28, 126), "HEAT", 18, Color.WHITE, true)
+		Ui.segment(hud, Rect2(-20, hy, 200, 30), Color(0.8, 0.15, 0.05, a))
+		Ui.text(hud, Vector2(28, hy + 22), "HEAT", 18, Color.WHITE, true)
 	# Gauges.
 	var bx = vp.x - 360
 	var by = vp.y - 170
@@ -1005,7 +1056,7 @@ func open_shop(mech: String, title: String) -> void:
 		var pid = id
 		var pr = Parts.price(pid)
 		rows.append({"label": Parts.PARTS[pid].name,
-			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)],
+			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)], "part": pid,
 			"action": func(): _buy_part(pid, mech, title)})
 	var back = open_menu if docked else main.menu.hide_menu
 	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % _spares().values().reduce(func(a, b): return a + b, 0),
@@ -1036,7 +1087,7 @@ func open_sell(mech: String, title: String) -> void:
 	var spares = _spares()
 	for id in spares:
 		var pid = id
-		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(sell_price(pid))],
+		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(sell_price(pid))], "part": pid,
 			"action": func(): _sell_part(pid, mech, title)})
 	var back = func(): open_shop(mech, title)
 	rows.append({"label": "Back", "action": back})
