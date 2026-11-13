@@ -44,16 +44,30 @@ A dedicated server runs the real match (bots included); players' games only send
 what the server sends (`scripts/net/`). Players can drop in mid-round; bots step aside to make room
 and come back when people leave. Nothing runs while nobody is connected.
 
-**Play:** main menu → ONLINE → type the server address (e.g. `fight.example.com` or `192.168.1.20`,
-port 7350 by default), your name, CONNECT. Or `godot --path . -- --connect host[:port] --name TUMI`.
+**Play:** main menu → ONLINE → type the server address, your name, CONNECT. Or
+`godot --path . -- --connect ADDRESS --name TUMI`. Address forms:
+- `fight.example.com` (or `example.com/fighter`): secure `wss://` on 443, i.e. behind Caddy/HTTPS
+- `192.168.1.20`, `localhost`: direct on port 7350 (LAN, testing)
+- `host:7351`: direct on that port, no TLS
 
-**Host on a home server (Linux):**
-1. Download the Godot 4.7.2 Linux binary (the same version as the clients) and clone this repo.
-2. `GODOT=/path/to/godot tools/server/run_server.sh 7350 4` (port, bots fill up to 4 fighters).
-   `tools/server/fighter-server.service` runs it under systemd and restarts it.
-3. Make it reachable: forward **TCP 7350** on the router to the server. Alternatively, a
-   Cloudflare Tunnel or Tailscale avoids opening ports (Cloudflare also gives you `wss://` with a
-   certificate, which browser builds need).
+**Host on a Linux server behind Caddy (Ubuntu):** from your own machine run
+
+    tools/server/deploy.sh <ssh-host>
+
+It copies the game over SSH to `~/fighter-server`, downloads the matching headless Godot
+(x86_64 or arm64) once, imports assets and installs/restarts the `fighter-server` systemd service
+listening on `127.0.0.1:7350` (asks for sudo). Then add a site to `/etc/caddy/Caddyfile`, point
+DNS for the name at the server like your other sites, and `sudo systemctl reload caddy`:
+
+    fight.example.com {
+    	reverse_proxy 127.0.0.1:7350
+    }
+
+Caddy handles the certificate and passes WebSockets through as-is. Re-run `deploy.sh` after every game
+update. Logs: `ssh <ssh-host> journalctl -u fighter-server -f`. Without a proxy, use
+`deploy.sh <ssh-host> --public` and forward TCP 7350 on the router; players then type `host:7350`.
+`PORT`, `FILL` (fighters incl. bots, default 4) and `DEST` env vars adjust the deploy.
+To run a server by hand: `GODOT=/path/to/godot tools/server/run_server.sh 7350 4`.
 
 Clients and server must have the same items and maps (the server refuses mismatched versions).
 `--server --map NAME` picks the first map; maps rotate after each match. Test locally with

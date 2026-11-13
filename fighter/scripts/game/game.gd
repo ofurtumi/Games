@@ -79,7 +79,7 @@ func boot(main: Node) -> void:
 		scenario_done()
 	elif args.has("server"):
 		Net.fill = clampi(int(args.get("fill", 4)), 2, 8)
-		if Net.host(int(args.get("port", Net.PORT))) != OK:
+		if Net.host(int(args.get("port", Net.PORT)), String(args.get("bind", "*"))) != OK:
 			get_tree().quit(1)
 			return
 		participants.clear()

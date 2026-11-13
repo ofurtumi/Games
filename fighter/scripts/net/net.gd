@@ -6,8 +6,8 @@ extends Node
 ## server sends back: ~30 snapshots/s with fighter/item state, destroyed tiles, and the
 ## effects/sounds that happened (see ArenaNet). WebSockets, so browser builds can join too.
 ##
-##   godot --headless --path . -- --server [--port 7350] [--fill 4] [--map downtown]
-##   godot --path . -- --connect host[:port] [--name TUMI]
+##   godot --headless --path . -- --server [--port 7350] [--bind 127.0.0.1] [--fill 4] [--map downtown]
+##   godot --path . -- --connect address [--name TUMI]   (see server_url for address forms)
 
 enum { OFFLINE, SERVER, CLIENT }
 
@@ -75,9 +75,10 @@ func item_def(i: int) -> WeaponDef:
 
 # ---------------------------------------------------------------- server
 
-func host(port := PORT) -> Error:
+## `bind` "127.0.0.1" when a reverse proxy (Caddy) sits in front and does TLS.
+func host(port := PORT, bind := "*") -> Error:
 	peer = WebSocketMultiplayerPeer.new()
-	var err := peer.create_server(port)
+	var err := peer.create_server(port, bind)
 	if err != OK:
 		push_error("[net] could not listen on port %d (%s)" % [port, error_string(err)])
 		return err
@@ -85,7 +86,7 @@ func host(port := PORT) -> Error:
 	mode = SERVER
 	item_ids = Items.defs.keys()
 	item_ids.sort()
-	print("[net] server v%d listening on port %d, filling to %d fighters" % [VERSION, port, fill])
+	print("[net] server v%d listening on %s:%d, filling to %d fighters" % [VERSION, bind, port, fill])
 	return OK
 
 
@@ -173,11 +174,7 @@ func join(addr: String, nm: String, n_local := 1) -> void:
 	leave()
 	address = addr
 	player_name = nm
-	var url := addr.strip_edges()
-	if not url.begins_with("ws://") and not url.begins_with("wss://"):
-		url = "ws://" + url
-	if url.count(":") < 2: # no port given
-		url += ":%d" % PORT
+	var url := server_url(addr)
 	peer = WebSocketMultiplayerPeer.new()
 	var err := peer.create_client(url)
 	if err != OK:
@@ -199,8 +196,29 @@ func join(addr: String, nm: String, n_local := 1) -> void:
 			steps.append([0.6, {"move": Vector2i(-1, 0)}])
 			steps.append([0.2, {"throw": true}])
 		local_sources[0] = ScriptedSource.new(steps)
-	status = "CONNECTING TO %s ..." % url.trim_prefix("ws://")
+	status = "CONNECTING TO %s ..." % addr.strip_edges().to_upper()
 	print("[net] connecting to ", url)
+
+
+## What players type -> WebSocket URL:
+##   fight.example.com        -> wss://fight.example.com      (behind Caddy/HTTPS, port 443)
+##   example.com/fighter      -> wss://example.com/fighter
+##   192.168.1.20, localhost  -> ws://192.168.1.20:7350       (LAN / direct, default port)
+##   host:7351                -> ws://host:7351                (explicit port = direct, no TLS)
+##   ws://... or wss://...    -> used as is
+static func server_url(addr: String) -> String:
+	var s := addr.strip_edges()
+	if s.contains("://"):
+		return s
+	var slash := s.find("/")
+	var host_part := s if slash < 0 else s.left(slash)
+	var path := "" if slash < 0 else s.substr(slash)
+	if host_part.contains(":"):
+		return "ws://" + s
+	var ip := RegEx.create_from_string("^\\d+\\.\\d+\\.\\d+\\.\\d+$").search(host_part) != null
+	if ip or host_part == "localhost" or not host_part.contains(".") or host_part.ends_with(".local"):
+		return "ws://%s:%d%s" % [host_part, PORT, path]
+	return "wss://" + s
 
 
 func leave() -> void:
