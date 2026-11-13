@@ -1,0 +1,12 @@
+# Add to /etc/caddy/Caddyfile (use your own name), then: sudo systemctl reload caddy
+# Browsers get the game from /var/www/fighter; WebSocket connections (browser and desktop
+# clients alike) go to the game server. Players open https://fight.example.com, or type
+# fight.example.com in ONLINE -> SERVER in a desktop build.
+fight.example.com {
+	@ws header Upgrade websocket
+	reverse_proxy @ws 127.0.0.1:7350
+
+	root * /var/www/fighter
+	file_server
+	encode gzip
+}

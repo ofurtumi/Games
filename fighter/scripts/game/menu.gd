@@ -47,7 +47,10 @@ func _ready() -> void:
 
 func _items() -> Array:
 	if page == "main":
-		return ["SINGLE PLAYER", "LOCAL MULTIPLAYER", "ONLINE", "QUIT"]
+		var main := ["SINGLE PLAYER", "LOCAL MULTIPLAYER", "ONLINE"]
+		if not OS.has_feature("web"): # browsers can't be quit from inside the page
+			main.append("QUIT")
+		return main
 	if page == "online":
 		var cur := "_" if int(t * 2.0) % 2 == 0 else " "
 		return ["SERVER: %s%s" % [addr, cur if sel == 0 else ""], "NAME: %s%s" % [pname, cur if sel == 1 else ""], "CONNECT"]
@@ -56,6 +59,10 @@ func _items() -> Array:
 
 
 func _load_online() -> void:
+	if OS.has_feature("web"): # default to the server that served this page
+		var host = JavaScriptBridge.eval("location.host", true)
+		if host is String and host != "":
+			addr = host
 	var cf := ConfigFile.new()
 	if cf.load(CFG) == OK:
 		addr = cf.get_value("online", "address", addr)

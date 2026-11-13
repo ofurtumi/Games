@@ -33,14 +33,10 @@ echo
 echo "==> done. Logs: ssh $HOST journalctl -u fighter-server -f"
 if [ "$BIND" = "127.0.0.1" ]; then
 	cat <<CADDY
-If Caddy isn't set up for it yet, add this to /etc/caddy/Caddyfile on the server
-(with a DNS record for the name pointing at your home IP, like your other sites),
-then: sudo systemctl reload caddy
+If Caddy isn't set up for it yet, add the site from tools/server/Caddyfile.example to
+/etc/caddy/Caddyfile on the server (with a DNS record for the name pointing at your home IP,
+like your other sites), then: sudo systemctl reload caddy
 
-fight.example.com {
-	reverse_proxy 127.0.0.1:$PORT
-}
-
-Players then type fight.example.com in ONLINE -> SERVER.
+Friends then open https://<that name> in a browser, or type it in ONLINE -> SERVER.
 CADDY
 fi

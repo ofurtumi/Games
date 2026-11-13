@@ -55,18 +55,27 @@ and come back when people leave. Nothing runs while nobody is connected.
     tools/server/deploy.sh <ssh-host>
 
 It copies the game over SSH to `~/fighter-server`, downloads the matching headless Godot
-(x86_64 or arm64) once, imports assets and installs/restarts the `fighter-server` systemd service
-listening on `127.0.0.1:7350` (asks for sudo). Then add a site to `/etc/caddy/Caddyfile`, point
-DNS for the name at the server like your other sites, and `sudo systemctl reload caddy`:
+(x86_64 or arm64) once, imports assets, exports the **browser build** into `/var/www/fighter`
+(fetches the export templates once, ~1.3 GB) and installs/restarts the `fighter-server` systemd
+service listening on `127.0.0.1:7350` (asks for sudo). Then add the site from
+`tools/server/Caddyfile.example` to `/etc/caddy/Caddyfile`, point DNS for the name at the server
+like your other sites, and `sudo systemctl reload caddy`:
 
     fight.example.com {
-    	reverse_proxy 127.0.0.1:7350
+    	@ws header Upgrade websocket
+    	reverse_proxy @ws 127.0.0.1:7350
+    	root * /var/www/fighter
+    	file_server
+    	encode gzip
     }
 
-Caddy handles the certificate and passes WebSockets through as-is. Re-run `deploy.sh` after every game
+Friends open `https://fight.example.com` in a browser and pick ONLINE (the server field is
+already filled in), or type the name in a desktop build. Caddy handles the certificate and passes WebSockets through as-is. Re-run `deploy.sh` after every game
 update. Logs: `ssh <ssh-host> journalctl -u fighter-server -f`. Without a proxy, use
 `deploy.sh <ssh-host> --public` and forward TCP 7350 on the router; players then type `host:7350`.
-`PORT`, `FILL` (fighters incl. bots, default 4) and `DEST` env vars adjust the deploy.
+`PORT`, `FILL` (fighters incl. bots, default 4), `DEST`, `WEB=0` (skip the browser build) and
+`WEB_ROOT` env vars adjust the deploy. Build the browser version locally with
+`godot --headless --path . --export-release Web build/web/index.html` (needs the export templates).
 Or on the server itself: `git clone -b fighter https://github.com/ofurtumi/games ~/games`, then
 `bash ~/games/fighter/tools/server/setup_remote.sh` (again after each `git pull`). To run a server by hand: `GODOT=/path/to/godot tools/server/run_server.sh 7350 4`.
 
