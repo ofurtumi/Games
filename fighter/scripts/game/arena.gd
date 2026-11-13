@@ -43,6 +43,8 @@ var net_mode := Net.OFFLINE # OFFLINE (couch), SERVER (authoritative, headless) 
 var anet: ArenaNet
 var map_key := "" # map file name, so clients can load the same map
 var ev_mute := 0 # server: >0 while running code whose effects clients recreate themselves
+var ev_owner := -1 # server: pid of the fighter being ticked (tags its events)
+var fx_mute := 0 # client: >0 while simulating our predicted fighter
 var next_net_id := 1
 var spawn_points: Array = []
 
@@ -242,7 +244,9 @@ func _physics_process(dt: float) -> void:
 			f.visible = false
 			continue
 		var frame: InputFrame = f.source.sample(f, self) if f.alive() and round_over_t < 0.0 and intro_t <= 0.0 else InputFrame.new()
+		ev_owner = f.player_index
 		f.tick(dt, frame)
+		ev_owner = -1
 		if f.alive() and f.global_position.y > kill_y:
 			f.die(f.last_hitter, "fall")
 
@@ -478,7 +482,7 @@ func _exit_tree_net() -> void:
 ## Server: remember something clients must see/hear (they recreate it from the snapshot).
 func record(kind: String, args: Array) -> void:
 	if net_mode == Net.SERVER and ev_mute == 0:
-		anet.events.append([kind, args])
+		anet.events.append([kind, args, ev_owner])
 
 
 func record_sfx(sound: String, pos: Variant, vol_db: float, pitch_var: float) -> void:
@@ -537,5 +541,7 @@ func client_new_round(key: String, num: int) -> void:
 	for f in fighters:
 		f.queue_free()
 	fighters.clear()
+	anet.history.clear()
+	anet.pending_me = PackedFloat32Array()
 	start_round()
 	round_num = num

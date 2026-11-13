@@ -280,7 +280,8 @@ func _finish() -> void:
 		print("[net-client] round=%d fighters=%d pickups=%d props=%d rx=%.1fKB (%.1f KB/s) me=%s hp=%d scores=%s" % [c.round_num,
 			c.fighters.size(), c.pickups().size(), c.props().size(), c.anet.rx_bytes / 1024.0,
 			c.anet.rx_bytes / 1024.0 / maxf(game_time, 1.0), me.global_position if me else "-", me.hp if me else -1, scores])
-		print("[net-client] names=%s" % [c.fighters.map(func(f): return f.display_name)])
+		print("[net-client] names=%s corrections=%d unconfirmed=%d" % [c.fighters.map(func(f): return f.display_name),
+			c.anet.corrections, c.anet.history.size()])
 	elif current is Arena:
 		var a: Arena = current
 		print("[test] rounds=%d time=%.1f scores=%s pickups=%d tiles=%d" % [a.round_num, game_time, scores, a.pickups().size(), a.terrain.mats.size()])

@@ -26,6 +26,9 @@ var item_ids: Array = [] # weapon id table, server order (index <-> id on the wi
 var status := "" # client: shown in the menu
 var address := ""
 var player_name := "PLAYER"
+var fake_lag_ms := 0 # client testing: delay every packet each way (`--fake-lag 60`)
+var _lag_out: Array = [] # [due msec, packet]
+var _lag_in: Array = [] # [due msec, Callable]
 
 
 func _ready() -> void:
@@ -34,6 +37,14 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_failed)
 	multiplayer.server_disconnected.connect(_on_server_gone)
+
+
+func _process(_dt: float) -> void:
+	var now := Time.get_ticks_msec()
+	while not _lag_out.is_empty() and _lag_out[0][0] <= now:
+		_send_now(_lag_out.pop_front()[1])
+	while not _lag_in.is_empty() and _lag_in[0][0] <= now:
+		(_lag_in.pop_front()[1] as Callable).call()
 
 
 func is_server() -> bool:
@@ -134,14 +145,16 @@ func input(packet: PackedInt32Array) -> void:
 	var a := Game.current as Arena
 	if a == null or slots <= 0:
 		return
+	# [slots, seq, bits * slots, seq, bits * slots, ...]
 	var i := 1
-	while i + slots <= packet.size():
+	while i + slots < packet.size():
+		var seq := packet[i]
 		for s in slots:
 			if s < pids.size():
 				var src := a.source_of(pids[s])
 				if src is NetSource:
-					(src as NetSource).push(packet[i + s])
-		i += slots
+					(src as NetSource).push(seq, packet[i + 1 + s])
+		i += slots + 1
 
 
 func broadcast_snapshot(data: PackedByteArray) -> void:
@@ -176,6 +189,7 @@ func join(addr: String, nm: String, n_local := 1) -> void:
 	local_sources = []
 	for i in n_local:
 		local_sources.append(KeyboardSource.new(i))
+	fake_lag_ms = int(Game.args.get("fake-lag", 0))
 	if Game.args.has("test-input"): # headless loopback tests: wander, jump and punch
 		var steps := []
 		for k in 40:
@@ -199,6 +213,13 @@ func leave() -> void:
 
 
 func send_input(packet: PackedInt32Array) -> void:
+	if fake_lag_ms > 0:
+		_lag_out.append([Time.get_ticks_msec() + fake_lag_ms, packet])
+	else:
+		_send_now(packet)
+
+
+func _send_now(packet: PackedInt32Array) -> void:
 	if mode == CLIENT and peer and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		input.rpc_id(1, packet)
 
@@ -237,6 +258,13 @@ func welcome(pids: Array, ids: Array, state: Dictionary) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func snap(data: PackedByteArray) -> void:
+	if fake_lag_ms > 0:
+		_lag_in.append([Time.get_ticks_msec() + fake_lag_ms, _snap_now.bind(data)])
+	else:
+		_snap_now(data)
+
+
+func _snap_now(data: PackedByteArray) -> void:
 	var a := Game.current as Arena
 	if a and a.anet and mode == CLIENT:
 		a.anet.receive(data)

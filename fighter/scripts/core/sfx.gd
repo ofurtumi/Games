@@ -50,6 +50,8 @@ var _next_ui := 0
 var _music: AudioStreamPlayer
 var _listener: AudioListener2D
 var recorder := Callable() # online server: sounds are sent to clients instead of played
+var muted_depth := 0 # >0: only sounds in `allow` play (online prediction replays)
+var allow: Array = []
 var _sfx_bus := "Master"
 var _music_bus := "Master"
 
@@ -105,6 +107,8 @@ func play(sound: String, pos: Variant = null, vol_db := 0.0, pitch_var := 0.08) 
 		return
 	if recorder.is_valid():
 		recorder.call(sound, pos, vol_db, pitch_var)
+		return
+	if muted_depth > 0 and not (sound in allow):
 		return
 	var stream := _stream(sound)
 	if stream == null or not _rate_ok(sound):

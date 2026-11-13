@@ -27,6 +27,8 @@ const AIM_MIN_SPD := 0.9 # rad/s when you start sweeping (taps = fine adjustment
 const AIM_MAX_SPD := 4.2
 const AIM_ACCEL := 11.0
 const AIM_MEMORY := 0.6 # re-aiming within this many seconds keeps the old angle
+## Sounds a predicted fighter plays itself (the server's copies of these are skipped).
+const LOCAL_SFX := ["jump", "land", "land_heavy", "footstep", "dive", "ledge_grab", "climb", "swing", "roll"]
 
 ## Unarmed moveset. a0..a1 = active hit window (seconds into the move).
 const MOVES := {
@@ -101,6 +103,8 @@ var vault_t := 0.0
 var arm_kick := 0.0
 var hitstop_t := 0.0 # brief freeze when a melee hit lands (both fighters)
 var puppet := false # online client: the server simulates this fighter, we only draw it
+var predicted := false # online client: OUR fighter, simulated locally for instant response
+	# (movement only; hits, shots, throws and pickups stay on the server)
 var net_floor := false
 var left := false # online: player disconnected / bot made room
 var _prev_vy := 0.0
@@ -438,6 +442,8 @@ func _hit_rect(reach: float) -> Rect2:
 
 
 func _do_hit(m: Dictionary) -> void:
+	if predicted:
+		return
 	var rect := _hit_rect(m["reach"])
 	var kb: Vector2 = m["kb"]
 	kb.x *= facing
@@ -474,7 +480,7 @@ func _dive(dt: float) -> void:
 	_gravity(dt)
 	var r := hitbox().grow(2.0)
 	for f in arena.fighters:
-		if f != self and f.alive() and not attack_hit.has(f) and r.intersects(f.hitbox()):
+		if not predicted and f != self and f.alive() and not attack_hit.has(f) and r.intersects(f.hitbox()):
 			attack_hit[f] = true
 			f.apply_hit({"dmg": 6.0, "kb": Vector2(facing * 170.0, -110.0), "src": self, "kind": "tackle",
 				"knockdown": true, "from_x": global_position.x})
@@ -501,7 +507,7 @@ func _slide(dt: float) -> void:
 	velocity.x = move_toward(velocity.x, 0.0, 330.0 * dt)
 	var feet := Rect2(global_position.x - 4.0 + facing * 3.0, global_position.y - 7.0, 8.0, 7.0)
 	for f in arena.fighters:
-		if f != self and f.alive() and not attack_hit.has(f) and feet.intersects(f.hitbox()) and f.state != S.SLIDE:
+		if not predicted and f != self and f.alive() and not attack_hit.has(f) and feet.intersects(f.hitbox()) and f.state != S.SLIDE:
 			attack_hit[f] = true
 			f.apply_hit({"dmg": 5.0, "kb": Vector2(facing * 60.0, -150.0), "src": self, "kind": "tackle",
 				"knockdown": true, "from_x": global_position.x})
@@ -532,7 +538,7 @@ func _stomp(dt: float) -> void:
 	velocity.x = move_toward(velocity.x, 0.0, 300.0 * dt)
 	var feet := Rect2(global_position.x - 4.0, global_position.y - 4.0, 8.0, 10.0)
 	for f in arena.fighters:
-		if f != self and f.alive() and feet.intersects(f.hitbox()):
+		if not predicted and f != self and f.alive() and feet.intersects(f.hitbox()):
 			f.apply_hit({"dmg": 22.0, "kb": Vector2(signf(f.global_position.x - global_position.x) * 60.0, -60.0),
 				"src": self, "kind": "stomp", "knockdown": true, "from_x": global_position.x})
 			velocity.y = -200.0
@@ -544,7 +550,8 @@ func _stomp(dt: float) -> void:
 
 func _land_stomp() -> void:
 	Sfx.play("land_heavy", global_position)
-	arena.terrain.damage_rect(Rect2(global_position.x - 5.0, global_position.y, 10.0, 4.0), 14.0)
+	if not predicted:
+		arena.terrain.damage_rect(Rect2(global_position.x - 5.0, global_position.y, 10.0, 4.0), 14.0)
 	arena.fx.burst(global_position, Color(0.7, 0.65, 0.6), 8, 70.0, 0.3, 200.0)
 	arena.shake(1.5)
 	_set_state(S.STUN, 0.15)
@@ -741,6 +748,8 @@ func _update_shape() -> void:
 # ---------------------------------------------------------------- guns
 
 func _gun(dt: float) -> void:
+	if predicted:
+		return
 	var d := weapon.def
 	var held := inp.attack
 	var pressed := _ap()
@@ -765,6 +774,8 @@ func _gun(dt: float) -> void:
 
 
 func _shoot(power: float) -> void:
+	if predicted:
+		return
 	var d := weapon.def
 	var dir := aim_dir
 	var spread := d.spread * (1.0 if aiming else 1.4)
@@ -790,6 +801,8 @@ func _shoot(power: float) -> void:
 # ---------------------------------------------------------------- items
 
 func _throw() -> void:
+	if predicted:
+		return
 	var dir := Vector2(facing, -0.35).normalized() if inp.move.y == 0 else _dir8()
 	if aiming:
 		dir = aim_dir
@@ -810,7 +823,7 @@ func _throw() -> void:
 
 
 func _drop_weapon(vel: Vector2) -> void:
-	if weapon == null:
+	if weapon == null or predicted:
 		return
 	var w := weapon
 	weapon = null
@@ -830,6 +843,8 @@ func _pickups_touching() -> Array:
 
 
 func _auto_pickup() -> void:
+	if predicted:
+		return
 	for p in _pickups_touching():
 		if p.def.kind == "throwable":
 			if throwable == null or throwable == p.def:
@@ -839,6 +854,8 @@ func _auto_pickup() -> void:
 
 
 func _try_pickup() -> void:
+	if predicted:
+		return
 	var best: Node = null
 	for p in _pickups_touching():
 		if best == null or p.global_position.distance_to(center()) < best.global_position.distance_to(center()):
@@ -1020,6 +1037,36 @@ func net_apply(r: PackedFloat32Array) -> void:
 	var a := aim_ang if aiming else 0.0
 	aim_dir = Vector2(cos(a) * facing, sin(a))
 	collision_layer = 0 if state == S.DEAD else Layers.FIGHTERS
+	if r.size() > 31:
+		drop_t = r[25]
+		hitstop_t = r[26]
+		ledge_cd = r[27]
+		coyote_t = r[28]
+		buffer_t = r[29]
+		set_collision_mask_value(Layers.PLATFORM_BIT, r[30] > 0.5)
+		combo = int(r[31])
+		combo_t = r[32]
+
+
+## Online client, our predicted fighter: take only what the server decides (health, items).
+func net_apply_status(r: PackedFloat32Array) -> void:
+	hp = r[10]
+	max_hp = r[22]
+	gibbed = int(r[9]) & 16 != 0
+	left = int(r[9]) & 64 != 0
+	var wd := Net.item_def(int(r[11]))
+	if wd == null:
+		weapon = null
+	elif weapon == null or weapon.def != wd:
+		weapon = WeaponState.new(wd)
+	if weapon:
+		weapon.ammo = int(r[12])
+		weapon.charge = r[13]
+		weapon.spin = r[14]
+	throwable = Net.item_def(int(r[15]))
+	throw_count = int(r[16])
+	hurt_flash = maxf(hurt_flash, r[18])
+	invuln_t = r[19]
 
 
 ## Online client: per-tick visuals for a puppet (no simulation).

@@ -20,7 +20,7 @@ func _rec(kind: String, args: Array) -> bool:
 	if arena and arena.net_mode == Net.SERVER:
 		arena.record(kind, args)
 		return true
-	return false
+	return arena != null and arena.fx_mute > 0 # client: predicted fighter's effects come from the server
 
 
 func clear() -> void:
