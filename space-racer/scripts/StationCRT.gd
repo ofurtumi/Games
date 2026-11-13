@@ -4,6 +4,7 @@ extends RefCounted
 # green CRT with the sections down the left and a vector plan of the station
 # on the right. The highlighted section's room lights up on the plan, with a
 # leader line from the list. Rows carry `place` (a room below) and `desc`.
+# It sits between the menu's tab strip and its action bar.
 # crt: {name, line, credits}
 
 const GREEN = Color(0.35, 1.0, 0.45)
@@ -39,8 +40,8 @@ static func font() -> Font:
 
 static func screen(size: Vector2) -> Rect2:
 	var w = minf(size.x - 80.0, 1400.0)
-	var h = minf(size.y - 80.0, 780.0)
-	return Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h)
+	var h = minf(size.y - 56.0 - 80.0, 780.0)
+	return Rect2((size.x - w) * 0.5, 56.0, w, h)
 
 static func row_rect(size: Vector2, i: int) -> Rect2:
 	var s = screen(size)
@@ -49,7 +50,7 @@ static func row_rect(size: Vector2, i: int) -> Rect2:
 static func _plan_rect(size: Vector2) -> Rect2:
 	var s = screen(size)
 	var x0 = s.position.x + 480
-	return Rect2(x0, s.position.y + 100, s.end.x - x0 - 40, s.size.y - 220)
+	return Rect2(x0, s.position.y + 100, s.end.x - x0 - 40, s.size.y - 190)
 
 static func _to(pr: Rect2, r: Rect2) -> Rect2:
 	var k = Vector2(pr.size.x / 100.0, pr.size.y / 64.0)
@@ -114,9 +115,8 @@ static func draw(c: CanvasItem, size: Vector2, crt: Dictionary, rows: Array, sel
 		c.draw_circle(tip, 4, GREEN)
 	# What the highlighted section is.
 	var desc = rows[selected].get("desc", "") if selected >= 0 and selected < rows.size() else ""
-	c.draw_line(Vector2(s.position.x + 30, s.end.y - 92), Vector2(s.end.x - 30, s.end.y - 92), DIM, 1.0)
-	c.draw_string(f, Vector2(s.position.x + 36, s.end.y - 58), desc, HORIZONTAL_ALIGNMENT_LEFT, s.size.x - 72, 17, GREEN)
-	c.draw_string(f, Vector2(s.position.x + 36, s.end.y - 26), "UP / DOWN  SECTION     ENTER  OPEN     ESC  LAUNCH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, DIM)
+	c.draw_line(Vector2(s.position.x + 30, s.end.y - 66), Vector2(s.end.x - 30, s.end.y - 66), DIM, 1.0)
+	c.draw_string(f, Vector2(s.position.x + 36, s.end.y - 30), desc, HORIZONTAL_ALIGNMENT_LEFT, s.size.x - 72, 17, GREEN)
 	# Scanlines and a dark rim.
 	var y = s.position.y
 	while y < s.end.y:

@@ -127,19 +127,6 @@ func _draw():
 			Ui.segment(self, Rect2(at.x - 46, at.y + 58, 92, 24), Color(0.85, 0.08, 0.06, 0.9))
 			Ui.text(self, Vector2(at.x - 46, at.y + 76), "LOCK", 16, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, 92)
 
-	# Banners (held back while the countdown is up).
-	var ny = vp.y * 0.24
-	for msg in ([] if main.countdown > 0.0 else main.messages):
-		var age = 2.2 - msg.t
-		var slide = Ui.ease_out(age / 0.25)
-		var a = clampf(msg.t / 0.3, 0.0, 1.0)
-		var w = 520.0
-		var r = Rect2((vp.x - w) * 0.5 + (1.0 - slide) * -300.0, ny, w, 42)
-		Ui.segment(self, r, Color(0.03, 0.035, 0.045, 0.8 * a))
-		Ui.segment(self, Rect2(r.position.x, r.end.y - 3, w, 3), Color(msg.color, a), 0.0)
-		Ui.text(self, Vector2(r.position.x, r.position.y + 29), msg.text, 22, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, w)
-		ny += 50
-
 # Track outline, gates (next one lit), the player and anyone else racing.
 func _minimap(r: Rect2) -> void:
 	var pts = main.track.pts

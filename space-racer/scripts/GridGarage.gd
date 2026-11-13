@@ -2,15 +2,19 @@ extends Control
 
 # Grid ship builder. Left: parts. Top: what the hovered/selected part does,
 # with a little demo of it working. Middle: the frame grid, with the cells
-# the selected part can go on marked green. Under the grid: rotation and the
-# reason a placement doesn't work. The ship turns on the showroom floor to the
-# right and rebuilds on every change.
+# the selected part can go on marked green, and under it the reason a
+# placement doesn't work. The ship turns on the showroom floor to the right
+# and rebuilds on every change. It's a tab of its hub (Main.hub): the tab
+# strip runs along the top.
 #
-# Click a part, click the grid to place it (R or the arrows rotate). Click a
-# placed part with nothing selected to pick it up, right-click to scrap it,
-# mouse wheel over it to repaint it. Q/E change frame. 1-5 presets, 0 random.
-# Saved builds (right): click an empty slot to save into it, click a full one
-# to load it, right-click a full one to overwrite it, Delete clears it.
+# Everything is select, then act: click a part in the list, a part on the
+# ship, a broken slot or a saved build, and the action bar along the bottom
+# (Bar.gd) lists what you can do with it: click a button, press its number,
+# or Enter for the first. With a part from the list selected, clicking a
+# free cell places it. Shortcuts: R rotates, right-click scraps a placed
+# part, mouse wheel repaints it, a double click wires it, Delete scraps or
+# clears, Q/E change frame, Esc drops the selection and then leaves.
+# Shift+1-5 load the preset builds, Shift+0 a random one.
 
 const Parts = preload("res://scripts/Parts.gd")
 const Ui = preload("res://scripts/Ui.gd")
@@ -19,13 +23,15 @@ const PartDemo = preload("res://scripts/PartDemo.gd")
 const SubGridEditorScript = preload("res://scripts/SubGridEditor.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
 
-const BAND = Rect2(390, 12, 780, 104)
+const BAND = Rect2(390, 52, 780, 104)
+const GRID = Rect2(410, 210, 540, 460)   # the frame grid sits in the middle of this
 const PartInfo = preload("res://scripts/PartInfo.gd")
+const Bar = preload("res://scripts/Bar.gd")
 const MATS = preload("res://scripts/GtMenu.gd").MATS
 
 var main
 var lo = {}
-var selected = ""
+var selected = ""       # a part from the list, ready to place
 var rot = 0
 var hover = Vector2i(-99, -99)
 var t = 0.0
@@ -34,7 +40,12 @@ var hover_list = -1
 var hover_slot = -1
 var name_edit: LineEdit
 var section = "power"
-var inspected = -1      # placed part being looked at
+var inspected = -1      # the placed part selected
+var sel_slot = -1       # the saved build selected
+var sel_broken = null   # the broken slot selected (Vector2i)
+var carry = {}          # a placed part picked up to move: it goes back if you let go
+var bar = Bar.new()
+var hover_tab = ""
 var editor              # the open component's sub-grid
 var demo: SubViewport
 var demo_rect: TextureRect
@@ -97,13 +108,17 @@ func _style_name() -> void:
 func open(m) -> void:
 	main = m
 	lo = main.loadout.duplicate(true)
-	selected = ""
-	inspected = -1
+	carry = {}
+	_deselect()
 	t = 0.0
 	visible = true
 	name_edit.text = lo.name
 
+# Shut the garage (Main's hub decides where you go next).
 func close() -> void:
+	if editor.visible:
+		editor.close()
+	_put_back()
 	visible = false
 	demo.show_part("")
 	main.garage_closed()
@@ -118,6 +133,7 @@ func _process(delta):
 	if not visible:
 		return
 	t += delta
+	_fill_bar()
 	var key = ""
 	if selected != "" and not editor.visible and _part_at(hover) < 0:
 		var g = _ghost()
@@ -140,12 +156,12 @@ func _process(delta):
 
 func _cell_px() -> float:
 	var sz = Parts.frame_size(lo.frame)
-	return floorf(minf(48.0, 500.0 / maxf(sz.x, sz.y)))
+	return floorf(minf(48.0, GRID.size.y / maxf(sz.x, sz.y)))
 
 func _grid_origin() -> Vector2:
 	var sz = Parts.frame_size(lo.frame)
 	var cp = _cell_px()
-	return Vector2(410.0 + (540.0 - sz.x * cp) * 0.5, 190.0 + (500.0 - sz.y * cp) * 0.5)
+	return GRID.position + (GRID.size - Vector2(sz) * cp) * 0.5
 
 func _cell_at(px: Vector2) -> Vector2i:
 	var o = _grid_origin()
@@ -161,31 +177,190 @@ func _list() -> Array:
 	return _ids.filter(func(id): return Parts.SECTION_OF.get(Parts.PARTS[id].kind, "utility") == section)
 
 func _tab_rect(i: int) -> Rect2:
-	return Rect2(22 + i * 62, 84, 58, 26)
+	return Rect2(22 + i * 62, 58, 58, 26)
 
 func _list_rect(i: int) -> Rect2:
 	var appear = Ui.ease_out((t - i * 0.03) / 0.25)
-	return Rect2(30 - (1.0 - appear) * 400.0, 122 + i * 30, 300, 26)
-
-# Top right: the way out (Esc does the same).
-func _done_rect() -> Rect2:
-	return Rect2(size.x - 220, 14, 200, 44)
+	return Rect2(30 - (1.0 - appear) * 400.0, 96 + i * 30, 300, 26)
 
 func _frame_rect() -> Rect2:
-	return Rect2(430, 132, 500, 38)
+	return Rect2(430, 166, 500, 34)
 
-func _rot_rects() -> Array:
-	return [Rect2(420, 716, 44, 40), Rect2(530, 716, 44, 40)]
+# Which way a part from the list will face, then the one line that says
+# what's wrong.
+func _facing_rect() -> Rect2:
+	return Rect2(430, 684, 48, 40)
 
 func _status_rect() -> Rect2:
-	return Rect2(600, 716, 360, 40)
+	return Rect2(492, 684, 468, 40)
 
 func _paint_rects() -> Array:
-	var y = 772.0
+	var y = 738.0
 	return [Rect2(430, y, 120, 34), Rect2(565, y, 120, 34), Rect2(700, y, 120, 34), Rect2(835, y, 120, 34)]
 
 func _slot_rect(i: int) -> Rect2:
-	return Rect2(size.x - 400, 668 + i * 36, 360, 32)
+	return Rect2(size.x - 400, 632 + i * 32, 360, 28)
+
+# ---------------------------------------------------------------- selection
+
+# One thing is selected at a time: a part from the list (to place), a placed
+# part, a broken slot or a saved build.
+func _deselect() -> void:
+	_put_back()
+	selected = ""
+	inspected = -1
+	sel_slot = -1
+	sel_broken = null
+
+# Let go of a part picked up to move: back where it was.
+func _put_back() -> void:
+	if carry.is_empty():
+		return
+	lo.parts.append(carry)
+	carry = {}
+	_commit()
+
+func pick_part(id: String) -> void:
+	_deselect()
+	selected = id
+	section = Parts.SECTION_OF.get(Parts.PARTS[id].kind, "utility")
+
+func pick_placed(idx: int) -> void:
+	_deselect()
+	inspected = idx if idx >= 0 and idx < lo.parts.size() else -1
+
+func _slots() -> Array:
+	var slots = main.save_data.get("slots", [])
+	slots.resize(Save.SLOTS)
+	return slots
+
+# What the action bar offers for the selection.
+func _fill_bar() -> void:
+	var acts = []
+	var title = ""
+	var hint = ""
+	var back = {"label": "DESELECT", "action": _deselect}
+	if selected != "":
+		var id = selected
+		title = "%s  %d / %d" % [Parts.PARTS[id].name.to_upper(), maxi(_free(id), 0), main.owned().get(id, 0)]
+		acts.append({"label": "ROTATE (R)", "action": func(): rot = (rot + 1) % 4})
+		if carry.is_empty():
+			acts.append_array(_trade_actions(id))
+			back.label = "PUT DOWN"
+			hint = "CLICK A GREEN CELL TO PLACE IT" if _free(id) > 0 else "NONE SPARE"
+		else:
+			back.label = "PUT BACK"
+			hint = "CLICK A GREEN CELL TO MOVE IT THERE"
+	elif inspected >= 0 and inspected < lo.parts.size():
+		var idx = inspected
+		title = Parts.PARTS[lo.parts[idx].id].name.to_upper()
+		if Parts.sub_size(lo.parts[idx].id) != Vector2i.ZERO:
+			acts.append({"label": "WIRE", "action": func(): editor.open(self, idx)})
+		acts.append({"label": "MOVE", "action": func(): _pick_up(idx)})
+		acts.append({"label": "TURN (R)", "action": func(): _turn(idx)})
+		acts.append({"label": "REPAINT", "action": func(): _repaint(idx, 1)})
+		acts.append({"label": "SCRAP (DEL)", "action": func(): _scrap(idx)})
+	elif sel_broken != null and _broken().has(sel_broken):
+		var free = main.save_data.get("repair_credits", 0)
+		var cost = main.repair_cost(lo.frame)
+		title = "BROKEN SLOT"
+		acts.append({"label": "REPAIR  ·  " + ("FREE (%d LEFT)" % free if free > 0 else main._price_text(cost).to_upper()),
+			"can": free > 0 or main.can_afford(cost), "action": _repair})
+		hint = "%d BROKEN" % _broken().size()
+	elif sel_slot >= 0:
+		var i = sel_slot
+		var saved = _slots()[i]
+		if saved != null:
+			title = "BUILD %d  %s" % [i + 1, str(saved.get("name", "")).to_upper()]
+			acts.append({"label": "LOAD", "action": func(): _try_load(Save.clean_loadout(_slots()[i]))})
+			acts.append({"label": "OVERWRITE", "action": func(): _save_slot(i)})
+			acts.append({"label": "CLEAR (DEL)", "action": func(): _clear_slot(i)})
+		else:
+			title = "BUILD %d  EMPTY" % (i + 1)
+			acts.append({"label": "SAVE THIS BUILD HERE", "action": func(): _save_slot(i)})
+	else:
+		hint = "SELECT A PART IN THE LIST OR ON YOUR SHIP, A BROKEN SLOT, OR A SAVED BUILD"
+		back = {"label": main.hub_back_label(), "action": main.hub_back}
+	bar.fill(title, acts, back, hint)
+
+# Buy / order / sell for a part from the list.
+func _trade_actions(id: String) -> Array:
+	var out = []
+	var pr = Parts.credit_price(id)
+	if main.sold_here(id):
+		out.append({"label": "BUY 1  ·  " + main._price_text(pr).to_upper(), "can": func(): return main.can_afford(pr),
+			"action": func(): main.buy_part(id)})
+	elif main.can_order(id):
+		out.append({"label": "ORDER BY COURIER", "action": func(): main.open_order(id)})
+	else:
+		out.append({"label": "NOT SOLD HERE", "can": false,
+			"action": func(): main.notify(main.where_sold(id), Color(1.0, 0.82, 0.25), "shop")})
+	if _free(id) > 0:
+		out.append({"label": "SELL 1  ·  +" + main._price_text(main.MiningScript.sell_price(id)).to_upper(),
+			"action": func(): main.sell_part(id)})
+	return out
+
+func _pick_up(idx: int) -> void:
+	var p = lo.parts[idx]
+	lo.parts.remove_at(idx)
+	pick_part(p.id)
+	carry = p
+	rot = p.get("rot", 0)
+	Sfx.play("clunk", -4.0, 1.3)
+	_commit()
+
+# Turn a placed part where it sits, to the next way round that fits.
+func _turn(idx: int) -> void:
+	var p = lo.parts[idx]
+	for k in range(1, 4):
+		var q = p.duplicate(true)
+		q.rot = (p.get("rot", 0) + k) % 4
+		if Parts.can_place(lo.frame, lo.parts, q, idx, _broken()):
+			lo.parts[idx] = q
+			Sfx.play("clunk", -4.0, 1.3)
+			_commit()
+			return
+	main.notify("NO ROOM TO TURN IT THERE", Color(1.0, 0.4, 0.3), "garage")
+
+func _repaint(idx: int, dir: int) -> void:
+	var col = _next_color(lo.parts[idx].get("color", null), dir, true)
+	if col == null:
+		lo.parts[idx].erase("color")
+	else:
+		lo.parts[idx].color = col
+	_commit()
+
+func _scrap(idx: int) -> void:
+	lo.parts.remove_at(idx)
+	inspected = -1
+	Sfx.play("scrap")
+	_commit()
+
+# Repair the selected slot and move on to the nearest one still broken, so
+# Enter (or the button) works down the lot.
+func _repair() -> void:
+	var c = sel_broken
+	if not main.repair_slot(lo.frame, c):
+		return
+	sel_broken = null
+	for b in _broken():
+		if sel_broken == null or (b - c).length_squared() < (sel_broken - c).length_squared():
+			sel_broken = b
+
+func _save_slot(i: int) -> void:
+	var slots = _slots()
+	slots[i] = lo.duplicate(true)
+	main.save_data.slots = slots
+	main.save_game()
+	Sfx.play("clunk")
+	main.notify("SAVED  " + lo.name.to_upper(), Color.WHITE, "garage")
+
+func _clear_slot(i: int) -> void:
+	var slots = _slots()
+	slots[i] = null
+	main.save_data.slots = slots
+	main.save_game()
+	Sfx.play("scrap")
 
 # ---------------------------------------------------------------- input
 
@@ -217,9 +392,12 @@ func _try_load(other: Dictionary) -> void:
 		if Parts.cells_of(p).any(func(c): return broken.has(c)):
 			main.notify("BROKEN SLOTS ON THAT FRAME  -  REPAIR THEM FIRST", Color(1.0, 0.4, 0.3))
 			return
+	carry = {}
+	_deselect()
 	lo = other.duplicate(true)
 	name_edit.text = lo.name
 	main.equip(lo.duplicate(true), false)
+	main.notify("LOADED  " + lo.name.to_upper(), Color.WHITE, "garage")
 
 func _broken() -> Dictionary:
 	return main.broken_cells(lo.frame)
@@ -227,24 +405,21 @@ func _broken() -> Dictionary:
 func _part_at(c: Vector2i) -> int:
 	return Parts.occupancy(lo.parts).get(c, -1)
 
+# The part that would go down under the cursor (a moved part keeps its
+# wiring and paint).
 func _ghost() -> Dictionary:
+	if not carry.is_empty():
+		var g = carry.duplicate(true)
+		g.cell = hover
+		g.rot = rot
+		return g
 	return {"id": selected, "cell": hover, "rot": rot}
-
-func _slot_click(i: int, button: int) -> void:
-	var slots = main.save_data.get("slots", [])
-	slots.resize(Save.SLOTS)
-	var full = slots[i] != null
-	if button == MOUSE_BUTTON_LEFT and full:
-		_try_load(Save.clean_loadout(slots[i]))
-	elif button == MOUSE_BUTTON_LEFT or (button == MOUSE_BUTTON_RIGHT and full):
-		slots[i] = lo.duplicate(true)
-		main.save_data.slots = slots
-		main.save_game()
-		main.notify("SAVED  " + lo.name.to_upper(), Color.WHITE)
 
 func _gui_input(event):
 	if event is InputEventMouseMotion:
 		hover = _cell_at(event.position)
+		bar.motion(size, event.position)
+		hover_tab = Bar.tab_at(main.hub_tabs(), event.position)
 		hover_list = -1
 		hover_slot = -1
 		for i in Save.SLOTS:
@@ -259,31 +434,32 @@ func _gui_input(event):
 		var c = _cell_at(pos)
 		var left = event.button_index == MOUSE_BUTTON_LEFT
 		var right = event.button_index == MOUSE_BUTTON_RIGHT
-		if left and _done_rect().has_point(pos):
-			Sfx.play("ui_back")
-			close()
-			accept_event()
-			return
+		accept_event()
 		if left:
 			name_edit.release_focus()
+			var tab = Bar.tab_at(main.hub_tabs(), pos)
+			if tab != "":
+				Sfx.play("ui_move")
+				main.hub_show(tab)
+				return
+			if bar.click(size, pos):
+				return
 		if left or right:
-			for i in Save.SLOTS:
-				if _slot_rect(i).has_point(pos):
-					_slot_click(i, event.button_index)
-					return
 			var prs = _paint_rects()
 			for i in prs.size():
 				if prs[i].has_point(pos):
 					_paint(i, 1 if left else -1)
 					return
-			var rr = _rot_rects()
-			if rr[0].has_point(pos) or rr[1].has_point(pos):
-				rot = (rot + (3 if rr[0].has_point(pos) else 1)) % 4
-				return
 			if _frame_rect().has_point(pos):
 				_cycle_frame(-1 if pos.x < _frame_rect().get_center().x else 1)
 				return
 		if left:
+			for i in Save.SLOTS:
+				if _slot_rect(i).has_point(pos):
+					_deselect()
+					sel_slot = i
+					Sfx.play("ui_move", -6.0)
+					return
 			for i in Parts.SECTIONS.size():
 				if _tab_rect(i).has_point(pos):
 					section = Parts.SECTIONS[i]
@@ -292,58 +468,63 @@ func _gui_input(event):
 			var lst = _list()
 			for i in lst.size():
 				if _list_rect(i).has_point(pos):
-					if Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()):
-						return
-					if _free(lst[i]) <= 0 and selected != lst[i]:
-						# None to hand: where can you get one?
-						main.open_order(lst[i])
-						return
-					# Clicking the selected part again puts it down.
-					selected = "" if selected == lst[i] else lst[i]
+					# Select it, spare or not: the bar says how to get one.
+					if not Parts.is_locked(Parts.PARTS[lst[i]], main.unlocks()) and selected != lst[i]:
+						pick_part(lst[i])
+						Sfx.play("ui_move", -6.0)
 					return
-			# Clicking a placed part opens its sub-grid, selection or not.
 			var at = _part_at(c)
-			if at < 0 and _broken().has(c):
-				main.repair_slot(lo.frame, c)
-				return
 			if at >= 0:
-				inspected = at
-				if Parts.sub_size(lo.parts[at].id) != Vector2i.ZERO:
-					editor.open(self, at)
-			elif selected != "":
+				pick_placed(_part_at(c))
+				Sfx.play("ui_move", -6.0)
+				if event.double_click and Parts.sub_size(lo.parts[inspected].id) != Vector2i.ZERO:
+					editor.open(self, inspected)
+			elif _broken().has(c):
+				_deselect()
+				sel_broken = c
+				Sfx.play("ui_move", -6.0)
+			elif selected != "" and Parts.frame_cells(lo.frame).has(c):
 				var g = _ghost()
 				if Parts.can_place(lo.frame, lo.parts, g, -1, _broken()) and _free(selected) > 0:
 					lo.parts.append(g)
 					Sfx.play("clunk")
+					if not carry.is_empty():
+						# Moved: it's the selection again, where it now sits.
+						carry = {}
+						selected = ""
+						inspected = lo.parts.size() - 1
 					_commit()
+			else:
+				_deselect()
 		elif right:
 			# Scrap whatever is under the cursor; the selection stays put.
 			var idx = _part_at(c)
 			if idx >= 0:
-				lo.parts.remove_at(idx)
-				inspected = -1
-				Sfx.play("scrap")
-				_commit()
-			elif Rect2(Vector2.ZERO, Vector2(Parts.frame_size(lo.frame))).has_point(Vector2(c)):
-				selected = ""
+				var keep = inspected
+				_scrap(idx)
+				inspected = keep - 1 if keep > idx else (keep if keep < idx else -1)
+			else:
+				_deselect()
 		elif event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			var idx = _part_at(c)
 			if idx >= 0:
-				var dir = 1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1
-				var col = _next_color(lo.parts[idx].get("color", null), dir, true)
-				if col == null:
-					lo.parts[idx].erase("color")
-				else:
-					lo.parts[idx].color = col
-				_commit()
-		accept_event()
+				_repaint(idx, 1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1)
 
 func _unhandled_key_input(event):
 	if not visible or not event.pressed or event.echo or editor.visible or main.menu.visible:
 		return
+	if bar.key(event):
+		get_viewport().set_input_as_handled()
+		return
 	match event.physical_keycode:
+		KEY_TAB:
+			Sfx.play("ui_move")
+			main.hub_step(-1 if event.shift_pressed else 1)
 		KEY_R:
-			rot = (rot + (3 if event.shift_pressed else 1)) % 4
+			if inspected >= 0 and inspected < lo.parts.size():
+				_turn(inspected)
+			else:
+				rot = (rot + (3 if event.shift_pressed else 1)) % 4
 		KEY_Q:
 			_cycle_frame(-1)
 		KEY_E:
@@ -351,26 +532,27 @@ func _unhandled_key_input(event):
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
 			_try_load(Parts.presets()[event.physical_keycode - KEY_1])
 		KEY_0:
-			_try_load(Parts.random_loadout(main.rng, main.unlocks()))
-		KEY_DELETE:
-			if hover_slot >= 0:
-				var slots = main.save_data.get("slots", [])
-				slots.resize(Save.SLOTS)
-				slots[hover_slot] = null
-				main.save_data.slots = slots
-				main.save_game()
+			if event.shift_pressed:
+				_try_load(Parts.random_loadout(main.rng, main.unlocks()))
+		KEY_DELETE, KEY_BACKSPACE:
+			if inspected >= 0 and inspected < lo.parts.size():
+				_scrap(inspected)
+			elif sel_slot >= 0 and _slots()[sel_slot] != null:
+				_clear_slot(sel_slot)
 		KEY_ESCAPE:
-			if selected != "":
-				selected = ""
+			if selected != "" or inspected >= 0 or sel_slot >= 0 or sel_broken != null:
+				_deselect()
 			else:
-				close()
+				Sfx.play("ui_back")
+				main.hub_back()
 		KEY_G:
-			close()
+			main.hub_back()
 		_:
 			return
 	get_viewport().set_input_as_handled()
 
 func _cycle_frame(dir: int) -> void:
+	_put_back()
 	var keys = Parts.FRAMES.keys().filter(func(f): return not Parts.FRAMES[f].get("hidden", false) and not Parts.is_locked(Parts.FRAMES[f], main.unlocks()))
 	lo.frame = keys[(keys.find(lo.frame) + dir + keys.size()) % keys.size()]
 	var kept = []
@@ -378,6 +560,8 @@ func _cycle_frame(dir: int) -> void:
 		if Parts.can_place(lo.frame, kept, p, -1, _broken()):
 			kept.append(p)
 	lo.parts = kept
+	inspected = -1
+	sel_broken = null
 	_commit()
 
 func _next_color(current, dir: int, allow_none: bool):
@@ -490,6 +674,8 @@ func _info_id() -> String:
 	var idx = _part_at(hover)
 	if idx >= 0:
 		return lo.parts[idx].id
+	if selected == "" and inspected >= 0 and inspected < lo.parts.size():
+		return lo.parts[inspected].id
 	return selected
 
 func _draw():
@@ -504,13 +690,10 @@ func _draw_screen():
 		return
 	var frame = Parts.frame_cells(lo.frame)
 	var sz = Parts.frame_size(lo.frame)
-	Ui.segment(self, Rect2(-30, 22, 380, 50), Ui.INK)
-	Ui.segment(self, Rect2(-30, 68, 380, 4), Ui.HILITE, 0.0)
-	Ui.text(self, Vector2(30, 58), "GARAGE", 30, Color.WHITE, true)
 	_draw_info()
 	var fr = _frame_rect()
 	Ui.segment(self, fr, Ui.PAPER)
-	Ui.text(self, fr.position + Vector2(0, 27), "‹   " + Parts.FRAMES[lo.frame].name.to_upper() + "   ›", 20, Ui.INK, true, HORIZONTAL_ALIGNMENT_CENTER, fr.size.x)
+	Ui.text(self, fr.position + Vector2(0, 24), "‹   " + Parts.FRAMES[lo.frame].name.to_upper() + "   ›", 20, Ui.INK, true, HORIZONTAL_ALIGNMENT_CENTER, fr.size.x)
 	var cp = _cell_px()
 	var o = _grid_origin()
 	draw_rect(Rect2(o - Vector2(14, 14), Vector2(sz) * cp + Vector2(28, 28)), Color(0.03, 0.035, 0.045, 0.85))
@@ -524,7 +707,7 @@ func _draw_screen():
 	var broken = _broken()
 	for c in broken:
 		var r = _cell_rect(c).grow(-1)
-		draw_rect(r, Color(0.2, 0.12, 0.1) if c != hover else Color(0.34, 0.18, 0.12))
+		draw_rect(r, Color(0.2, 0.12, 0.1) if c != hover and c != sel_broken else Color(0.34, 0.18, 0.12))
 		draw_line(r.position + r.size * Vector2(0.2, 0.15), r.position + r.size * Vector2(0.55, 0.5), Color(0.75, 0.3, 0.15), 2.0)
 		draw_line(r.position + r.size * Vector2(0.55, 0.5), r.position + r.size * Vector2(0.4, 0.85), Color(0.75, 0.3, 0.15), 2.0)
 		draw_line(r.position + r.size * Vector2(0.55, 0.5), r.position + r.size * Vector2(0.85, 0.6), Color(0.75, 0.3, 0.15), 2.0)
@@ -552,6 +735,8 @@ func _draw_screen():
 	if inspected >= 0 and inspected < lo.parts.size():
 		for c in Parts.cells_of(lo.parts[inspected]):
 			draw_rect(_cell_rect(c).grow(-1), Color.WHITE, false, 3.0)
+	if sel_broken != null and broken.has(sel_broken):
+		draw_rect(_cell_rect(sel_broken).grow(-1), Color(0.95, 0.7, 0.2), false, 3.0)
 	var err = ""
 	var over = _part_at(hover)
 	if over >= 0:
@@ -559,7 +744,7 @@ func _draw_screen():
 			draw_rect(_cell_rect(c).grow(-1), Color(0.3, 0.55, 1.0), false, 3.0)
 	elif broken.has(hover):
 		var free = main.save_data.get("repair_credits", 0)
-		err = "click to repair:  " + ("free (%d left)" % free if free > 0 else main._price_text(main.repair_cost(lo.frame)))
+		err = "broken slot  -  repair:  " + ("free (%d left)" % free if free > 0 else main._price_text(main.repair_cost(lo.frame)))
 	elif selected != "" and Rect2(Vector2.ZERO, Vector2(sz)).has_point(Vector2(hover)):
 		var g = _ghost()
 		err = Parts.placement_error(lo.frame, lo.parts, g, -1, _broken())
@@ -602,10 +787,6 @@ func _draw_screen():
 			draw_rect(Rect2(r.end.x - 70 + q.x * 6, r.position.y + 3 + q.y * 6, 5, 5), Color.WHITE if sel else Color(0.3, 0.32, 0.36))
 	_draw_slots()
 	_draw_repairs()
-	var dr = _done_rect()
-	Ui.segment(self, dr, Ui.HILITE, 10.0)
-	Ui.text(self, dr.position + Vector2(0, 30), "DONE", 20, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, dr.size.x)
-	Ui.text(self, dr.position + Vector2(0, 30), "ESC", 11, Color(0.75, 0.82, 1.0), true, HORIZONTAL_ALIGNMENT_RIGHT, dr.size.x - 14)
 	var prs = _paint_rects()
 	var paint = lo.paint
 	var labels = ["HULL", "TRIM", paint.pattern.to_upper(), "GLOW"]
@@ -615,35 +796,28 @@ func _draw_screen():
 		Ui.text(self, prs[i].position + Vector2(12, 23), labels[i], 15, Ui.INK, true)
 		if swatches[i] != null:
 			draw_rect(Rect2(prs[i].end.x - 34, prs[i].position.y + 8, 18, 18), swatches[i])
+	Bar.draw_tabs(self, size, main.hub_tabs(), main.hub_tab, hover_tab)
+	bar.draw(self, size)
 
-# Rotation control + the one line that says what's wrong.
+# Which way the part will face + the one line that says what's wrong.
 func _draw_status(err: String, over: int = -1) -> void:
-	var rr = _rot_rects()
-	for i in 2:
-		Ui.segment(self, rr[i], Ui.PAPER, 8.0)
-		var c = rr[i].get_center()
-		draw_arc(c, 10, PI * 0.2, PI * 1.6, 12, Ui.ink(Ui.INK), 3.0)
-		var tip = c + Vector2(cos(PI * (1.6 if i == 1 else 0.2)), sin(PI * (1.6 if i == 1 else 0.2))) * 10
-		draw_circle(tip, 4, Ui.ink(Ui.INK))
-	# Current facing, as an arrow between the buttons.
-	var mid = Rect2(470, 716, 56, 40)
+	var mid = _facing_rect()
 	Ui.segment(self, mid, Ui.INK, 8.0)
 	var f = Vector2(Parts.rotate(Vector2i(0, -1), rot))
 	var n = Vector2(-f.y, f.x)
 	var cc = mid.get_center()
-	draw_colored_polygon(PackedVector2Array([cc + f * 12, cc - f * 8 + n * 9, cc - f * 8 - n * 9]), Color.WHITE)
-	Ui.text(self, Vector2(rr[1].end.x + 6, rr[1].position.y + 26), "R", 13, Ui.DIM, true)
+	draw_colored_polygon(PackedVector2Array([cc + f * 12, cc - f * 8 + n * 9, cc - f * 8 - n * 9]), Ui.ink(Color.WHITE) if selected != "" else Ui.ink(Ui.DIM))
 	var sr = _status_rect()
 	var st = main.ship.stats
-	if err.begins_with("click to repair"):
+	if err.begins_with("broken slot  -  repair"):
 		Ui.segment(self, sr, Color(0.95, 0.7, 0.2), 8.0)
 		Ui.text(self, sr.position + Vector2(18, 27), err.to_upper(), 18, Ui.INK, true)
 	elif selected != "" and _free(selected) <= 0 and over < 0:
 		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
-		Ui.text(self, sr.position + Vector2(18, 27), "NONE LEFT  -  BUY MORE AT AN OUTPOST", 18, Color.WHITE, true)
-	elif over >= 0 and Parts.sub_size(lo.parts[over].id) != Vector2i.ZERO:
+		Ui.text(self, sr.position + Vector2(18, 27), "NONE SPARE  -  SEE THE ACTIONS BELOW", 18, Color.WHITE, true)
+	elif over >= 0 and over != inspected:
 		Ui.segment(self, sr, Ui.HILITE, 8.0)
-		Ui.text(self, sr.position + Vector2(18, 27), "CLICK TO WIRE " + Parts.PARTS[lo.parts[over].id].name.to_upper(), 18, Color.WHITE, true)
+		Ui.text(self, sr.position + Vector2(18, 27), "CLICK TO SELECT " + Parts.PARTS[lo.parts[over].id].name.to_upper(), 18, Color.WHITE, true)
 	elif err != "":
 		Ui.segment(self, sr, Color(0.8, 0.12, 0.1), 8.0)
 		Ui.text(self, sr.position + Vector2(18, 27), err.to_upper(), 18, Color.WHITE, true)
@@ -664,7 +838,7 @@ func _draw_repairs() -> void:
 	var bank = main.inventory
 	var broken = _broken().size()
 	var h = 74.0 + (96.0 if broken > 0 else 0.0)
-	var r = Rect2(-20, size.y - h - 24.0, 390, h)
+	var r = Rect2(-20, size.y - h - Bar.RESERVED - 6.0, 390, h)
 	Ui.segment(self, r, Color(0.03, 0.035, 0.045, 0.88), 10.0)
 	Ui.segment(self, Rect2(r.position.x, r.end.y - 4, r.size.x, 4), Ui.HILITE, 0.0)
 	var y = r.position.y + 32.0
@@ -695,17 +869,21 @@ func _draw_repairs() -> void:
 func _draw_slots() -> void:
 	var slots = main.save_data.get("slots", [])
 	var x = size.x - 400
-	name_edit.position = Vector2(x, 626)
-	name_edit.size = Vector2(360, 34)
+	Ui.text(self, Vector2(x + 4, 584), "THIS BUILD", 12, Ui.DIM, true)
+	Ui.text(self, Vector2(x + 4, 584), "SAVED BUILDS BELOW", 12, Ui.DIM, true, HORIZONTAL_ALIGNMENT_RIGHT, 352)
+	name_edit.position = Vector2(x, 592)
+	name_edit.size = Vector2(360, 32)
 	for i in Save.SLOTS:
 		var r = _slot_rect(i)
 		var lo_i = slots[i] if i < slots.size() else null
+		var on = i == sel_slot
 		var hot = i == hover_slot
-		Ui.segment(self, r, (Color.WHITE if hot else Ui.PAPER) if lo_i != null else Color(0.2, 0.22, 0.25, 0.9), 8.0)
-		Ui.text(self, r.position + Vector2(14, 22), str(i + 1), 15, Ui.DIM, true)
+		Ui.segment(self, r, Ui.HILITE if on else ((Color.WHITE if hot else Ui.PAPER) if lo_i != null else Color(0.2, 0.22, 0.25, 0.9)), 8.0)
+		if hot and not on:
+			draw_rect(Rect2(r.position.x, r.position.y, 4, r.size.y), Ui.ink(Color.WHITE) if Ui.terminal() else Ui.HILITE)
+		Ui.text(self, r.position + Vector2(14, 20), str(i + 1), 15, Color.WHITE if on else Ui.DIM, true)
 		if lo_i != null:
-			Ui.text(self, r.position + Vector2(40, 22), str(lo_i.get("name", "")).to_upper(), 16, Ui.INK, true)
-			Ui.text(self, r.position + Vector2(40, 22), Parts.FRAMES.get(lo_i.get("frame", ""), {"name": ""}).name, 13, Ui.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 56)
+			Ui.text(self, r.position + Vector2(40, 20), str(lo_i.get("name", "")).to_upper(), 16, Color.WHITE if on else Ui.INK, true)
+			Ui.text(self, r.position + Vector2(40, 20), Parts.FRAMES.get(lo_i.get("frame", ""), {"name": ""}).name, 13, Color.WHITE if on else Ui.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 56)
 		else:
-			Ui.text(self, r.position + Vector2(40, 22), "+ SAVE", 15, Color(0.6, 0.63, 0.68), true)
-
+			Ui.text(self, r.position + Vector2(40, 20), "EMPTY", 15, Color.WHITE if on else Color(0.6, 0.63, 0.68), true)

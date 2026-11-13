@@ -1,6 +1,6 @@
 extends RefCounted
 
-# The shops' overview panel (Tab switches view):
+# The shops' overview panel (V, or a click on its headings, switches view):
 #   SHIP  - your build: the frame's grid with what's on it (broken slots
 #           scorched), the parts list and the numbers that matter.
 #   PARTS - every part you own: owned, fitted, spare. The shop's selected
@@ -13,19 +13,28 @@ const Ui = preload("res://scripts/Ui.gd")
 const KIND_COLORS = {"engine": Color(1.0, 0.55, 0.2), "thruster": Color(0.95, 0.85, 0.3), "drill": Color(0.8, 0.8, 0.85),
 	"shield": Color(0.5, 0.65, 1.0), "brake": Color(0.6, 0.62, 0.68), "fin": Color(0.3, 0.85, 1.0), "hopjet": Color(0.5, 1.0, 0.6)}
 
+const MODES = [["ship", "SHIP"], ["parts", "PARTS OWNED"]]
+
+# The view whose heading is at `pos`, or "".
+static func tab_at(r: Rect2, pos: Vector2) -> String:
+	for i in MODES.size():
+		if Rect2(r.position.x + 20 + i * 150, r.position.y + 10, 150, 40).has_point(pos):
+			return MODES[i][0]
+	return ""
+
 static func draw(c: CanvasItem, r: Rect2, data: Dictionary, mode: String) -> void:
 	Ui.segment(c, r, Color(0.03, 0.035, 0.045, 0.9), 10.0)
 	Ui.segment(c, Rect2(r.position, Vector2(r.size.x, 4)), Ui.HILITE, 0.0)
 	# Tabs.
 	var x = r.position.x + 30
-	for m in [["ship", "SHIP"], ["parts", "PARTS OWNED"]]:
+	for m in MODES:
 		var on = m[0] == mode
 		Ui.text(c, Vector2(x, r.position.y + 34), m[1], 18, Color.WHITE if on else Ui.DIM, true)
 		if on:
 			var w = Ui.font(true).get_string_size(m[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
 			c.draw_rect(Rect2(x, r.position.y + 42, w, 3), Ui.HILITE)
 		x += 150
-	Ui.text(c, Vector2(r.end.x - 120, r.position.y + 34), "TAB  SWITCH", 13, Ui.DIM, true)
+	Ui.text(c, Vector2(r.end.x - 120, r.position.y + 34), "V  SWITCH", 13, Ui.DIM, true)
 	var body = Rect2(r.position + Vector2(30, 62), r.size - Vector2(60, 76))
 	if mode == "ship":
 		_ship(c, body, data)

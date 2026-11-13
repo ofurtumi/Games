@@ -7,14 +7,19 @@ extends Control
 # shot down each branch, payloads go off where it lands and launch whatever
 # is wired after them.
 #
-# Click a palette node, then a cell, to place it (it wires itself onto the end
-# of the chain, so cards go in series in the order you place them). Drag from a port to a node
-# to wire it. Right-click a node or a wire to remove it. Esc or DONE closes.
+# Click a palette card, then a cell, to place it (it wires itself onto the end
+# of the chain, so cards go in series in the order you place them). Drag from
+# a port to a node to wire it. Right-click a node or a wire to remove it.
+# Select, then act, as in the garage: a palette card, a placed card or a
+# preset is selected with a click and the action bar along the bottom (Bar.gd)
+# lists what you can do with it; with nothing selected it saves or clears the
+# wiring. Esc drops the selection, then closes.
 
 const Parts = preload("res://scripts/Parts.gd")
 const Ui = preload("res://scripts/Ui.gd")
 const ToolDemo = preload("res://scripts/ToolDemo.gd")
 const Sfx = preload("res://scripts/Sfx.gd")
+const Bar = preload("res://scripts/Bar.gd")
 
 # Which numbers to compare live for each kind of component.
 const STAT_ROWS = {
@@ -34,7 +39,10 @@ var idx = -1
 var pid = ""
 var sub = {}
 var gsize = Vector2i.ZERO
-var placing = ""
+var placing = ""        # the palette card selected, ready to place
+var sel_node = -2       # the placed card selected
+var sel_preset = -1     # the preset selected (index into presets())
+var bar = Bar.new()
 var drag_from = -2
 var mouse = Vector2.ZERO
 var hover_node = -2
@@ -64,7 +72,7 @@ func open(g, part_index: int) -> void:
 	pid = garage.lo.parts[idx].id
 	sub = Parts.sub_of(garage.lo.parts[idx]).duplicate(true)
 	gsize = Parts.sub_size(pid)
-	placing = ""
+	_deselect()
 	drag_from = -2
 	t = 0.0
 	base = Parts.stats(garage.lo)
@@ -82,7 +90,54 @@ func close() -> void:
 func _process(delta):
 	if visible:
 		t += delta
+		_fill_bar()
 		queue_redraw()
+
+func _deselect() -> void:
+	placing = ""
+	sel_node = -2
+	sel_preset = -1
+
+# What the action bar offers for the selection.
+func _fill_bar() -> void:
+	var m = garage.main
+	var acts = []
+	var title = ""
+	var hint = ""
+	var back = {"label": "DESELECT", "action": _deselect}
+	if placing != "":
+		var id = placing
+		var pr = Parts.card_price(id)
+		title = "%s  %d / %d" % [Parts.NODES[id].name.to_upper(), maxi(_free(id), 0), m.cards().get(id, 0)]
+		if m.cards_sold_here():
+			acts.append({"label": "BUY 1  ·  " + m._price_text(pr).to_upper(), "can": func(): return m.can_afford(pr),
+				"action": func(): m.buy_cards({id: 1})})
+		hint = "CLICK A FREE CELL TO PLACE IT" if _free(id) > 0 else ("NONE FREE" if m.cards_sold_here() else "NONE FREE  -  CARDS ARE SOLD AT OUTPOSTS")
+		back.label = "PUT DOWN"
+	elif sel_node >= 0 and sel_node < sub.nodes.size():
+		var n = sel_node
+		title = Parts.NODES[sub.nodes[n].id].name.to_upper() + " CARD"
+		acts.append({"label": "REMOVE (DEL)", "action": func(): _remove_node(n); Sfx.play("scrap", -4.0, 1.3)})
+		acts.append({"label": "CUT ITS WIRES", "can": sub.wires.any(func(w): return w[0] == n or w[1] == n),
+			"action": func(): sub.wires = sub.wires.filter(func(w): return w[0] != n and w[1] != n)})
+	elif sel_preset >= 0 and sel_preset < presets().size():
+		var i = sel_preset
+		var short = _preset_short(presets()[i])
+		title = "PRESET  " + presets()[i].name.to_upper()
+		acts.append({"label": "LOAD", "can": short.is_empty(), "action": func(): _load_preset(i)})
+		if not short.is_empty() and m.cards_sold_here() and not _preset_locked(presets()[i]):
+			var cost = 0
+			for id in short:
+				cost += Parts.card_price(id).credits * short[id]
+			acts.append({"label": "BUY MISSING CARDS  ·  %d CR" % cost, "can": m.credits() >= cost, "action": func(): m.buy_cards(short)})
+		acts.append({"label": "FORGET", "action": func(): _forget_preset(i)})
+	else:
+		title = "WIRING"
+		acts.append({"label": "SAVE AS PRESET", "can": not sub.nodes.is_empty(), "action": _save_preset})
+		acts.append({"label": "CLEAR", "can": not sub.nodes.is_empty(), "action": func(): sub = {"nodes": [], "wires": []}; Sfx.play("scrap", -4.0, 1.3)})
+		hint = "PICK A CARD ON THE LEFT, THEN A CELL"
+		back = {"label": "DONE", "action": close}
+	bar.fill(title, acts, back, hint)
 
 # ---------------------------------------------------------------- layout
 
@@ -90,8 +145,9 @@ func _panel() -> Rect2:
 	var gw = gsize.x * CELL
 	var gh = gsize.y * CELL
 	var w = PAL_W + gw + 90.0 + INFO_W
-	var h = maxf(maxf(gh + 330.0, 560.0), 110.0 + _palette().size() * 36.0 + 80.0 + PRESET_H)
-	return Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h)
+	var h = maxf(maxf(gh + 330.0, 560.0), 110.0 + _palette().size() * 36.0 + 24.0 + PRESET_H)
+	# Centred in what the action bar leaves.
+	return Rect2((size.x - w) * 0.5, maxf(8.0, (size.y - Bar.RESERVED - h) * 0.5), w, h)
 
 func _origin() -> Vector2:
 	var pr = _panel()
@@ -133,7 +189,7 @@ func _pal_rect(i: int) -> Rect2:
 
 func _info_rect() -> Rect2:
 	var pr = _panel()
-	return Rect2(pr.end.x - INFO_W - 10, pr.position.y + 80, INFO_W - 20, pr.size.y - 160)
+	return Rect2(pr.end.x - INFO_W - 10, pr.position.y + 80, INFO_W - 20, pr.size.y - 100)
 
 func _demo_area() -> Rect2:
 	var ir = _info_rect()
@@ -225,10 +281,11 @@ func _describe(prog: Dictionary) -> String:
 
 # ---------------------------------------------------------------- presets
 
-# Saved wirings, under the palette: save this one, load one into any
-# component it fits (same family, cards allowed, fits the grid), right-click
-# to forget one. Kept in the save as {name, family, part, sub}.
-const PRESET_H = 250.0
+# Saved wirings, under the palette: the ones that fit this component (same
+# family, cards allowed, fits the grid). Select one to load or forget it;
+# save this wiring from the bar with nothing selected. Kept in the save as
+# {name, family, part, sub}.
+const PRESET_H = 236.0
 const PRESETS_SHOWN = 6
 
 func presets() -> Array:
@@ -255,13 +312,9 @@ func _presets_top() -> float:
 	var pr = _panel()
 	return pr.position.y + 110 + _palette().size() * 36 + 24
 
-func _save_rect() -> Rect2:
-	var pr = _panel()
-	return Rect2(pr.position.x + 24, _presets_top() + 14, PAL_W - 40, 30)
-
 func _preset_rect(k: int) -> Rect2:
 	var pr = _panel()
-	return Rect2(pr.position.x + 24, _presets_top() + 52 + k * 34, PAL_W - 40, 30)
+	return Rect2(pr.position.x + 24, _presets_top() + 14 + k * 34, PAL_W - 40, 30)
 
 func _save_preset() -> void:
 	if sub.nodes.is_empty():
@@ -275,28 +328,41 @@ func _save_preset() -> void:
 	Sfx.play("ui_select")
 	garage.main.save_game()
 
-# Load a preset into this component, if you own the cards for it (this
-# part's own cards are freed first).
-func _load_preset(i: int) -> void:
-	var pr = presets()[i]
+# Cards you'd have to buy to load a preset here (this part's own are freed
+# first): {id: how many}.
+func _preset_short(pr: Dictionary) -> Dictionary:
 	var need = {}
 	for nd in pr.sub.nodes:
 		need[nd.id] = need.get(nd.id, 0) + 1
 	var elsewhere = Parts.count_cards(garage.lo, idx)
-	var short = []
+	var short = {}
 	for id in need:
 		var have = garage.main.cards().get(id, 0) - elsewhere.get(id, 0)
 		if need[id] > have:
-			short.append("%d %s" % [need[id] - have, Parts.NODES[id].name])
+			short[id] = need[id] - have
+	return short
+
+func _preset_locked(pr: Dictionary) -> bool:
+	return pr.sub.nodes.any(func(nd): return Parts.is_locked(Parts.NODES[nd.id], garage.main.unlocks()))
+
+func _load_preset(i: int) -> void:
+	var pr = presets()[i]
+	var short = _preset_short(pr)
 	if not short.is_empty():
-		garage.main.notify("MISSING CARDS  " + ", ".join(short).to_upper(), Color(1.0, 0.4, 0.3), "preset")
+		var names = []
+		for id in short:
+			names.append("%d %s" % [short[id], Parts.NODES[id].name])
+		garage.main.notify("MISSING CARDS  " + ", ".join(names).to_upper(), Color(1.0, 0.4, 0.3), "preset")
 		return
 	sub = pr.sub.duplicate(true)
+	sel_node = -2
 	Sfx.play("clunk", -4.0, 1.4)
 
-func _done_rect() -> Rect2:
-	var ir = _info_rect()
-	return Rect2(ir.position.x + 10, ir.end.y + 22, ir.size.x - 20, 42)
+func _forget_preset(i: int) -> void:
+	garage.main.notify("PRESET REMOVED  " + presets()[i].name.to_upper(), Color(0.8, 0.8, 0.8), "preset")
+	presets().remove_at(i)
+	sel_preset = -1
+	garage.main.save_game()
 
 # ---------------------------------------------------------------- graph
 
@@ -348,6 +414,7 @@ func _reaches(from: int, target: int) -> bool:
 	return false
 
 func _remove_node(i: int) -> void:
+	sel_node = -2
 	sub.nodes.remove_at(i)
 	var keep = []
 	for w in sub.wires:
@@ -377,10 +444,14 @@ func _wire_points(from: int, to: int, k: int) -> PackedVector2Array:
 
 # ---------------------------------------------------------------- input
 
+func _cell_under(pos: Vector2) -> Vector2i:
+	return Vector2i(((pos - _origin()) / CELL).floor())
+
 func _gui_input(event):
 	if event is InputEventMouseMotion:
 		mouse = event.position
-		var c = Vector2i(((mouse - _origin()) / CELL).floor())
+		bar.motion(size, mouse)
+		var c = _cell_under(mouse)
 		hover_node = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
 		hover_pal = -1
 		var pal = _palette()
@@ -389,59 +460,58 @@ func _gui_input(event):
 				hover_pal = i
 	elif event is InputEventMouseButton:
 		var pos = event.position
+		var c = _cell_under(pos)
+		var inside = Rect2i(Vector2i.ZERO, gsize).has_point(c)
+		accept_event()
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			if _done_rect().has_point(pos):
-				close()
-				return
-			if _save_rect().has_point(pos):
-				_save_preset()
+			if bar.click(size, pos):
 				return
 			var comp = _compat()
 			for k in comp.size():
 				if _preset_rect(k).has_point(pos):
-					_load_preset(comp[k])
+					_deselect()
+					sel_preset = comp[k]
+					Sfx.play("ui_move", -6.0)
+					if event.double_click:
+						_load_preset(comp[k])
 					return
 			var pal = _palette()
 			for i in pal.size():
 				if _pal_rect(i).has_point(pos):
-					if not Parts.is_locked(Parts.NODES[pal[i]], garage.main.unlocks()):
-						placing = "" if placing == pal[i] else pal[i]
+					if not Parts.is_locked(Parts.NODES[pal[i]], garage.main.unlocks()) and placing != pal[i]:
+						_deselect()
+						placing = pal[i]
+						Sfx.play("ui_move", -6.0)
 					return
 			# Ports first: start a wire.
 			for i in range(-1, sub.nodes.size()):
 				var outs = Parts.node_outs("" if i == -1 else sub.nodes[i].id)
-				if Parts.NODES.get("" if i == -1 else sub.nodes[i].id, {}).get("type", "") == "upgrade" and false:
-					continue
 				for k in outs:
 					if _out_port(i, k).distance_to(pos) < 12.0 and Parts.wires_from(sub, i).size() < outs:
 						drag_from = i
 						return
-			var c = Vector2i(((pos - _origin()) / CELL).floor())
-			if placing != "" and Rect2i(Vector2i.ZERO, gsize).has_point(c) and _node_at(c) == -2:
+			var n = _node_at(c) if inside else -2
+			if n >= 0:
+				_deselect()
+				sel_node = n
+				Sfx.play("ui_move", -6.0)
+			elif placing != "" and inside and n == -2:
 				if _free(placing) <= 0:
-					garage.main.notify("NO " + Parts.NODES[placing].name.to_upper() + " CARDS LEFT  -  BUY MORE AT AN OUTPOST", Color(1.0, 0.4, 0.3), "cards")
+					garage.main.notify("NO " + Parts.NODES[placing].name.to_upper() + " CARDS FREE", Color(1.0, 0.4, 0.3), "cards")
 					return
 				sub.nodes.append({"id": placing, "cell": c})
 				_auto_wire(sub.nodes.size() - 1)
 				Sfx.play("clunk", -4.0, 1.4)
+			else:
+				_deselect()
 		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and drag_from != -2:
-			var c = Vector2i(((pos - _origin()) / CELL).floor())
-			var target = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
+			var target = _node_at(c) if inside else -2
 			if target >= 0 and target != drag_from and not _has_input(target) and not _reaches(target, drag_from):
 				sub.wires.append([drag_from, target])
 				Sfx.play("wire")
 			drag_from = -2
-		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _compat().any(func(k): return _preset_rect(_compat().find(k)).has_point(pos)):
-			var comp = _compat()
-			for k in comp.size():
-				if _preset_rect(k).has_point(pos):
-					garage.main.notify("PRESET REMOVED  " + presets()[comp[k]].name.to_upper(), Color(0.8, 0.8, 0.8), "preset")
-					presets().remove_at(comp[k])
-					garage.main.save_game()
-					break
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			var c = Vector2i(((pos - _origin()) / CELL).floor())
-			var n = _node_at(c) if Rect2i(Vector2i.ZERO, gsize).has_point(c) else -2
+			var n = _node_at(c) if inside else -2
 			if n >= 0 and _node_rect(n).has_point(pos):
 				_remove_node(n)
 				Sfx.play("scrap", -4.0, 1.3)
@@ -449,12 +519,29 @@ func _gui_input(event):
 				var w = _wire_near(pos)
 				if w >= 0:
 					sub.wires.remove_at(w)
-		accept_event()
+				else:
+					_deselect()
 
 func _unhandled_key_input(event):
-	if visible and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
-		close()
+	if not visible or not event.pressed or event.echo:
+		return
+	if bar.key(event):
 		get_viewport().set_input_as_handled()
+		return
+	match event.physical_keycode:
+		KEY_ESCAPE:
+			if placing != "" or sel_node >= 0 or sel_preset >= 0:
+				_deselect()
+			else:
+				Sfx.play("ui_back")
+				close()
+		KEY_DELETE, KEY_BACKSPACE:
+			if sel_node >= 0 and sel_node < sub.nodes.size():
+				_remove_node(sel_node)
+				Sfx.play("scrap", -4.0, 1.3)
+		_:
+			return
+	get_viewport().set_input_as_handled()
 
 # ---------------------------------------------------------------- drawing
 
@@ -476,6 +563,8 @@ func _draw_node(i: int, live: bool) -> void:
 	var hot = i == hover_node
 	Ui.segment(self, Rect2(r.position + Vector2(4, 4), r.size), Color(0, 0, 0, 0.4), 8.0)
 	Ui.segment(self, r, col.lightened(0.2) if hot else col, 8.0)
+	if i >= 0 and i == sel_node:
+		draw_rect(r.grow(4), Ui.ink(Color.WHITE), false, 3.0)
 	Ui.text(self, r.position + Vector2(0, r.size.y * 0.5 + 8), tag, 20, Color.WHITE if live else Color(1, 1, 1, 0.5), true, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 	if i != -1:
 		draw_circle(_in_port(i), 6.0, Color(0.9, 0.9, 0.95))
@@ -516,17 +605,17 @@ func _draw_screen():
 			Color.WHITE if on else (Color(0.8, 0.25, 0.2) if free <= 0 else Ui.DIM), true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 10)
 	# Presets.
 	var ptop = _presets_top()
-	Ui.text(self, Vector2(_save_rect().position.x, ptop), "PRESETS", 13, Ui.DIM, true)
-	var sr = _save_rect()
-	Ui.segment(self, sr, Ui.HILITE if sr.has_point(mouse) else Color(0.2, 0.22, 0.25), 6.0)
-	Ui.text(self, sr.position + Vector2(0, 21), "+ SAVE THIS WIRING", 14, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, sr.size.x)
+	Ui.text(self, Vector2(_preset_rect(0).position.x, ptop), "PRESETS", 13, Ui.DIM, true)
 	var comp = _compat()
 	for k in comp.size():
 		var p = presets()[comp[k]]
 		var r = _preset_rect(k)
-		Ui.segment(self, r, Color.WHITE if r.has_point(mouse) else Ui.PAPER, 6.0)
-		Ui.text(self, r.position + Vector2(12, 20), p.name, 14, Ui.INK, true)
-		Ui.text(self, r.position + Vector2(0, 20), "%d" % p.sub.nodes.size(), 12, Ui.DIM, true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 10)
+		var on = comp[k] == sel_preset
+		Ui.segment(self, r, Ui.HILITE if on else Ui.PAPER, 6.0)
+		if r.has_point(mouse) and not on:
+			draw_rect(Rect2(r.position.x, r.position.y, 4, r.size.y), Ui.ink(Color.WHITE) if Ui.terminal() else Ui.HILITE)
+		Ui.text(self, r.position + Vector2(12, 20), p.name, 14, Color.WHITE if on else Ui.INK, true)
+		Ui.text(self, r.position + Vector2(0, 20), "%d" % p.sub.nodes.size(), 12, Color.WHITE if on else Ui.DIM, true, HORIZONTAL_ALIGNMENT_RIGHT, r.size.x - 10)
 	if comp.is_empty():
 		Ui.text(self, _preset_rect(0).position + Vector2(4, 20), "none saved for this kind yet", 13, Ui.DIM)
 	# Grid.
@@ -552,9 +641,7 @@ func _draw_screen():
 		_draw_node(i, live.has(i))
 	_draw_info(pal, live)
 	_draw_effect()
-	var dr = _done_rect()
-	Ui.segment(self, dr, Ui.HILITE, 8.0)
-	Ui.text(self, dr.position + Vector2(0, 29), "DONE", 20, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, dr.size.x)
+	bar.draw(self, size)
 
 # Right-hand column: what the hovered node (or the component) does.
 func _draw_info(pal: Array, live: Array) -> void:

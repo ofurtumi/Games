@@ -223,6 +223,8 @@ func loud_weapons() -> bool:
 func _process(delta):
 	if model == null:
 		return
+	if rival and main != null and main.race_held():
+		return
 	delta = minf(delta, 1.0 / 30.0)
 	_t += delta
 	zap_cd -= delta

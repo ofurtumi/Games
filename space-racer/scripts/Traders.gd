@@ -107,28 +107,32 @@ func near(p: Vector2, r: float):
 func open_deals(t: Dictionary) -> void:
 	t.trading = true
 	var main = mining.main
+	main.hub_reset()
 	var rows = []
 	for sw in t.swaps:
 		var give = sw[0]
 		var take = sw[1]
 		rows.append({"label": "Swap  " + mining._price_text(give), "value": "> " + mining._price_text(take), "can": func(): return mining._can_pay(give),
-			"action": func(): _swap(t, give, take)})
+			"actions": [{"label": "SWAP", "can": func(): return mining._can_pay(give), "action": func(): _swap(t, give, take)}]})
 	var fuel_price = {"credits": 15}
-	rows.append({"label": "Refuel", "value": mining._price_text(fuel_price), "can": func(): return mining._can_pay(fuel_price), "action": func():
-		if mining._can_pay(fuel_price):
-			mining._pay(fuel_price)
-			mining.miner.fuel = mining.miner.stats.fuel
-			preload("res://scripts/Sfx.gd").play("coins")})
+	rows.append({"label": "Refuel", "value": mining._price_text(fuel_price), "can": func(): return mining._can_pay(fuel_price),
+		"actions": [{"label": "REFUEL  ·  " + mining._price_text(fuel_price).to_upper(), "can": func(): return mining._can_pay(fuel_price), "action": func():
+			if mining._can_pay(fuel_price):
+				mining._pay(fuel_price)
+				mining.miner.fuel = mining.miner.stats.fuel
+				preload("res://scripts/Sfx.gd").play("coins")
+			else:
+				main.notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3), "shop")}]})
 	var part_price = {"credits": int(Parts.credit_price(t.part).credits * 0.75)}
 	rows.append({"label": Parts.PARTS[t.part].name, "value": "%d owned   %s" % [main.owned().get(t.part, 0), mining._price_text(part_price)], "part": t.part, "can": func(): return mining._can_pay(part_price),
-		"action": func(): _buy(t, part_price)})
-	rows.append({"label": "Leave", "action": func(): close(t)})
+		"actions": [{"label": "BUY 1  ·  " + mining._price_text(part_price).to_upper(), "can": func(): return mining._can_pay(part_price), "action": func(): _buy(t, part_price)}]})
 	main.menu.show_menu("TRADER  " + t.name, rows, func(): close(t), main.menu.title == "TRADER  " + t.name)
+	main.menu.back_label = "LEAVE"
 	main.menu.wallet = mining.wallet
 
 func _swap(t: Dictionary, give: Dictionary, take: Dictionary) -> void:
 	if not mining._can_pay(give):
-		mining.main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+		mining.main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3), "shop")
 		return
 	mining._pay(give)
 	for k in take:
@@ -138,7 +142,7 @@ func _swap(t: Dictionary, give: Dictionary, take: Dictionary) -> void:
 
 func _buy(t: Dictionary, price: Dictionary) -> void:
 	if not mining._can_pay(price):
-		mining.main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
+		mining.main.notify("NOT ENOUGH", Color(1.0, 0.3, 0.3), "shop")
 		return
 	mining._pay(price)
 	var o = mining.main.owned()

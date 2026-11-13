@@ -1,8 +1,13 @@
 extends Control
 
-# Top-most layer: the red flash and the big banner when you die.
+# Top-most layer: the red flash and the big banner when you die, and the
+# short banners (Main.notify), which have to show over menus and the garage
+# too: a shop says what it sold you there.
 
 const Ui = preload("res://scripts/Ui.gd")
+const Bar = preload("res://scripts/Bar.gd")
+
+var main
 
 var flash = 0.0
 var title = ""
@@ -61,6 +66,7 @@ func _draw():
 		var band = Rect2(-40, vp.y * 0.5 - 110, vp.x + 80, 200)
 		Ui.segment(self, band, Color(0.02, 0.02, 0.03, 0.55 * a), 40.0)
 		Ui.text(self, Vector2(0, vp.y * 0.5 + sz * 0.33), txt, sz, Color(col, a), true, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
+	_draw_notes(vp)
 	if t_banner <= 0.0:
 		return
 	var age = 3.2 - t_banner
@@ -74,3 +80,21 @@ func _draw():
 	Ui.segment(self, Rect2(r.position.x, r.end.y - 6, r.size.x, 6), Color(accent, a), 0.0)
 	Ui.text(self, Vector2(0, y + 74), title, 64, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
 	Ui.text(self, Vector2(0, y + 106), sub, 18, Color(0.9, 0.75, 0.7, a), true, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
+
+# Main.notify's banners: down from a quarter of the way while you're flying,
+# stacked up from the action bar while a menu or the garage is open. Held
+# back while the countdown is up.
+func _draw_notes(vp: Vector2) -> void:
+	if main == null or main.countdown > 0.0:
+		return
+	var in_menu = main.menu_open()
+	var ny = vp.y - Bar.RESERVED - 50.0 if in_menu else vp.y * 0.24
+	for msg in main.messages:
+		var slide = Ui.ease_out((2.2 - msg.t) / 0.25)
+		var a = clampf(msg.t / 0.3, 0.0, 1.0)
+		var w = 560.0
+		var r = Rect2((vp.x - w) * 0.5 + (1.0 - slide) * -300.0, ny, w, 42)
+		Ui.segment(self, r, Color(0.03, 0.035, 0.045, (0.95 if in_menu else 0.8) * a))
+		Ui.segment(self, Rect2(r.position.x, r.end.y - 3, w, 3), Color(msg.color, a), 0.0)
+		Ui.text(self, Vector2(r.position.x, r.position.y + 29), msg.text, 22, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, w)
+		ny += -50.0 if in_menu else 50.0

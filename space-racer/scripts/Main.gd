@@ -182,11 +182,13 @@ func _ready():
 	title_card = TitleCardScript.new()
 	menu_layer.add_child(title_card)
 	menu = GtMenuScript.new()
+	menu.main = self
 	menu_layer.add_child(menu)
 	var top = CanvasLayer.new()
 	top.layer = 5
 	add_child(top)
 	overlay = OverlayScript.new()
+	overlay.main = self
 	top.add_child(overlay)
 	var msg_layer = CanvasLayer.new()
 	msg_layer.layer = 6
@@ -204,13 +206,14 @@ func _ready():
 	_new_planet()
 	if garage:
 		garage = false
-		open_garage()
+		hub_enter("pit", "garage", true)
 	if has_meta("editor"):
 		open_editor()
 	if has_meta("menu"):
 		open_menu()
 	if has_meta("mining"):
 		enter_mining()
+	_test_args()
 	# Plain launch: the title screen, with the ship lapping behind it.
 	if shot_path == "" and not has_meta("nosave") and not garage and not has_meta("editor") and not has_meta("menu") and not has_meta("mining"):
 		show_title()
@@ -235,6 +238,32 @@ func _parse_args() -> void:
 			"shot": shot_path = kv[1]
 			"frames": shot_frames = int(kv[1])
 			"camdist": set_meta("camdist", float(kv[1]))
+			# For screenshots of the menus: --tab=shop (a hub tab; with
+			# --mining, the outpost's), --pick=3 (the menu row), --part=drill_1
+			# / --placed=0 / --wire=0 (garage: select a list part / a placed
+			# part / open its wiring), --style=classic, --credits=500,
+			# --career (a new pilot's ship and kit).
+			"tab", "pick", "part", "placed", "wire", "style", "credits": set_meta(kv[0], kv[1])
+			"career": set_meta("career", true)
+
+func _test_args() -> void:
+	if has_meta("style"):
+		Ui.style = get_meta("style")
+	if has_meta("credits"):
+		inventory.credits = int(get_meta("credits"))
+	if has_meta("tab"):
+		if hub == "":
+			hub_enter("pit", get_meta("tab"))
+		else:
+			hub_show(get_meta("tab"))
+	if has_meta("pick"):
+		menu.selected = int(get_meta("pick"))
+	if has_meta("part"):
+		grid_garage.pick_part(get_meta("part"))
+	if has_meta("placed"):
+		grid_garage.pick_placed(int(get_meta("placed")))
+	if has_meta("wire"):
+		grid_garage.editor.open(grid_garage, int(get_meta("wire")))
 
 func _build_world() -> void:
 	var we = WorldEnvironment.new()
@@ -446,10 +475,8 @@ func story_docked() -> void:
 		return
 	save_data.story = 3
 	save_game()
-	menu.hide_menu()
-	open_garage()
-	grid_garage.section = "tools"
-	grid_garage.selected = "drill_1"
+	hub_show("garage")
+	grid_garage.pick_part("drill_1")
 
 # Saves from before the career keep the frames they started with, whole.
 func _migrate_career() -> void:
@@ -608,8 +635,9 @@ func missing_cards(lo: Dictionary) -> Dictionary:
 	return miss
 
 # The card counter (outposts): copies of every card you can use. Locked ones
-# need their blueprint (Blueprints menu) first.
+# need their blueprint (Blueprints tab) first.
 func open_cards(back: Callable) -> void:
+	var again = func(): open_cards(back)
 	var rows = []
 	var used = Parts.count_cards(loadout)
 	for id in Parts.NODES:
@@ -619,22 +647,48 @@ func open_cards(back: Callable) -> void:
 		if Parts.is_locked(nd, unlocks()):
 			row.value = "blueprint needed"
 			row.can = false
+			row.actions = []
+			row.hint = "LOCKED  -  GET ITS BLUEPRINT FIRST"
 		else:
 			var pr = Parts.card_price(nid)
 			row.value = func(): return "%d owned  %d in use   %s" % [cards().get(nid, 0), used.get(nid, 0), _price_text(pr)]
-			row.action = func(): _buy_card(nid, back)
 			row.can = func(): return can_afford(pr)
+			row.actions = [{"label": "BUY 1  ·  " + _price_text(pr).to_upper(), "can": row.can,
+				"action": func(): buy_cards({nid: 1}); again.call()}]
 		rows.append(row)
 	# Your presets: buy exactly the cards one needs.
 	for pr in presets():
 		var p = pr
+		var ok = not preset_shortfall(p).has("locked") and preset_cost(p) > 0
 		rows.append({"label": "Preset: " + pr.name, "value": func(): return _preset_value(p, false),
-			"can": func(): return not preset_shortfall(p).has("locked") and preset_cost(p) > 0 and credits() >= preset_cost(p),
+			"can": func(): return ok and credits() >= preset_cost(p),
 			"note": {"title": pr.name, "text": "Buys the cards you're missing to wire this onto one more component (what your build holds stays put)."},
-			"action": func(): buy_preset(p); open_cards(back)})
-	rows.append({"label": "Back", "action": back})
+			"actions": [{"label": "BUY MISSING CARDS  ·  %d CR" % preset_cost(p), "can": ok and credits() >= preset_cost(p),
+				"action": func(): buy_preset(p); again.call()}]})
 	menu.show_menu("CARDS", rows, back, menu.title == "CARDS")
-	menu.wallet = func(): return {"bank": inventory}
+	menu.wallet = wallet
+
+# Card copies are sold at the outposts' counters.
+func cards_sold_here() -> bool:
+	return mode == "mining" and mining != null and mining.docked
+
+# Buy copies of cards: {id: how many}. Returns true if it did.
+func buy_cards(want: Dictionary) -> bool:
+	var cost = 0
+	for id in want:
+		cost += Parts.card_price(id).credits * want[id]
+	if credits() < cost:
+		notify("NOT ENOUGH CREDITS  -  %d CR" % cost, Color(1.0, 0.3, 0.3), "shop")
+		return false
+	inventory.credits -= cost
+	var names = []
+	for id in want:
+		cards()[id] = cards().get(id, 0) + want[id]
+		names.append(("%d " % want[id] if want[id] > 1 else "") + Parts.NODES[id].name)
+	notify("BOUGHT  " + ", ".join(names).to_upper() + "  -%d CR" % cost, Color.WHITE, "shop")
+	Sfx.play("coins")
+	save_game()
+	return true
 
 # Saved component wirings (the sub-grid editor's presets).
 func presets() -> Array:
@@ -698,18 +752,6 @@ func _preset_value(pr: Dictionary, with_part: bool) -> String:
 	if n == 0 and not with_part:
 		return "all set"
 	return ("part + " if with_part else "") + "%d card%s   %d cr" % [n, "" if n == 1 else "s", preset_cost(pr, with_part)]
-
-func _buy_card(id: String, back: Callable) -> void:
-	var pr = Parts.card_price(id)
-	if not can_afford(pr):
-		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
-		return
-	inventory.credits -= pr.credits
-	cards()[id] = cards().get(id, 0) + 1
-	notify("CARD  " + Parts.NODES[id].name.to_upper(), Color.WHITE)
-	Sfx.play("coins")
-	save_game()
-	open_cards(back)
 
 func missing_parts(lo: Dictionary) -> Dictionary:
 	var need = Parts.count_parts(lo)
@@ -801,16 +843,16 @@ func open_board(here: int, back: Callable) -> void:
 		var c = active[i]
 		var k = i
 		rows.append({"label": Contracts.title(c), "value": func(): return "ACTIVE  " + Contracts.progress(c),
-			"action": func(): _confirm_abandon(k, again)})
+			"actions": [{"label": "ABANDON", "action": func(): _confirm_abandon(k, again)}]})
 	var offers = contract_offers(here)
 	for i in offers.size():
 		var c = offers[i]
 		var k = i
 		rows.append({"label": Contracts.title(c), "value": Contracts.reward_text(c),
-			"action": func():
-				if accept_contract(here, k):
-					again.call()})
-	rows.append({"label": "Back", "action": back})
+			"actions": [{"label": "ACCEPT", "can": func(): return contracts().size() < Contracts.MAX_ACTIVE,
+				"action": func():
+					if accept_contract(here, k):
+						again.call()}]})
 	menu.show_menu(Contracts.PLANET_NAMES[here] + " CONTRACTS", rows, back, menu.title.ends_with("CONTRACTS"))
 
 func _confirm_abandon(k: int, back: Callable) -> void:
@@ -819,6 +861,7 @@ func _confirm_abandon(k: int, back: Callable) -> void:
 		{"label": "Abandon", "action": func(): abandon_contract(k); back.call()},
 		{"label": "Keep it", "action": back},
 	], back)
+	menu.selected = 2
 
 # Blueprints and salvaged frames, by display name.
 func unlocks() -> Array:
@@ -897,7 +940,7 @@ func _unhandled_input(event):
 			mining.open_menu()
 		return
 	if event.is_action("garage"):
-		open_garage()
+		hub_enter("pit", "garage", true)
 	elif event.is_action("builder"):
 		open_editor()
 	elif event.is_action("charge"):
@@ -915,41 +958,180 @@ func _unhandled_input(event):
 			var full = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
+# ---------------------------------------------------------------- hub
+
+# A place with several counters (an outpost, the pit lane, Nine Fingers) is
+# one screen with a tab strip along the top: its pages and the garage sit
+# side by side. A click or Tab / Shift+Tab moves between them; Esc goes to
+# the first tab and, from there, out (launch, back to the race).
+const HUBS = {
+	"outpost": [["home", "OUTPOST"], ["garage", "GARAGE"], ["shop", "SHOP"], ["cards", "CARDS"], ["blueprints", "BLUEPRINTS"],
+		["market", "MARKET"], ["contracts", "CONTRACTS"], ["settings", "SETTINGS"]],
+	"pit": [["home", "PAUSE"], ["garage", "GARAGE"], ["shop", "PIT SHOP"], ["market", "MARKET"], ["contracts", "CONTRACTS"],
+		["settings", "SETTINGS"]],
+	"nine": [["blueprints", "BLUEPRINTS"], ["shop", "PARTS"]],
+}
+const HUB_EXIT = {"outpost": "LAUNCH", "pit": "RESUME", "nine": "LEAVE"}
+
+var hub = ""             # which place is up ("" none)
+var hub_tab = ""
+var hub_direct = false   # opened straight onto a tab (G for the garage): Esc leaves at once
+
+func hub_tabs() -> Array:
+	return HUBS.get(hub, [])
+
+func hub_enter(kind: String, tab: String, direct: bool = false) -> void:
+	hub = kind
+	hub_direct = direct
+	hub_show(tab)
+
+# No hub: a menu that stands alone (title, results, a trader) is coming up.
+func hub_reset() -> void:
+	hub = ""
+	hub_tab = ""
+	hub_direct = false
+
+# The planet whose outpost or track this is.
+func _hub_planet() -> int:
+	return mining.outposts[mining.at_outpost].planet if hub == "outpost" else planet_index % 4
+
+func hub_show(tab: String) -> void:
+	if hub == "":
+		return
+	if grid_garage.visible:
+		if tab == "garage":
+			return
+		grid_garage.close()
+	hub_tab = tab
+	if mode == "race":
+		ship.set_process(false)
+	match tab:
+		"garage":
+			menu.hide_menu()
+			open_garage()
+		"home":
+			if hub == "outpost":
+				mining.open_home()
+			else:
+				_open_pause()
+		"shop":
+			if hub == "outpost":
+				var def = MiningScript.PLANETS[_hub_planet()]
+				open_shop(def.mech, def.name.to_upper() + " SHOP", hub_back)
+			elif hub == "nine":
+				open_shop("nine", "NINE FINGERS PARTS", hub_back)
+			else:
+				open_shop("", "PIT SHOP", hub_back)
+		"cards":
+			open_cards(hub_back)
+		"blueprints":
+			if hub == "outpost":
+				var def = MiningScript.PLANETS[_hub_planet()]
+				mining.open_market(def.offers, Parts.MECHANICS[def.mech].name.to_upper())
+			else:
+				mining.open_market()
+		"market":
+			open_exchange(hub_back)
+		"contracts":
+			open_board(_hub_planet(), hub_back)
+		"settings":
+			open_settings(hub_back)
+
+func hub_step(dir: int) -> void:
+	var tabs = hub_tabs()
+	for i in tabs.size():
+		if tabs[i][0] == hub_tab:
+			hub_show(tabs[(i + dir + tabs.size()) % tabs.size()][0])
+			return
+
+# Esc leaves the place from its first tab (or when there's no home tab, or
+# you came straight in); from any other tab it goes home first.
+func _hub_exits() -> bool:
+	var tabs = hub_tabs()
+	return hub_direct or tabs.is_empty() or tabs[0][0] != "home" or hub_tab == "home"
+
+func hub_back_label() -> String:
+	return HUB_EXIT.get(hub, "DONE") if _hub_exits() else hub_tabs()[0][1]
+
+func hub_back() -> void:
+	if _hub_exits():
+		hub_leave()
+	else:
+		hub_show("home")
+
+func hub_leave() -> void:
+	var kind = hub
+	if grid_garage.visible:
+		grid_garage.close()
+	hub_reset()
+	match kind:
+		"outpost":
+			mining.launch()
+		"pit":
+			close_menu()
+		_:
+			menu.hide_menu()
+
+# While the pit is up the race waits: the clock, the rivals, the drones.
+func race_held() -> bool:
+	return hub == "pit"
+
 # ---------------------------------------------------------------- menus
 
 func open_menu() -> void:
-	ship.set_process(false)
+	hub_enter("pit", "home")
+
+func _open_pause() -> void:
 	var practice = []
-	if mode == "race" and race_laps == 0 and countdown <= 0.0:
+	if race_laps == 0 and countdown <= 0.0:
 		practice = [{"label": "End session", "value": func(): return "%d laps" % session.get("laps", 0), "action": show_session}]
 	menu.show_menu("PAUSE", [
-		{"label": "Resume", "action": close_menu}] + practice + [
-		{"label": "Garage", "action": func(): close_menu(); open_garage()},
-		{"label": "Pit shop", "action": func(): open_pit(open_menu)},
-		{"label": "Contracts", "value": func(): return "%d / %d active" % [contracts().size(), Contracts.MAX_ACTIVE],
-			"action": func(): open_board(planet_index % 4, open_menu)},
-		{"label": "Track Builder", "action": func(): close_menu(); open_editor()},
-		{"label": "Expedition", "action": func(): close_menu(); enter_mining()},
-		{"label": "New Planet", "action": func(): close_menu(); _next_planet()},
-		{"label": "Camera", "value": func(): return "Ortho" if ortho else "Perspective",
-			"action": func(): ortho = not ortho, "left": func(): ortho = not ortho, "right": func(): ortho = not ortho},
-		{"label": "Outlines", "value": func(): return "On" if outline.visible else "Off",
-			"action": func(): outline.visible = not outline.visible, "left": func(): outline.visible = not outline.visible, "right": func(): outline.visible = not outline.visible},
-		{"label": "Render", "value": func(): return "Low-res" if get_viewport().scaling_3d_scale < 1.0 else "Full",
-			"action": _toggle_res, "left": _toggle_res, "right": _toggle_res},
-		{"label": "Controls", "action": func(): open_controls(open_menu)},
-		_rivals_row(),
-		{"label": "Sound", "action": func(): open_sound(open_menu)},
-		_interface_row(),
-		{"label": "Main menu", "action": func(): close_menu(); show_title()},
+		{"label": "Resume", "action": hub_leave}] + practice + [
+		{"label": "Track Builder", "action": func(): hub_leave(); open_editor()},
+		{"label": "Expedition", "action": func(): hub_leave(); enter_mining()},
+		{"label": "New Planet", "action": func(): hub_leave(); _next_planet()},
+		{"label": "Main menu", "action": func(): hub_leave(); show_title()},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
-	], close_menu)
+	], hub_back, menu.title == "PAUSE")
 
-# ---------------------------------------------------------------- pit shop
+# Interface, rivals, volume and keys, wherever you are; plus what only
+# matters here (the race camera; on the title, Reset save).
+func open_settings(back: Callable) -> void:
+	var again = func(): open_settings(back)
+	var rows = [_interface_row(), _rivals_row()]
+	for r in SOUND_ROWS:
+		var key = r[0]
+		rows.append({"label": r[1] + " volume",
+			"value": func():
+				var n = sound_levels()[key]
+				return "■".repeat(n) + "□".repeat(10 - n) + "  %d" % n,
+			"left": func(): _nudge_sound(key, -1), "right": func(): _nudge_sound(key, 1)})
+	if mode == "race" and not title_on:
+		var flip_cam = func(): ortho = not ortho
+		var flip_lines = func(): outline.visible = not outline.visible
+		rows.append({"label": "Camera", "value": func(): return "Ortho" if ortho else "Perspective", "left": flip_cam, "right": flip_cam})
+		rows.append({"label": "Outlines", "value": func(): return "On" if outline.visible else "Off", "left": flip_lines, "right": flip_lines})
+		rows.append({"label": "Render", "value": func(): return "Low-res" if get_viewport().scaling_3d_scale < 1.0 else "Full",
+			"left": _toggle_res, "right": _toggle_res})
+	rows.append({"label": "Controls", "value": "rebind keys", "verb": "OPEN", "action": func(): open_controls(again)})
+	if title_on:
+		rows.append({"label": "Reset save", "value": "start over", "verb": "OPEN", "action": func(): _confirm_reset(again)})
+	menu.show_menu("SETTINGS", rows, back, menu.title == "SETTINGS")
 
-# The track's pit lane sells stock parts (no mechanics' specials, those are
-# at the outposts) and buys spares back, all through the bank.
-# ---------------------------------------------------------------- ordering
+# ---------------------------------------------------------------- shops
+
+# Whose parts are sold where you are: an outpost's mechanic, "" in the pit
+# lane (stock parts only), null when there's no shop here.
+func shop_here():
+	if mode != "mining":
+		return ""
+	if mining != null and mining.docked:
+		return MiningScript.PLANETS[mining.outposts[mining.at_outpost].planet].mech
+	return "nine" if hub == "nine" else null
+
+func sold_here(id: String) -> bool:
+	var m = shop_here()
+	return m != null and Parts.shop_stock(m).has(id) and not Parts.is_locked(Parts.PARTS[id], unlocks())
 
 # Outposts you've visited (seen on the map) whose shop stocks a part.
 func outposts_selling(id: String) -> Array:
@@ -961,40 +1143,123 @@ func outposts_selling(id: String) -> Array:
 			out.append(i)
 	return out
 
-# From the garage: a part you have none of to hand. Buy it here if you can,
-# otherwise see where it's sold.
+# Docked, and another outpost you've been to sells it: a courier can bring it.
+func can_order(id: String) -> bool:
+	return cards_sold_here() and not outposts_selling(id).is_empty() and not sold_here(id)
+
+# In words, for a part this place doesn't sell.
+func where_sold(id: String) -> String:
+	var names = []
+	for i in outposts_selling(id):
+		names.append(MiningScript.PLANETS[i].name.to_upper())
+	if names.is_empty():
+		return "NOT SOLD ANYWHERE YOU'VE BEEN  -  EXPLORE"
+	return "SOLD AT " + ", ".join(names) + (" OUTPOST" if names.size() == 1 else " OUTPOSTS")
+
+# Hold and bank, for the shops' wallet panel (docked, the hold is already
+# in the bank).
+func wallet() -> Dictionary:
+	if mode == "mining" and mining != null and not mining.docked:
+		return {"hold": mining.cargo, "bank": inventory}
+	return {"bank": inventory}
+
+func buy_part(id: String, price: Dictionary = {}) -> bool:
+	var pr = price if not price.is_empty() else Parts.credit_price(id)
+	if not can_afford(pr):
+		notify("NOT ENOUGH CREDITS  -  " + _price_text(pr).to_upper(), Color(1.0, 0.3, 0.3), "shop")
+		return false
+	for k in pr:
+		inventory[k] -= pr[k]
+	owned()[id] = owned().get(id, 0) + 1
+	notify("BOUGHT  " + Parts.PARTS[id].name.to_upper() + "  -" + _price_text(pr).to_upper(), Color.WHITE, "shop")
+	Sfx.play("coins")
+	save_game()
+	return true
+
+# Spares (parts the build isn't using) sell for half the shop price.
+func sell_part(id: String) -> bool:
+	if spare_parts().get(id, 0) <= 0:
+		notify("NO SPARE " + Parts.PARTS[id].name.to_upper() + "  -  TAKE ONE OFF THE SHIP FIRST", Color(1.0, 0.4, 0.3), "shop")
+		return false
+	var o = owned()
+	o[id] -= 1
+	if o[id] <= 0:
+		o.erase(id)
+	var pay = MiningScript.sell_price(id)
+	for k in pay:
+		inventory[k] = inventory.get(k, 0) + pay[k]
+	notify("SOLD  " + Parts.PARTS[id].name.to_upper() + "  +" + _price_text(pay).to_upper(), Color(1.0, 0.82, 0.25), "shop")
+	Sfx.play("coins")
+	save_game()
+	return true
+
+# A parts shop: what `mech` stocks (an outpost's mechanics plus stock parts;
+# "" the pit lane's stock parts; "nine" the black market's), then any other
+# spares you could sell here, then your presets for parts sold here (the part
+# and the cards it needs, in one go). Select a part: Buy and Sell are on the
+# action bar.
+func open_shop(mech: String, title: String, back: Callable) -> void:
+	var again = func(): open_shop(mech, title, back)
+	var stock = Parts.shop_stock(mech).filter(func(id): return not Parts.is_locked(Parts.PARTS[id], unlocks()))
+	var rows = []
+	for id in stock:
+		rows.append(_shop_row(id, true, again))
+	for id in spare_parts():
+		if not stock.has(id):
+			rows.append(_shop_row(id, false, again))
+	for pr in presets():
+		if not stock.has(pr.part):
+			continue
+		var p = pr
+		var ok = not preset_shortfall(p).has("locked") and credits() >= preset_cost(p, true)
+		rows.append({"label": "Preset: " + pr.name, "part": pr.part, "value": func(): return _preset_value(p, true), "can": ok,
+			"actions": [{"label": "BUY PART + CARDS  ·  %d CR" % preset_cost(p, true), "can": ok,
+				"action": func(): buy_preset(p, true); again.call()}]})
+	menu.show_menu(title, rows, back, menu.title == title)
+	menu.wallet = wallet
+	menu.overview = shop_overview
+
+func _shop_row(id: String, sold: bool, again: Callable) -> Dictionary:
+	var pr = Parts.credit_price(id)
+	var pay = MiningScript.sell_price(id)
+	var spare = func(): return spare_parts().get(id, 0)
+	var acts = []
+	if sold:
+		acts.append({"label": "BUY 1  ·  " + _price_text(pr).to_upper(), "can": func(): return can_afford(pr),
+			"action": func(): buy_part(id); again.call()})
+	acts.append({"label": "SELL 1  ·  +" + _price_text(pay).to_upper(), "can": func(): return spare.call() > 0,
+		"action": func(): sell_part(id); again.call()})
+	var row = {"label": Parts.PARTS[id].name, "part": id, "actions": acts,
+		"value": func(): return "%d owned  %d spare   %s" % [owned().get(id, 0), spare.call(), _price_text(pr) if sold else "not sold here"]}
+	if sold:
+		row.can = func(): return can_afford(pr)
+	return row
+
+# ---------------------------------------------------------------- ordering
+
+# From the garage: a part this outpost doesn't sell, brought over from one
+# that does. A courier flies it; pirates may not agree.
 func open_order(id: String) -> void:
 	var def = Parts.PARTS[id]
 	var pr = Parts.credit_price(id)
 	var rows = []
-	var here = -1
-	if mode == "mining" and mining != null and mining.docked:
-		here = mining.outposts[mining.at_outpost].planet
-	var sold_here = (here >= 0 and Parts.shop_stock(MiningScript.PLANETS[here].mech).has(id)) or (mode == "race" and def.mech == "")
-	if sold_here:
-		rows.append({"label": "Buy here", "value": _price_text(pr), "part": id, "can": func(): return can_afford(pr),
-			"action": func(): _order_buy(id)})
+	var here = mining.outposts[mining.at_outpost].planet
+	var fee = MiningScript.CouriersScript.fee(id)
 	for i in outposts_selling(id):
 		if i == here:
 			continue
 		var src = i
-		if here >= 0:
-			# Docked: have it sent. A courier flies it over; pirates may not agree.
-			var total = {"credits": pr.credits + MiningScript.CouriersScript.fee(id)}
-			rows.append({"label": "Courier from " + MiningScript.PLANETS[i].name, "value": _price_text(pr) + " + %d fee" % MiningScript.CouriersScript.fee(id),
-				"part": id, "can": func(): return can_afford(total), "action": func(): _order_courier(id, src, here)})
-		else:
-			rows.append({"label": MiningScript.PLANETS[i].name + " outpost", "value": "sells it  " + _price_text(pr), "part": id, "can": false})
-	if rows.is_empty():
-		rows.append({"label": "Not sold anywhere you've been", "value": "explore", "part": id, "can": false})
-	rows.append({"label": "Back", "action": menu.hide_menu})
+		var total = {"credits": pr.credits + fee}
+		rows.append({"label": "Courier from " + MiningScript.PLANETS[i].name, "value": _price_text(pr) + " + %d fee" % fee,
+			"part": id, "can": func(): return can_afford(total), "verb": "ORDER  ·  %d CR" % total.credits,
+			"action": func(): _order_courier(id, src, here)})
 	menu.show_menu("ORDER  " + def.name.to_upper(), rows, menu.hide_menu)
-	menu.wallet = func(): return {"bank": inventory}
+	menu.wallet = wallet
 
 func _order_courier(id: String, from: int, to: int) -> void:
 	var total = Parts.credit_price(id).credits + MiningScript.CouriersScript.fee(id)
 	if credits() < total:
-		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
+		notify("NOT ENOUGH CREDITS  -  %d CR" % total, Color(1.0, 0.3, 0.3), "shop")
 		return
 	inventory.credits -= total
 	mining.couriers.send(id, from, to)
@@ -1003,41 +1268,9 @@ func _order_courier(id: String, from: int, to: int) -> void:
 	save_game()
 	menu.hide_menu()
 
-func _order_buy(id: String) -> void:
-	var pr = Parts.credit_price(id)
-	if not can_afford(pr):
-		notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
-		return
-	inventory.credits -= pr.credits
-	owned()[id] = owned().get(id, 0) + 1
-	notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
-	Sfx.play("coins")
-	save_game()
-	menu.hide_menu()
-	grid_garage.selected = id
-
 # What the shops' overview panel shows: your build and what you own.
 func shop_overview() -> Dictionary:
 	return {"lo": loadout, "owned": owned(), "stats": ship.stats, "broken": broken_cells(loadout.get("frame", "basic"))}
-
-func open_pit(back: Callable) -> void:
-	var rows = []
-	for id in Parts.shop_stock(""):
-		if Parts.is_locked(Parts.PARTS[id], unlocks()):
-			continue
-		var pid = id
-		var pr = Parts.credit_price(pid)
-		rows.append({"label": Parts.PARTS[pid].name,
-			"value": func(): return "%d owned   %s" % [owned().get(pid, 0), _price_text(pr)], "part": pid,
-			"can": func(): return can_afford(pr),
-			"action": func(): _pit_buy(pid, back)})
-	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % spare_parts().values().reduce(func(a, b): return a + b, 0),
-		"action": func(): _pit_sell_menu(back)})
-	rows.append({"label": "Sell materials", "value": "market", "action": func(): open_exchange(func(): open_pit(back))})
-	rows.append({"label": "Back", "action": back})
-	menu.show_menu("PIT SHOP", rows, back, menu.title == "PIT SHOP")
-	menu.wallet = func(): return {"bank": inventory}
-	menu.overview = shop_overview
 
 func _price_text(price: Dictionary) -> String:
 	var bits = []
@@ -1056,14 +1289,16 @@ func open_exchange(back: Callable) -> void:
 	var rows = []
 	for m in ["rock", "metal", "crystal", "core"]:
 		var mat = m
-		rows.append({"label": "Sell 10 " + m, "value": func(): return "%d in bank   +%d cr" % [inventory.get(mat, 0), Parts.sale(mat, mini(10, inventory.get(mat, 0)))],
-			"action": func(): _sell_mat(mat, 10, back)})
-		rows.append({"label": "Sell all " + m, "value": func(): return "+%d cr" % Parts.sale(mat, inventory.get(mat, 0)),
-			"action": func(): _sell_mat(mat, inventory.get(mat, 0), back)})
-	rows.append({"label": "Back", "action": back})
+		var have = inventory.get(mat, 0)
+		rows.append({"label": m.capitalize(), "swatch": MiningScript.MAT_COLORS[m], "can": have > 0,
+			"value": "%d in bank   %s cr each" % [have, str(Parts.SELL_VALUE[m]).trim_suffix(".0")],
+			"actions": [
+				{"label": "SELL 10  ·  +%d CR" % Parts.sale(mat, mini(10, have)), "can": have > 0, "action": func(): _sell_mat(mat, 10, back)},
+				{"label": "SELL ALL  ·  +%d CR" % Parts.sale(mat, have), "can": have > 0, "action": func(): _sell_mat(mat, have, back)},
+			]})
 	menu.show_menu("MARKET", rows, back, menu.title == "MARKET")
-	menu.blurb = "Sell materials from your bank for credits (rock 1 cr per 2, metal %d, crystal %d, core %d each). Docking unloads your hold into the bank. Keep some rock and metal for repairs." % [int(Parts.SELL_VALUE.metal), int(Parts.SELL_VALUE.crystal), int(Parts.SELL_VALUE.core)]
-	menu.wallet = func(): return {"bank": inventory}
+	menu.blurb = "Sell materials from your bank for credits. Docking unloads your hold into the bank. Keep some rock and metal for repairs."
+	menu.wallet = wallet
 
 func _sell_mat(m: String, n: int, back: Callable) -> void:
 	n = mini(n, inventory.get(m, 0))
@@ -1076,47 +1311,6 @@ func _sell_mat(m: String, n: int, back: Callable) -> void:
 	Sfx.play("coins")
 	save_game()
 	open_exchange(back)
-
-func _pit_buy(id: String, back: Callable) -> void:
-	var pr = Parts.credit_price(id)
-	if not can_afford(pr):
-		notify("NOT ENOUGH", Color(1.0, 0.3, 0.3))
-		return
-	for k in pr:
-		inventory[k] -= pr[k]
-	owned()[id] = owned().get(id, 0) + 1
-	notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
-	Sfx.play("coins")
-	save_game()
-	open_pit(back)
-
-func _pit_sell_menu(back: Callable) -> void:
-	var rows = []
-	var spares = spare_parts()
-	for id in spares:
-		var pid = id
-		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(MiningScript.sell_price(pid))], "part": pid,
-			"action": func(): _pit_sell(pid, back)})
-	var up = func(): open_pit(back)
-	rows.append({"label": "Back", "action": up})
-	menu.show_menu("SELL", rows, up, menu.title == "SELL")
-	menu.wallet = func(): return {"bank": inventory}
-	menu.overview = shop_overview
-
-func _pit_sell(id: String, back: Callable) -> void:
-	if spare_parts().get(id, 0) <= 0:
-		return
-	var o = owned()
-	o[id] -= 1
-	if o[id] <= 0:
-		o.erase(id)
-	var pay = MiningScript.sell_price(id)
-	for k in pay:
-		inventory[k] = inventory.get(k, 0) + pay[k]
-	notify("SOLD  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
-	Sfx.play("coins")
-	save_game()
-	_pit_sell_menu(back)
 
 # ---------------------------------------------------------------- sound
 
@@ -1140,19 +1334,6 @@ func _nudge_sound(key: String, d: int) -> void:
 	Sfx.play("ui_move" if key != "loops" else "tick")
 	save_game()
 
-# Master / effects / engines, 0 to 10, left and right to change.
-func open_sound(back: Callable) -> void:
-	var rows = []
-	for r in SOUND_ROWS:
-		var key = r[0]
-		rows.append({"label": r[1],
-			"value": func():
-				var n = sound_levels()[key]
-				return "■".repeat(n) + "□".repeat(10 - n) + "  %d" % n,
-			"left": func(): _nudge_sound(key, -1), "right": func(): _nudge_sound(key, 1)})
-	rows.append({"label": "Back", "action": back})
-	menu.show_menu("SOUND", rows, back, menu.title == "SOUND")
-
 # Every action and its key. Pick a row, press a key to rebind it.
 func open_controls(back: Callable) -> void:
 	var rows = []
@@ -1160,9 +1341,8 @@ func open_controls(back: Callable) -> void:
 		var id = a[0]
 		rows.append({"label": a[1],
 			"value": func(): return "press a key" if rebinding == id else Controls.key_name(id, save_data.get("keys", {})),
-			"action": func(): _rebind(id, back)})
+			"verb": "REBIND", "action": func(): _rebind(id, back)})
 	rows.append({"label": "Reset to defaults", "action": func(): _reset_keys(back)})
-	rows.append({"label": "Back", "action": back})
 	menu.show_menu("CONTROLS", rows, back, menu.title == "CONTROLS")
 
 func _reset_keys(back: Callable) -> void:
@@ -1186,6 +1366,7 @@ func _rebind(id: String, back: Callable) -> void:
 # ---------------------------------------------------------------- title
 
 func show_title() -> void:
+	hub_reset()
 	title_on = true
 	if mode == "mining":
 		leave_mining()
@@ -1202,29 +1383,25 @@ func show_title() -> void:
 	menu.dim_backdrop = false
 	if story() == 0:
 		# A fresh game: nothing to do but start.
-		menu.show_menu("", [{"label": "Start", "action": _story_intro}], Callable())
+		menu.show_menu("", [{"label": "Start", "verb": "START", "action": _story_intro}], Callable())
 		return
 	menu.show_menu("", [
 		{"label": "Race", "value": func(): return Contracts.PLANET_NAMES[planet_index % 4] + " CUP",
 			"action": func(): _leave_title(); race_on(planet_index % 4)},
 		{"label": "Time trial", "action": func(): _leave_title(); start_practice()},
 		{"label": "Expedition", "action": func(): _leave_title(); enter_mining()},
-		{"label": "Garage", "action": func(): _leave_title(); open_garage()},
+		{"label": "Garage", "action": func(): _leave_title(); hub_enter("pit", "garage")},
 		{"label": "Track Builder", "action": func(): _leave_title(); open_editor()},
-		{"label": "Controls", "action": func(): open_controls(show_title)},
-		_rivals_row(),
-		{"label": "Sound", "action": func(): open_sound(show_title)},
-		_interface_row(),
-		{"label": "Reset save", "action": _confirm_reset},
+		{"label": "Settings", "action": func(): open_settings(show_title)},
 		{"label": "Quit", "action": func(): save_game(); get_tree().quit()},
 	], Callable())
 
-func _confirm_reset() -> void:
+func _confirm_reset(back: Callable) -> void:
 	menu.show_menu("RESET SAVE?", [
 		{"label": "Start over", "value": "parts, frames, wins, materials"},
 		{"label": "Reset", "action": reset_save},
-		{"label": "Back", "action": show_title},
-	], show_title)
+		{"label": "Keep it", "action": back},
+	], back)
 	menu.selected = 2
 
 # Back to a fresh career (the old save is copied aside first). Controls and
@@ -1309,6 +1486,7 @@ func _tick_countdown(delta: float) -> void:
 			rv.set_process(true)
 
 func close_menu() -> void:
+	hub_reset()
 	menu.hide_menu()
 	ship.set_process(not garage)
 
@@ -1332,6 +1510,8 @@ func open_garage() -> void:
 	_set_garage(true)
 	grid_garage.open(self)
 
+# The garage has shut (GridGarage.close): put the world back. Where you go
+# next is the hub's business.
 func garage_closed() -> void:
 	_set_garage(false)
 	save_game()
@@ -1393,6 +1573,7 @@ var trip = {}   # {kind: "up" (off the track) / "down" (onto the grid), t}
 # From the results: up off the track into the sky, cut, and out of the
 # planet to its outpost.
 func go_to_outpost() -> void:
+	hub_reset()
 	menu.hide_menu()
 	hud.visible = false
 	ship.set_process(false)
@@ -1688,6 +1869,7 @@ func show_results(place_name: String, prize: String, trophy: String = "") -> voi
 	rows.append({"label": "Go to outpost", "value": Contracts.PLANET_NAMES[planet_index % 4], "action": go_to_outpost})
 	rows.append({"label": "Race again", "action": _restart_race})
 	rows.append({"label": "Main menu", "action": func(): _close_results(); show_title()})
+	hub_reset()
 	menu.show_menu("RESULTS  ·  " + place_name, rows, Callable())
 	menu.selected = field.size() + (2 if trophy != "" else 1)
 
@@ -1716,7 +1898,9 @@ func show_session() -> void:
 	rows.append({"label": "Go to outpost", "value": Contracts.PLANET_NAMES[planet_index % 4], "action": go_to_outpost})
 	rows.append({"label": "Main menu", "action": func(): menu.hide_menu(); show_title()})
 	var head = "NEW MEDAL" if not session.get("medals", []).is_empty() else ("BEST  " + Hud.laptime(best) if best >= 0.0 else "NO LAPS")
+	hub_reset()
 	menu.show_menu("PRACTICE  ·  " + head, rows, Callable() if done else close_menu)
+	menu.back_label = "KEEP DRIVING"
 	menu.selected = rows.size() - (3 if done else 4)
 
 func _close_results() -> void:
@@ -1860,6 +2044,7 @@ func _process(delta):
 		for m in messages:
 			m.t -= delta
 		messages = messages.filter(func(m): return m.t > 0.0)
+		_shot_tick()
 		return
 	if garage:
 		ship.model.rotate_y(delta * 0.6)
@@ -1873,6 +2058,8 @@ func _process(delta):
 		_trip_step(delta)
 	elif countdown > 0.0:
 		_tick_countdown(delta)
+	elif race_held():
+		pass
 	else:
 		lap_time += delta
 		_race(delta)
@@ -1887,6 +2074,10 @@ func _process(delta):
 			m.t -= delta
 	messages = messages.filter(func(m): return m.t > 0.0)
 	hud.queue_redraw()
+	_shot_tick()
+
+# --shot: save the frame and quit.
+func _shot_tick() -> void:
 	if shot_path != "":
 		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
 		_frame += 1

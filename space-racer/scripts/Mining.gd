@@ -476,6 +476,7 @@ func _start_arrival(planet: int) -> void:
 
 # From the pad down into the planet, then the race on its surface.
 func depart_to_race(planet: int) -> void:
+	main.hub_reset()
 	main.menu.hide_menu()
 	docked = false
 	var pl = planets[planet]
@@ -556,7 +557,6 @@ func open_pickups(back: Callable) -> void:
 		rows.append({"label": m.capitalize(), "value": func(): return "COLLECT" if wants(mat) else "LEAVE",
 			"swatch": MAT_COLORS[m], "action": func(): _toggle_pickup(mat),
 			"left": func(): _toggle_pickup(mat), "right": func(): _toggle_pickup(mat)})
-	rows.append({"label": "Back", "action": back})
 	main.menu.show_menu("PICKUPS", rows, back, main.menu.title == "PICKUPS")
 
 # ---------------------------------------------------------------- map
@@ -605,6 +605,7 @@ func _explore() -> void:
 			mark_seen("planet:%d" % i)
 
 func launch() -> void:
+	main.hub_reset()
 	docked = false
 	_undock_cd = 2.5
 	trader_cool = 3.0
@@ -642,58 +643,62 @@ func wrecked() -> void:
 	main.overlay.show_death("WRECKED", "your cargo is in the wreck  ·  towing you home" if held > 0 else "towing you home")
 	_dead_left = 2.6
 
+# Esc: docked, the outpost (its first tab); out in space, the pause menu.
 func open_menu() -> void:
 	if docked:
-		var def = PLANETS[outposts[at_outpost].planet]
-		var mech = Parts.MECHANICS[def.mech].name
-		main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
-			{"label": "Launch", "place": "pad", "action": launch,
-				"desc": "Undock. You drop out under the station, nose to the planet."},
-			{"label": "Map", "place": "nav", "action": open_map,
-				"desc": "The system as far as you've charted it. Signals mark what you haven't visited."},
-			{"label": "Contracts", "place": "contracts", "value": func(): return "%d / %d active" % [main.contracts().size(), Contracts.MAX_ACTIVE], "action": open_contracts,
-				"desc": "The job board: hauls, races, salvage, surveys, bounties. Paid in credits."},
-			{"label": "Shop", "place": "shop", "value": "parts", "action": func(): open_shop(def.mech, def.name.to_upper() + " SHOP"),
-				"desc": "Stock parts and " + mech + "'s own, for credits. Sell your spares here too."},
-			{"label": "Cards", "place": "cards", "value": "program cards", "action": func(): main.open_cards(open_menu),
-				"desc": "Copies of program cards to wire into your components' sub-grids."},
-			{"label": "Market", "place": "market", "value": func(): return "%d cr" % main.credits(), "action": func(): main.open_exchange(open_menu),
-				"desc": "Sell materials from your bank for credits."},
-			{"label": "Blueprints", "place": "blueprints", "value": mech, "action": func(): open_market(def.offers, mech.to_upper()),
-				"desc": mech + "'s drafting office: blueprints that unlock new cards and parts."},
-			{"label": "Pickups", "place": "cargo", "value": _filter_text, "action": func(): open_pickups(open_menu),
-				"desc": "Cargo control: which materials you collect out there."},
-			{"label": "Garage", "place": "garage", "action": func(): main.menu.hide_menu(); main.open_garage(),
-				"desc": "Build and repair your ship. Broken slots are fixed here with rock and metal."},
-			{"label": "Race here", "place": "chute", "value": def.name, "action": func(): depart_to_race(outposts[at_outpost].planet),
-				"desc": "Down the drop chute to " + def.name + "'s track, against the locals."},
-			{"label": "Controls", "place": "comms", "action": func(): main.open_controls(open_menu),
-				"desc": "Rebind keys."},
-			{"label": "Sound", "place": "comms", "action": func(): main.open_sound(open_menu),
-				"desc": "Volume."},
-			main._interface_row().merged({"place": "comms", "desc": "Terminal (green screens) or Classic menus."}),
-			{"label": "Quit", "place": "airlock", "action": func(): main.save_game(); get_tree().quit(),
-				"desc": "Save and leave the game."},
-		], launch)
-		main.menu.crt = {"name": def.name.to_upper() + " OUTPOST", "line": "RUN BY " + mech.to_upper() + "  ::  " + def.name.to_upper() + " ORBIT",
-			"credits": main.credits()}
-	else:
-		main.menu.show_menu("EXPEDITION", [
-			{"label": "Resume", "action": main.menu.hide_menu},
-			{"label": "Map", "action": open_map},
-			{"label": "Camera", "value": _camera_text, "action": _camera_auto},
-			{"label": "Pickups", "value": _filter_text, "action": func(): open_pickups(open_menu)},
-			{"label": "Tow home", "value": "lose cargo", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
-			{"label": "Controls", "action": func(): main.open_controls(open_menu)},
-			{"label": "Sound", "action": func(): main.open_sound(open_menu)},
-			main._interface_row(),
-			{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
-		], main.menu.hide_menu)
+		main.hub_enter("outpost", "home")
+		return
+	main.hub_reset()
+	main.menu.show_menu("EXPEDITION", [
+		{"label": "Resume", "action": main.menu.hide_menu},
+		{"label": "Map", "action": open_map},
+		{"label": "Camera", "value": _camera_text, "verb": "BACK TO AUTO", "action": _camera_auto},
+		{"label": "Pickups", "value": _filter_text, "action": func(): open_pickups(open_menu)},
+		{"label": "Tow home", "value": "lose cargo", "action": _confirm_tow},
+		{"label": "Settings", "action": func(): main.open_settings(open_menu)},
+		{"label": "Quit", "action": func(): main.save_game(); get_tree().quit()},
+	], main.menu.hide_menu, main.menu.title == "EXPEDITION")
+	main.menu.back_label = "RESUME"
 
+func _confirm_tow() -> void:
+	main.menu.show_menu("TOW HOME?", [
+		{"label": "Hold", "value": _hold_text()},
+		{"label": "Tow me home", "action": func(): main.menu.hide_menu(); cargo.clear(); _dock()},
+		{"label": "Stay out", "action": open_menu},
+	], open_menu)
+	main.menu.selected = 2
+
+func _hold_text() -> String:
+	var bits = []
+	for k in cargo:
+		if cargo[k] > 0:
+			bits.append("%d %s" % [cargo[k], k])
+	return "  ".join(bits) if not bits.is_empty() else "empty"
+
+# The outpost's first tab: what the station itself does. The shops, the
+# garage and the rest are the other tabs (Main.HUBS).
+func open_home() -> void:
+	var def = PLANETS[outposts[at_outpost].planet]
+	var mech = Parts.MECHANICS[def.mech].name
+	main.menu.show_menu(def.name.to_upper() + " OUTPOST", [
+		{"label": "Launch", "place": "pad", "action": main.hub_leave,
+			"desc": "Undock. You drop out under the station, nose to the planet."},
+		{"label": "Race here", "place": "chute", "value": def.name, "action": func(): depart_to_race(outposts[at_outpost].planet),
+			"desc": "Down the drop chute to " + def.name + "'s track, against the locals."},
+		{"label": "Map", "place": "nav", "action": open_map,
+			"desc": "The system as far as you've charted it. Signals mark what you haven't visited."},
+		{"label": "Pickups", "place": "cargo", "value": _filter_text, "action": func(): open_pickups(open_menu),
+			"desc": "Cargo control: which materials you collect out there."},
+		{"label": "Quit", "place": "airlock", "action": func(): main.save_game(); get_tree().quit(),
+			"desc": "Save and leave the game."},
+	], main.hub_back, main.menu.title == def.name.to_upper() + " OUTPOST")
+	main.menu.crt = {"name": def.name.to_upper() + " OUTPOST", "line": "RUN BY " + mech.to_upper() + "  ::  " + def.name.to_upper() + " ORBIT",
+		"credits": main.credits()}
+
+# The garage has shut: the expedition's own ship and camera again.
 func garage_closed() -> void:
 	miner.equip(main.loadout)
 	cam.current = true
-	open_menu()
 
 # ---------------------------------------------------------------- ore & gas
 
@@ -891,17 +896,6 @@ func _draw_hud() -> void:
 		Ui.text(hud, Vector2(vp.x * 0.5 - 150, 42), "TOWING  " + _site_label(tow), 17, Color.WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, 300)
 	# Where things are lives on the map now (M).
 	Ui.text(hud, Vector2(28, vp.y - 30), Controls.key_name("map", main.save_data.get("keys", {})).to_upper() + "  MAP", 14, Ui.DIM, true)
-	# Banners.
-	var ny = vp.y * 0.24
-	for msg in main.messages:
-		var a = clampf(msg.t / 0.3, 0.0, 1.0)
-		var bw = 560.0
-		var r = Rect2((vp.x - bw) * 0.5, ny, bw, 42)
-		Ui.segment(hud, r, Color(0.03, 0.035, 0.045, 0.8 * a))
-		Ui.segment(hud, Rect2(r.position.x, r.end.y - 3, bw, 3), Color(msg.color, a), 0.0)
-		Ui.text(hud, Vector2(r.position.x, r.position.y + 29), msg.text, 22, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, bw)
-		ny += 50
-
 
 func draw_rect_on(r: Rect2, c: Color) -> void:
 	hud.draw_rect(r, c)
@@ -1054,11 +1048,7 @@ func _work_site(s: Dictionary) -> void:
 			main.notify("TOWING  -  BRING IT TO AN OUTPOST", Color.WHITE)
 		"market":
 			_market_cool = true
-			main.menu.show_menu("NINE FINGERS", [
-				{"label": "Blueprints", "action": func(): open_market()},
-				{"label": "Parts", "action": func(): open_shop("nine", "NINE FINGERS PARTS")},
-				{"label": "Leave", "action": main.menu.hide_menu},
-			], main.menu.hide_menu)
+			main.hub_enter("nine", "blueprints")
 
 # The hull hangs off a cable: a distance limit between ship and hull, split
 # by their masses, so a heavy hull drags a light ship around. The Tractor beam
@@ -1137,14 +1127,18 @@ func _pay(price: Dictionary) -> void:
 		cargo[k] = cargo.get(k, 0) - from_cargo
 		main.inventory[k] = main.inventory.get(k, 0) - (price[k] - from_cargo)
 
+# A blueprint counter (an outpost mechanic's drafting office, Nine Fingers):
+# a tab of its hub.
 func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void:
 	var rows = []
 	for offer in offers:
 		var o = offer
-		var row = {"label": o.name,
-			"value": func(): return "OWNED" if main.unlocks().has(o.name) else _price_text({"credits": Parts.to_credits(o.price)}),
-			"can": func(): return not main.unlocks().has(o.name) and _can_pay({"credits": Parts.to_credits(o.price)}),
-			"action": func(): _buy(o, offers, title)}
+		var cr = {"credits": Parts.to_credits(o.price)}
+		var have = main.unlocks().has(o.name)
+		var row = {"label": o.name, "value": "OWNED" if have else _price_text(cr), "can": not have and _can_pay(cr),
+			"actions": [] if have else [{"label": "BUY BLUEPRINT  ·  " + _price_text(cr).to_upper(), "can": _can_pay(cr),
+				"action": func(): _buy(o, offers, title)}],
+			"hint": "YOU HAVE THIS ONE" if have else ""}
 		# A card for the tool sub-grid, or a whole part: say which.
 		for id in Parts.NODES:
 			if Parts.NODES[id].name == o.name:
@@ -1153,10 +1147,8 @@ func open_market(offers: Array = MARKET, title: String = "NINE FINGERS") -> void
 			if Parts.PARTS[id].name == o.name:
 				row.part = id
 		rows.append(row)
-	var back = open_menu if docked else main.menu.hide_menu
-	rows.append({"label": "Leave", "action": back})
-	main.menu.show_menu(title, rows, back, main.menu.title == title)
-	main.menu.blurb = "Blueprints: program cards you wire into a placed tool's sub-grid in the garage (click the tool) to change what it does, and the odd locked part. Bought once, yours for good."
+	main.menu.show_menu(title, rows, main.hub_back, main.menu.title == title)
+	main.menu.blurb = "Blueprints: program cards you wire into a placed tool's sub-grid in the garage (select the tool, then Wire) to change what it does, and the odd locked part. Bought once, yours for good."
 	main.menu.wallet = wallet
 
 func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS") -> void:
@@ -1164,7 +1156,7 @@ func _buy(o: Dictionary, offers: Array = MARKET, title: String = "NINE FINGERS")
 		return
 	var cr = {"credits": Parts.to_credits(o.price)}
 	if not _can_pay(cr):
-		main.notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
+		main.notify("NOT ENOUGH CREDITS  -  " + _price_text(cr).to_upper(), Color(1.0, 0.3, 0.3), "shop")
 		return
 	_pay(cr)
 	main.unlock(o.name)
@@ -1214,91 +1206,10 @@ func _update_trading(delta: float) -> void:
 	else:
 		_trade_t = 0.0
 
-# ---------------------------------------------------------------- parts shop
-
-# Stock parts everywhere, plus this outpost's mechanics. Locked parts need
-# their blueprint first. Paid from the hold first, then the bank.
-func open_shop(mech: String, title: String) -> void:
-	var rows = []
-	for id in Parts.shop_stock(mech):
-		if Parts.is_locked(Parts.PARTS[id], main.unlocks()):
-			continue
-		var pid = id
-		var pr = Parts.credit_price(pid)
-		rows.append({"label": Parts.PARTS[pid].name,
-			"value": func(): return "%d owned   %s" % [main.owned().get(pid, 0), _price_text(pr)], "part": pid,
-			"can": func(): return _can_pay(pr),
-			"action": func(): _buy_part(pid, mech, title)})
-	# Presets for parts sold here: the part and the cards it needs, in one go.
-	for pr in main.presets():
-		if not Parts.shop_stock(mech).has(pr.part) or Parts.is_locked(Parts.PARTS[pr.part], main.unlocks()):
-			continue
-		var p = pr
-		rows.append({"label": "Preset: " + pr.name, "part": pr.part, "value": func(): return main._preset_value(p, true),
-			"can": func(): return not main.preset_shortfall(p).has("locked") and main.credits() >= main.preset_cost(p, true),
-			"action": func(): main.buy_preset(p, true); open_shop(mech, title)})
-	var back = open_menu if docked else main.menu.hide_menu
-	rows.append({"label": "Sell parts", "value": func(): return "%d spare" % _spares().values().reduce(func(a, b): return a + b, 0),
-		"action": func(): open_sell(mech, title)})
-	rows.append({"label": "Leave", "action": back})
-	main.menu.show_menu(title, rows, back, main.menu.title == title)
-	main.menu.wallet = wallet
-	main.menu.overview = main.shop_overview
-
 # Hold and bank, for the shop menus' wallet panel.
 func wallet() -> Dictionary:
-	return {"hold": cargo, "bank": main.inventory}
-
-# Parts you own that the current build isn't using.
-func _spares() -> Dictionary:
-	return main.spare_parts()
+	return main.wallet()
 
 # Half the shop price, in credits.
 static func sell_price(id: String) -> Dictionary:
 	return {"credits": Parts.credit_price(id).credits / 2}
-
-func open_sell(mech: String, title: String) -> void:
-	var rows = []
-	var spares = _spares()
-	for id in spares:
-		var pid = id
-		rows.append({"label": Parts.PARTS[pid].name, "value": "%d spare   +%s" % [spares[pid], _price_text(sell_price(pid))], "part": pid,
-			"action": func(): _sell_part(pid, mech, title)})
-	var back = func(): open_shop(mech, title)
-	rows.append({"label": "Back", "action": back})
-	main.menu.show_menu("SELL", rows, back, main.menu.title == "SELL")
-	main.menu.wallet = wallet
-	main.menu.overview = main.shop_overview
-
-func _sell_part(id: String, mech: String, title: String) -> void:
-	if _spares().get(id, 0) <= 0:
-		return
-	var o = main.owned()
-	o[id] -= 1
-	if o[id] <= 0:
-		o.erase(id)
-	var pay = sell_price(id)
-	for k in pay:
-		main.inventory[k] = main.inventory.get(k, 0) + pay[k]
-	main.notify("SOLD  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
-	Sfx.play("coins")
-	main.save_game()
-	open_sell(mech, title)
-
-func _buy_part(id: String, mech: String, title: String) -> void:
-	var pr = Parts.credit_price(id)
-	if not _can_pay(pr):
-		main.notify("NOT ENOUGH CREDITS", Color(1.0, 0.3, 0.3))
-		return
-	_pay(pr)
-	var o = main.owned()
-	o[id] = o.get(id, 0) + 1
-	main.notify("BOUGHT  " + Parts.PARTS[id].name.to_upper(), Color.WHITE)
-	Sfx.play("coins")
-	main.save_game()
-	open_shop(mech, title)
-
-# ---------------------------------------------------------------- contracts
-
-func open_contracts() -> void:
-	main.open_board(outposts[at_outpost].planet, open_menu)

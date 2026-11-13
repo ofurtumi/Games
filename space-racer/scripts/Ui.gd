@@ -123,6 +123,15 @@ static func text(ci: CanvasItem, pos: Vector2, s: String, size: int, color: Colo
 		return
 	ci.draw_string(font(bold), pos, s, align, width, size, color)
 
+# How wide text() draws `s` under the Interface setting: for layout worked out
+# away from a _draw (hit tests), where begin() isn't in force.
+static func measure(s: String, size: int, bold: bool = false) -> float:
+	var was = _on
+	_on = style == "terminal"
+	var w = font(bold).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(size * 0.84)) if _on else size).x
+	_on = was
+	return w
+
 static func ease_out(t: float) -> float:
 	t = clampf(t, 0.0, 1.0)
 	return 1.0 - pow(1.0 - t, 3.0)

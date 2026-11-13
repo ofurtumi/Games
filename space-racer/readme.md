@@ -8,10 +8,35 @@ track, swappable builds. Godot 4.7, everything built in code.
 
 The game opens on a title screen with your ship lapping the track behind it:
 Race (the cup on your current planet, against its locals), Time trial (five
-practice laps for medals), Expedition, Garage, Track Builder, Controls,
-Rivals, Sound, Reset save, Quit. **Reset save** (after an "are you sure")
-copies the save aside as `space_racer_save.backup-<date>.txt` and starts a
-fresh career; controls and sound settings stay.
+practice laps for medals), Expedition, Garage, Track Builder, Settings,
+Quit. **Settings** is the same everywhere (title, pause, outposts, the
+expedition menu): Interface, Rivals, the three volumes, Controls, plus the
+race camera in a race and, on the title, **Reset save** (after an "are you
+sure" it copies the save aside as `space_racer_save.backup-<date>.txt` and
+starts a fresh career; controls and sound settings stay).
+
+## How the screens work
+
+Every menu, the garage and the wiring editor share two things:
+
+- **The action bar** along the bottom. Left: what's selected. Then what you
+  can do with it, as numbered buttons: click one, press its number, or Enter
+  for the first you can do. Right: the way back (Esc, or right-click in a
+  menu). Greyed-out buttons still answer, to say why not.
+- **The tab strip** along the top wherever a place has several counters. An
+  outpost is one screen: Outpost, Garage, Shop, Cards, Blueprints, Market,
+  Contracts, Settings. The pause menu is another: Pause, Garage, Pit shop,
+  Market, Contracts, Settings (the race waits while it's up, rivals and
+  clock included). Nine Fingers: Blueprints, Parts. Click a tab, or Tab /
+  Shift+Tab. Esc goes to the first tab and, from there, out (launch, back to
+  the race).
+
+Things you pick between are **selected with one click and acted on from the
+bar**: a part in a shop (Buy 1, Sell 1), a material in the market (Sell 10,
+Sell all), a contract (Accept, Abandon), a part in the garage. Nothing
+toggles on a second click. Plain menu rows (Race, Launch, Resume) are
+buttons: click and they go. Long lists scroll (wheel or the arrow keys).
+Banners (BOUGHT, NOT ENOUGH CREDITS...) show over menus and the garage too.
 
 **Interface** (title, pause, outpost and expedition menus): **Terminal**
 (the default: green phosphor on dark, monospace, scanlines, for every menu,
@@ -112,7 +137,7 @@ beam only bites every third of a second. Your homing missiles go for them
 too. When a rival's homing missile locks on to you, red chevrons around
 your ship point at it, a LOCK tag flashes and it beeps.
 
-**Rivals** (title and pause menus) sets how hard they race. Easy rivals
+**Rivals** (Settings) sets how hard they race. Easy rivals
 bring only their first tool, ease off the throttle and use it less; Hard
 ones are keener and each borrows a tool from the next planet's crew. Every
 win on a planet also heats its locals up by half a step (up to three wins),
@@ -131,8 +156,9 @@ at once (they show on the expedition HUD with their progress):
 - **Bounty**: destroy a number of drones
 Rewards are materials; salvage jobs sometimes also pay a blueprint you
 haven't found. Taking a job puts up a fresh offer. Pick an active job on
-the board to abandon it. The race pause menu has **Contracts** too: the
-board of the planet you're racing on, the same offers its outpost has.
+the board to abandon it (it asks first). The pause screen has a
+**Contracts** tab too: the board of the planet you're racing on, the same
+offers its outpost has.
 
 ### Dying
 
@@ -142,12 +168,11 @@ ship comes apart, your cargo stays in **your wreck** where you died (go back
 for it), you're towed to the last outpost and the repairs come out of the
 bank.
 
-Docked, the outpost is an old green **CRT terminal**: its sections down the
-left (Launch, Map, Contracts, Shop, Cards, Market, Blueprints, Pickups,
-Garage, Race here, Controls, Sound, Quit) and a vector plan of the station on
-the right, where the highlighted section's room lights up (the parts shop,
-the job board, the drafting office, the drop chute down to the track...),
-with a line saying what it's for along the bottom. Esc launches.
+Docked, the outpost's first tab is an old green **CRT terminal**: Launch,
+Race here, Map, Pickups and Quit down the left and a vector plan of the
+station on the right, where the highlighted row's room lights up, with a
+line saying what it's for along the bottom. The shops, the garage and the
+rest are the other tabs. Esc on the first tab launches.
 
 Outposts float 55 m above their planets. Come in slowly over the pad and
 the ship glides in and docks; Launch drops you out underneath, nose to the
@@ -158,7 +183,8 @@ planet, so its pull takes you clear of the station.
 Hover slowly next to something to work it (a ring fills around the ship).
 Sites only show on the map once you've been near them, and some are buried.
 
-**Pickups** (outpost and expedition menus) switches each material on or
+**Pickups** (outpost and expedition menus; out in space, **Tow home** asks
+before it costs you the hold) switches each material on or
 off: switched off, drilled rock isn't kept and ore chunks are left floating
 (for a minute), and its chip on the HUD's hold is struck through.
 
@@ -230,12 +256,14 @@ A card you place wires itself onto the end of the chain (core > first card >
 second...), so cards go in series in the order you put them down; drag
 wires or right-click them away to branch or reorder.
 
-**Presets**: under the palette, + SAVE THIS WIRING keeps the component's
-wiring as a named preset (in the save). The list shows the presets that fit
-the component you're editing (same family, cards it allows, fits its grid):
-click one to load it there, so a wiring moves from one tool to another, or
-onto a new one; it needs the cards free (this part's own are freed first).
-Right-click a preset to forget it. The **Cards** counter lists your presets
+**Presets**: with nothing selected the action bar has Save as preset, which
+keeps the component's wiring as a named preset (in the save), and Clear.
+The list under the palette shows the presets that fit the component you're
+editing (same family, cards it allows, fits its grid): Load puts one there,
+so a wiring moves from one tool to another, or onto a new one; it needs the
+cards free (this part's own are freed first).
+Select a preset for Load, Buy missing cards (docked) and Forget on the
+action bar. The **Cards** counter lists your presets
 too: one click buys exactly the cards you're missing to wire one onto
 another component (what your build holds stays put); an outpost's shop lists
 the presets whose part it sells and buys the part and its cards together.
@@ -255,7 +283,8 @@ wired: a plain bomb.
 
 **Program cards cost.** The nodes you place are cards you own in copies:
 each placed card uses one (the palette shows free / owned; with none free it
-won't place), taking it out frees it again. A new pilot has one Fast and one
+won't place; docked, the selected card has Buy 1 on the action bar), taking
+it out frees it again. A new pilot has one Fast and one
 Bomb. Every outpost has a **Cards** counter selling copies for credits (mods
 40, splits and payloads 60, upgrades 50; locked cards half again, and only
 after their blueprint, which comes with a first copy). A saved build that
@@ -264,12 +293,13 @@ every card they could use.
 
 Every component with behaviour (drills, lasers, missile pods, bomb bays,
 engines, thrusters, shields, magnets, tanks, scoops) has a little grid of its
-own. Click a placed component in the garage to open it (hovering one says
-CLICK TO WIRE). The core (the
-component itself) sits on the left; place nodes from the palette, then drag
-from a node's output port to another node to wire it. Only nodes wired back
-to the core do anything (loose ones are dimmed). Right-click a node or wire
-to remove it.
+own. Select a placed component in the garage and pick Wire (or double-click
+it). The core (the component itself) sits on the left; click a card in the
+palette, then a cell, to place it, then drag from a node's output port to
+another node to wire it. Only nodes wired back to the core do anything
+(loose ones are dimmed). Select a placed card for Remove and Cut its wires,
+or right-click a node or wire to remove it. Esc drops the selection, then
+closes.
 
 Tool wiring is the program, read along the wires:
 - **mods** change the shot as it passes: Homing, Phasing, Fast, Timer, Orbit
@@ -291,7 +321,7 @@ outposts and from Nine Fingers.
 Materials are what you dig; **credits** (cr) are what you spend. Every
 outpost has a **Market** that buys materials from your bank (rock 1 cr per
 2, metal 6, crystal 15, core 45 each; docking unloads your hold into the bank),
-and the pit shop has one too. Shops, the pit, blueprints and traders' parts
+and the pause screen has one too. Shops, the pit, blueprints and traders' parts
 and refuels are priced in credits (a part's price is its material cost at
 those rates); selling a part back pays half in credits. Race prizes (200 /
 100 / 50 / 20 cr), medals (gold 120, silver 70, bronze 50) and contracts pay
@@ -310,7 +340,7 @@ and quicker. Broken slots show scorched and cracked in
 the garage and dark and rusted on the ship itself (in races, the garage and
 the expedition); the garage's bottom-left panel shows your bank, the broken
 count, the next repair's price (green if you can pay it) and how many you can
-repair right now; click one to repair it for materials from the bank (6 rock 2
+repair right now; select one and Repair it for materials from the bank (6 rock 2
 metal for the first, a little more for each after, crystal too once you've
 done five). The Rustbucket is the only frame you start with: the Dart and
 Advanced frames have to be earned, and frames towed home from derelicts
@@ -329,10 +359,11 @@ In every shop (and the card counter, blueprints and traders) what you can
 afford right now is lit with a green edge and what you can't is greyed out.
 Shop rows show the selected part's card on the right, the same one the
 garage shows: maker, what it does, its numbers and its placement rule.
-In the garage, clicking a part you have none of to hand opens an **order**:
-Buy here if this outpost (or the pit, for stock parts) sells it; docked
-anywhere else, **Courier from** any outpost you've visited that sells it, for
-the price plus a fee (a quarter, at least 20 cr). A small yellow courier
+In the garage, a part selected in the list has its trade on the action bar,
+spare or not: **Buy 1** if this outpost (or the pit, for stock parts) sells
+it, **Sell 1** if you have a spare; docked somewhere that doesn't sell it,
+**Order by courier** from any outpost you've visited that does, for the
+price plus a fee (a quarter, at least 20 cr). A small yellow courier
 flies it over (it's on your map, and keeps flying while you wait at the
 station). About one in three gets jumped by pirates on the way: Rix tells you
 where, and the courier wreck (on your map, guarded by two drones) still has
@@ -340,30 +371,37 @@ your part in it. Salvage it to get it back. Orders are saved. The first
 courier wreck you salvage also gives you its **Courier frame** (small, light,
 battered), and the contract boards offer **courier** jobs: carry a package to
 another outpost, paid on docking there.
-Under the shop's part card is an overview panel (Tab switches): **Ship** draws your frame with
+Under the shop's part card is an overview panel (V, or click its headings): **Ship** draws your frame with
 what's fitted (broken slots scorched), lists the parts and gives top speed,
 accel, shield and drill; **Parts owned** lists everything you own with
 owned / fitted / spare, the shop's selected part marked.
-**Sell parts** (bottom of every shop) sells spares, the parts your current
-build isn't using, for half the shop price into the bank.
-Between races, **Pit shop** on the pause menu sells the stock parts (no
-mechanics' specials) and buys spares, paid from and into the bank.
+Every shop row shows owned and spare, and **Sell 1** sells a spare (a part
+your current build isn't using) for half the shop price; spares the shop
+doesn't stock are listed after its own so they can be sold too.
+Between races, the **Pit shop** tab of the pause screen sells the stock
+parts (no mechanics' specials) and buys spares, paid from and into the bank.
 
 ## Garage (grid builder)
 
-A ship is a frame (a grid shape) with shaped components on it. Left click a
-part (again to put it down), click the grid to place it, R or the arrows under
-the grid rotate it (every part rotates), right-click scraps a placed part
-without changing your selection, clicking any placed part opens its sub-grid
-(a small wire mark shows which parts are wired), Esc or right-clicking an
-empty cell drops the selection, mouse wheel over a part repaints it. Q/E change frame, 1-5
-presets, 0 random. The tabs (POWER, MOVE, TOOLS, DEFENSE, UTILITY) filter
+A ship is a frame (a grid shape) with shaped components on it. Select, then
+act; the action bar lists what goes with the selection:
+- **a part in the list**: click a green cell to place it; Rotate (R), Buy 1
+  / Order by courier, Sell 1
+- **a part on the ship**: Wire (its sub-grid; a small wire mark shows which
+  parts are wired), Move (pick it up, wiring and paint and all; let go and it
+  goes back), Turn (R), Repaint, Scrap (Del)
+- **a broken slot**: Repair, with the price; it moves on to the next broken
+  slot, so Enter works down the lot
+- **a saved build** (six slots on the right): Load, Overwrite, Clear (Del),
+  or Save this build here on an empty one
+
+Shortcuts: right-click scraps a placed part, mouse wheel over a part repaints
+it, double-click wires it, Esc or a click on nothing drops the selection.
+Q/E change frame, Shift+1-5 load the preset builds, Shift+0 a random one. The tabs (POWER, MOVE, TOOLS, DEFENSE, UTILITY) filter
 the parts list. With a part selected, the cells it can go on light up
 green; the bar under the grid says why a spot doesn't work. The band at the
 top shows what the hovered part does, who sells it, its rule and a little
-demo of it working. Six save slots on the right: click an
-empty one to save, a full one to load, right-click to overwrite, Delete to
-clear. Engines make power and thrusters spend it; thrusters push away from
+demo of it working. Engines make power and thrusters spend it; thrusters push away from
 their exhaust, so sideways ones push you into turns and forward ones brake.
 Drills, lasers and rocket pods work in whatever direction they face.
 
@@ -391,8 +429,8 @@ to the blast, missile launch, warp, hop, hits, shield down, gate chime, lap
 arpeggio, pickups, bomb ticks, menu ticks and garage clunks. Rivals' engines are
 heard within 40 m, louder the closer they are and panned to where they are
 on screen (each at a slightly different pitch); their weapons within 30 m,
-and their explosions always. **Sound** (title, pause and outpost menus) sets
-Master, Effects and Engines from 0 to 10 with left / right; it's saved.
+and their explosions always. **Settings** has Master, Effects and Engines
+volume from 0 to 10 (left / right); it's saved.
 
 ## Code map (`scripts/`)
 
@@ -408,9 +446,13 @@ race/mining adapters it talks to · `Overlay.gd` death flash and banners ·
 `Main.gd` race loop, rivals, pickups, camera, menus, medals, save · `Mining.gd` /
 `Miner.gd` expedition mode and its ship · `Controls.gd` input actions ·
 `Save.gd` save file · `GridGarage.gd` grid builder ·
-`TrackEditor.gd` blueprint editor · `GtMenu.gd` row menus · `Ui.gd` fonts and
+`TrackEditor.gd` blueprint editor · `GtMenu.gd` row menus · `Bar.gd` the
+action bar and tab strip every screen shares · `Ui.gd` fonts and
 panel shapes · `Hud.gd` race HUD ·
 `Fx.gd` particles · `MeshKit.gd` low-poly mesh helpers.
 
 Screenshot from the command line:
 `Godot --path . -- --preset=1 --auto --shot=/tmp/a.png --frames=300`
+(menus: `--menu`, `--garage`, `--mining` to dock at Cinder, `--tab=shop`,
+`--pick=3`, `--part=thruster`, `--placed=0`, `--wire=0`, `--style=classic`,
+`--credits=500`)

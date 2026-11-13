@@ -9,8 +9,17 @@ extends Control
 # with Shift), swatch (Color or Callable), part (a part id: its card shows
 # along the bottom while the row is selected), note ({title, text}: a card
 # for something that isn't a part), can (bool or Callable: in shops, lit with
-# a green edge when you can afford it, greyed out when you can't)}. Every menu gets a line under its title
-# saying what it's for (BLURBS, by title; set `blurb` to override).
+# a green edge when you can afford it, greyed out when you can't), actions
+# (Array or Callable: see below), hint (a word on the action bar), verb (what
+# the bar calls a plain row's action)}. Every menu gets a line under its
+# title saying what it's for (BLURBS, by title; set `blurb` to override).
+#
+# Two kinds of row. A command (action) is a button: pointing at it selects
+# it, clicking does it. An item (actions: [{label, can, action}], a part in
+# a shop) is something you select with a click; what you can do with it is on
+# the action bar along the bottom (Bar.gd), Enter does the first. The bar
+# also carries the way back. Long lists scroll. In a hub (Main.hub: an
+# outpost, the pit) the tab strip runs along the top: click, or Tab.
 
 const Ui = preload("res://scripts/Ui.gd")
 const BACKDROP = preload("res://assets/shaders/menu_backdrop.gdshader")
@@ -18,6 +27,7 @@ const Sfx = preload("res://scripts/Sfx.gd")
 const PartInfo = preload("res://scripts/PartInfo.gd")
 const ShopOverview = preload("res://scripts/ShopOverview.gd")
 const StationCRT = preload("res://scripts/StationCRT.gd")
+const Bar = preload("res://scripts/Bar.gd")
 
 const ROW_H = 40.0
 const ROW_GAP = 6.0
@@ -44,6 +54,14 @@ var _blurb_lines = []
 var overview: Callable   # shops set this: returns ShopOverview data; cleared by show_menu
 var overview_mode = "ship"
 var crt = {}             # set (after show_menu) to draw this menu as a station's CRT terminal
+var main                 # set by Main: the hub's tabs come from it
+var bar = Bar.new()
+var back_label = ""      # what the bar calls the way back ("BACK"); cleared by show_menu
+var scroll = 0           # first row shown
+var hover_row = -1
+var hover_tab = ""
+var _items = false       # the list has items: click selects, the bar acts
+var _follow = false      # bring the selected row into view
 
 const BLURB_SIZE = 15
 const BLURB_LINE = 20.0
@@ -70,21 +88,21 @@ func _rows_top() -> float:
 # What each menu is for, by title: [match, how ("is", "starts", "ends"), text].
 const BLURBS = [
 	["PAUSE", "is", "The race is held while you're here."],
-	["PIT SHOP", "is", "Stock parts for your ship, paid in credits. Mechanics' specials are only sold at outposts."],
-	["SELL", "is", "Parts your current build isn't using, sold back for half what they cost."],
-	["ORDER", "starts", "You have none of these spare. Buy one here if this place sells it, or have a courier bring it from an outpost you've been to (for a fee; couriers do get jumped)."],
-	["CARDS", "is", "Program cards to wire into your components' sub-grids (click a placed part in the garage). Each placed card uses a copy; take it out and it's free again."],
+	["PIT SHOP", "is", "Stock parts for your ship, paid in credits. Mechanics' specials are only sold at outposts. Spares sell back for half."],
+	["ORDER", "starts", "Not sold here. A courier can bring one from an outpost you've been to, for a fee (couriers do get jumped)."],
+	["CARDS", "is", "Program cards to wire into your components' sub-grids (select a placed part in the garage, then Wire). Each placed card uses a copy; take it out and it's free again."],
 	["MARKET", "is", "Sell materials from your bank for credits. Docking unloads your hold into the bank."],
-	["SOUND", "is", "Volume from 0 to 10. Left and right to change."],
+	["SETTINGS", "is", "Left and right change a setting."],
+	["TOW HOME?", "is", "A tow to the last outpost. Everything in your hold is left behind."],
 	["PICKUPS", "is", "What goes in your hold. Switch a material off when you have enough of it: drilled rock is dropped, ore is left floating."],
 	["CONTROLS", "is", "Pick an action, then press the key you want for it."],
 	["RESET SAVE?", "is", "Starts a fresh career. A copy of this save is kept next to it."],
 	["ABANDON?", "is", "Drops the contract. Nothing you've done on it is paid."],
 	["EXPEDITION", "is", "Paused out in space."],
-	["NINE FINGERS", "is", "A black market. Program cards and parts you won't find at the outposts."],
+	["NINE FINGERS", "starts", "A black market. Parts you won't find at the outposts. Spares sell back for half."],
 	["CONTRACTS", "ends", "Jobs from this planet. Do them anywhere, three at a time; pick an active one to abandon it."],
 	["OUTPOST", "ends", "Docked: your hold is unloaded into the bank, and fuel and shield are topped up."],
-	["SHOP", "ends", "Parts for your ship: stock parts plus this outpost's mechanics' own. They go to your garage."],
+	["SHOP", "ends", "Parts for your ship: stock parts plus this outpost's mechanics' own. They go to your garage. Spares sell back for half."],
 	["TRADER", "starts", "A travelling trader: swap materials, refuel, or buy the part they're carrying, cheap."],
 	["RESULTS", "starts", "Where everyone finished, and what you won."],
 	["PRACTICE", "starts", "This run against the track's medal times."],
@@ -119,15 +137,21 @@ func show_menu(menu_title: String, menu_rows: Array, back: Callable, keep_select
 	wallet = Callable()
 	overview = Callable()
 	crt = {}
+	back_label = ""
 	blurb = blurb_for(menu_title)
 	on_back = back
 	if not keep_selection:
 		selected = 0
+		scroll = 0
 	selected = clampi(selected, 0, maxi(rows.size() - 1, 0))
+	_items = rows.any(func(r): return r.has("actions"))
+	_follow = true
+	hover_row = -1
 	if animate:
 		t = 0.0
 	closing = false
 	visible = true
+	_fill_bar()
 	queue_redraw()
 
 func hide_menu() -> void:
@@ -139,10 +163,25 @@ func _process(delta):
 	t += delta
 	backdrop.visible = dim_backdrop
 	backdrop.material.set_shader_parameter("amount", Ui.ease_out(t / 0.25) * 0.85)
+	var most = maxi(rows.size() - _shown(), 0)
+	if _follow and size.y > 0.0:
+		_follow = false
+		scroll = clampi(scroll, selected - _shown() + 1, selected)
+	scroll = clampi(scroll, 0, most)
+	_fill_bar()
 	queue_redraw()
 
 func _val(v):
 	return v.call() if v is Callable else v
+
+func _tabs() -> Array:
+	return main.hub_tabs() if main != null else []
+
+# How many rows fit between the title and the action bar.
+func _shown() -> int:
+	if not crt.is_empty():
+		return rows.size()
+	return maxi(1, int((size.y - Bar.RESERVED - 6.0 - _rows_top() + ROW_GAP) / (ROW_H + ROW_GAP)))
 
 func _row_rect(i: int) -> Rect2:
 	if not crt.is_empty():
@@ -150,16 +189,50 @@ func _row_rect(i: int) -> Rect2:
 	return _gt_row_rect(i)
 
 func _gt_row_rect(i: int) -> Rect2:
-	var appear = Ui.ease_out((t - 0.12 - i * STAGGER) / SLIDE)
+	var k = i - scroll
+	var appear = Ui.ease_out((t - 0.12 - k * STAGGER) / SLIDE)
 	var x = origin.x - (1.0 - appear) * (ROW_W + origin.x + 60.0)
 	var w = ROW_W + (24.0 if i == selected else 0.0)
-	return Rect2(x, _rows_top() + i * (ROW_H + ROW_GAP), w, ROW_H)
+	return Rect2(x, _rows_top() + k * (ROW_H + ROW_GAP), w, ROW_H)
+
+# The row under `pos` (-1: none), among the ones on screen.
+func _row_at(pos: Vector2) -> int:
+	for i in range(scroll, mini(rows.size(), scroll + _shown())):
+		if _row_rect(i).grow(3).has_point(pos):
+			return i
+	return -1
+
+# Right column (shops): the part card, then the overview panel under it.
+func _side_w() -> float:
+	return minf(size.x - ROW_W - origin.x - 70.0, 900.0)
+
+func _overview_rect() -> Rect2:
+	var top = origin.y + 160.0
+	return Rect2(size.x - _side_w(), top, _side_w() + 20.0, minf(size.y - top - Bar.RESERVED - 10.0, 440.0))
+
+# What the action bar says for the selected row.
+func _fill_bar() -> void:
+	var r = rows[selected] if selected < rows.size() else {}
+	var acts = []
+	if r.has("actions"):
+		acts = _val(r.actions)
+	elif r.has("left") and r.has("right"):
+		acts = [{"label": "‹  PREV", "action": r.left}, {"label": "NEXT  ›", "action": r.right}]
+	elif r.has("action"):
+		acts = [{"label": r.get("verb", "SELECT"), "action": r.action}]
+	var back = {}
+	if on_back.is_valid():
+		var in_hub = main != null and main.hub != "" and on_back == main.hub_back
+		back = {"label": back_label if back_label != "" else (main.hub_back_label() if in_hub else "BACK"), "action": on_back}
+	bar.fill(str(r.get("label", "")).to_upper(), acts, back, r.get("hint", ""))
 
 func _draw():
 	Ui.begin()
 	if Ui.terminal() and dim_backdrop and crt.is_empty():
 		draw_rect(Rect2(Vector2.ZERO, size), Color(Ui.T_BG, 0.82))
 	_draw_screen()
+	Bar.draw_tabs(self, size, _tabs(), main.hub_tab if main != null else "", hover_tab)
+	bar.draw(self, size)
 	Ui.scanlines(self, Rect2(Vector2.ZERO, size))
 	Ui.end()
 
@@ -175,7 +248,8 @@ func _draw_screen():
 		Ui.text(self, Vector2(origin.x, tr.position.y + 42), title, 34, Color.WHITE, true)
 		for li in _blurb_lines.size():
 			Ui.text(self, Vector2(origin.x + (ta - 1.0) * 700.0, origin.y - 10 + li * BLURB_LINE), _blurb_lines[li], BLURB_SIZE, Color(0.82, 0.85, 0.9), false)
-	for i in rows.size():
+	var last = mini(rows.size(), scroll + _shown())
+	for i in range(scroll, last):
 		var r = rows[i]
 		var rr = _row_rect(i)
 		var sel = i == selected
@@ -187,17 +261,18 @@ func _draw_screen():
 			fill = Color(0.3, 0.36, 0.5) if sel else Color(0.52, 0.54, 0.58)
 			ink = Color(0.85, 0.87, 0.9) if sel else Color(0.3, 0.32, 0.36)
 		Ui.segment(self, rr, fill)
+		if i == hover_row and not sel:
+			# Pointed at, not selected (item lists): an edge.
+			draw_rect(Rect2(rr.position.x, rr.position.y, 4, rr.size.y), Ui.ink(Color.WHITE) if Ui.terminal() else Ui.HILITE)
 		if can == true:
 			Ui.segment(self, Rect2(rr.position.x + 6, rr.position.y + 6, 6, rr.size.y - 12), Color(0.35, 0.95, 0.45), 2.0)
 		Ui.text(self, rr.position + Vector2(18, 27), r.label, 20, ink, sel)
 		var value = _val(r.get("value", ""))
-		var vx = rr.end.x - 20
 		if value != "":
 			var shown = value
 			if sel and (r.has("left") or r.has("right")):
 				shown = "‹  %s  ›" % value
 			Ui.text(self, Vector2(rr.position.x + 170, rr.position.y + 27), shown, 18, ink if sel else Color(0.25, 0.27, 0.3), false, HORIZONTAL_ALIGNMENT_RIGHT, rr.size.x - 190)
-			vx = rr.position.x + 150
 		var sw = _val(r.get("swatch", null))
 		if sw != null:
 			var sq = Rect2(rr.end.x - 46, rr.position.y + 10, 20, 20)
@@ -205,17 +280,24 @@ func _draw_screen():
 				sq.position.x = rr.position.x + 150 - 4
 			draw_rect(sq, sw)
 			draw_rect(sq, ink, false, 1.5)
+	# More rows than fit: a scroll rail beside the list.
+	if rows.size() > _shown():
+		var top = _rows_top()
+		var h = _shown() * (ROW_H + ROW_GAP) - ROW_GAP
+		var x = origin.x - 30.0 + (ta - 1.0) * 700.0
+		draw_rect(Rect2(x, top, 5, h), Color(1, 1, 1, 0.1))
+		var k = h / rows.size()
+		draw_rect(Rect2(x, top + scroll * k, 5, _shown() * k), Ui.ink(Color.WHITE))
 	if wallet.is_valid():
 		_draw_wallet(wallet.call(), ta)
 	if overview.is_valid():
-		var bw3 = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
-		var top3 = origin.y + 160.0
 		var data = overview.call()
 		data.selected = rows[selected].get("part", "") if selected < rows.size() else ""
-		ShopOverview.draw(self, Rect2(size.x - bw3 + (1.0 - ta) * 1000.0, top3, bw3 + 20.0, minf(size.y - top3 - 30.0, 440.0)), data, overview_mode)
+		var orect = _overview_rect()
+		orect.position.x += (1.0 - ta) * 1000.0
+		ShopOverview.draw(self, orect, data, overview_mode)
 	if selected < rows.size() and rows[selected].has("note") and not rows[selected].has("part"):
-		var bw2 = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
-		var band2 = Rect2(size.x - bw2 + (1.0 - ta) * 1000.0, origin.y + 40.0, bw2 + 20.0, 84)
+		var band2 = Rect2(size.x - _side_w() + (1.0 - ta) * 1000.0, origin.y + 40.0, _side_w() + 20.0, 84)
 		var nt = rows[selected].note
 		Ui.segment(self, band2, Color(0.03, 0.035, 0.045, 0.9), 10.0)
 		Ui.segment(self, Rect2(band2.position, Vector2(band2.size.x, 4)), Ui.HILITE, 0.0)
@@ -223,8 +305,7 @@ func _draw_screen():
 		Ui.text(self, band2.position + Vector2(36, 60), nt.text, 15, Color(0.85, 0.87, 0.9))
 	if selected < rows.size() and rows[selected].has("part"):
 		# Right side, under the wallet, clear of the rows however long the list.
-		var bw = minf(size.x - ROW_W - origin.x - 70.0, 900.0)
-		var band = Rect2(size.x - bw + (1.0 - ta) * 1000.0, origin.y + 40.0, bw + 20.0, 104)
+		var band = Rect2(size.x - _side_w() + (1.0 - ta) * 1000.0, origin.y + 40.0, _side_w() + 20.0, 104)
 		PartInfo.draw(self, band, rows[selected].part, 36.0)
 
 # What you can spend, top right: hold and bank, a chip and a count per ore.
@@ -232,13 +313,14 @@ func _draw_wallet(w: Dictionary, ta: float) -> void:
 	var x0 = size.x - 470 + (1.0 - ta) * 500.0
 	var parts = [["HOLD", w.get("hold")], ["BANK", w.get("bank")]].filter(func(p): return p[1] != null)
 	var cr = w.get("bank", {}).get("credits", 0)
-	var h = 24 + parts.size() * 40 + 40
-	var y = origin.y + 12 - h
+	var h = 20 + parts.size() * 36 + 36
+	# Above the part card, and under the tab strip when there is one.
+	var y = maxf(origin.y + 30 - h, Bar.TABS_H + 4.0 if not _tabs().is_empty() else 0.0)
 	Ui.segment(self, Rect2(x0, y, 520, h), Ui.INK)
 	Ui.segment(self, Rect2(x0, y + h - 4, 520, 4), Ui.HILITE, 0)
 	var line = 0
 	for part in parts:
-		var ly = y + 40 + line * 40
+		var ly = y + 34 + line * 36
 		Ui.text(self, Vector2(x0 + 30, ly), part[0], 16, Ui.DIM, true)
 		var cx = x0 + 100
 		for m in MATS:
@@ -246,17 +328,25 @@ func _draw_wallet(w: Dictionary, ta: float) -> void:
 			Ui.text(self, Vector2(cx + 18, ly), str(part[1].get(m[0], 0)), 20, Color.WHITE, true)
 			cx += 82
 		line += 1
-	var cy = y + 40 + line * 40
+	var cy = y + 34 + line * 36
 	Ui.text(self, Vector2(x0 + 30, cy), "CREDITS", 16, Ui.DIM, true)
 	Ui.text(self, Vector2(x0 + 118, cy), "%d cr" % cr, 22, Color(1.0, 0.82, 0.25), true)
 
+# Enter, or a click on a command row: do the row's thing (for an item, the
+# first action on the bar).
 func _activate(i: int) -> void:
 	if i < 0 or i >= rows.size():
 		return
 	var r = rows[i]
-	if r.has("action"):
+	if r.has("actions"):
+		_fill_bar()
+		if bar.primary() >= 0:
+			bar.run(bar.primary())
+	elif r.has("action"):
 		Sfx.play("ui_select")
 		r.action.call()
+	elif r.has("right"):
+		_step(1, false)
 
 func _step(dir: int, alt: bool) -> void:
 	if rows.is_empty():
@@ -266,8 +356,10 @@ func _step(dir: int, alt: bool) -> void:
 	if r.has(key):
 		Sfx.play("ui_move")
 		r[key].call()
-	elif not alt and r.has("action") and dir > 0 and not r.has("left"):
-		pass
+
+func _toggle_overview() -> void:
+	overview_mode = "parts" if overview_mode == "ship" else "ship"
+	Sfx.play("ui_move")
 
 func _gui_input(event):
 	if capture.is_valid() and event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
@@ -277,25 +369,49 @@ func _gui_input(event):
 		accept_event()
 		return
 	if event is InputEventMouseMotion:
-		for i in rows.size():
-			if _row_rect(i).grow(4).has_point(event.position):
-				if selected != i:
-					Sfx.play("ui_move", -6.0)
-				selected = i
+		bar.motion(size, event.position)
+		hover_tab = Bar.tab_at(_tabs(), event.position)
+		hover_row = _row_at(event.position)
+		# Commands follow the pointer; items wait for a click.
+		if hover_row >= 0 and not _items and selected != hover_row:
+			Sfx.play("ui_move", -6.0)
+			selected = hover_row
 	elif event is InputEventMouseButton and event.pressed:
+		var pos = event.position
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			for i in rows.size():
-				if _row_rect(i).has_point(event.position):
+			var tab = Bar.tab_at(_tabs(), pos)
+			if tab != "":
+				Sfx.play("ui_move")
+				main.hub_show(tab)
+			elif bar.click(size, pos):
+				pass
+			elif overview.is_valid() and ShopOverview.tab_at(_overview_rect(), pos) != "":
+				overview_mode = ShopOverview.tab_at(_overview_rect(), pos)
+				Sfx.play("ui_move")
+			else:
+				var i = _row_at(pos)
+				if i >= 0:
+					var was = selected
 					selected = i
-					if rows[i].has("right") and not rows[i].has("action"):
-						_step(1, event.shift_pressed)
+					if rows[i].has("actions"):
+						if event.double_click:
+							_activate(i)
+						elif was != i:
+							Sfx.play("ui_move", -6.0)
 					else:
 						_activate(i)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if on_back.is_valid():
+				Sfx.play("ui_back")
 				on_back.call()
 		elif event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
-			_step(1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1, event.shift_pressed)
+			var up = event.button_index == MOUSE_BUTTON_WHEEL_UP
+			var i = _row_at(pos)
+			if i >= 0 and (rows[i].has("left") or rows[i].has("right")):
+				selected = i
+				_step(1 if up else -1, event.shift_pressed)
+			else:
+				scroll += -1 if up else 1
 		accept_event()
 
 func _unhandled_key_input(event):
@@ -308,12 +424,15 @@ func _unhandled_key_input(event):
 			cb.call(event.physical_keycode)
 		get_viewport().set_input_as_handled()
 		return
-	match event.physical_keycode:
+	var k = event.physical_keycode
+	match k:
 		KEY_UP, KEY_W:
 			selected = (selected - 1 + rows.size()) % maxi(rows.size(), 1)
+			_follow = true
 			Sfx.play("ui_move")
 		KEY_DOWN, KEY_S:
 			selected = (selected + 1) % maxi(rows.size(), 1)
+			_follow = true
 			Sfx.play("ui_move")
 		KEY_LEFT, KEY_A:
 			_step(-1, event.shift_pressed)
@@ -322,10 +441,17 @@ func _unhandled_key_input(event):
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if not event.echo:
 				_activate(selected)
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
+			if not event.echo:
+				_fill_bar()
+				bar.run(k - KEY_1)
 		KEY_TAB:
-			if overview.is_valid() and not event.echo:
-				overview_mode = "parts" if overview_mode == "ship" else "ship"
+			if not event.echo and _tabs().size() > 1:
 				Sfx.play("ui_move")
+				main.hub_step(-1 if event.shift_pressed else 1)
+		KEY_V:
+			if overview.is_valid() and not event.echo:
+				_toggle_overview()
 		KEY_ESCAPE, KEY_BACKSPACE:
 			if not event.echo and on_back.is_valid():
 				Sfx.play("ui_back")
