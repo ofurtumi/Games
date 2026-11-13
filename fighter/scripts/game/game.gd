@@ -86,8 +86,8 @@ func boot(main: Node) -> void:
 		fill_bots(Net.fill)
 		goto_match(Net.SERVER)
 	elif args.has("connect"):
-		goto_menu()
 		Net.join(String(args["connect"]), String(args.get("name", "PLAYER")))
+		goto_menu()
 	elif args.has("bots"):
 		var n := int(args["bots"])
 		participants.clear()
