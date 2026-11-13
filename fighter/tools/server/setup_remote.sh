@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# Server half of deploy.sh (runs on the Linux box, from the copied game). Not meant to be run
-# by hand; env DEST BIND PORT FILL V come from deploy.sh.
+# Installs/updates the fighter server on this Linux box: fetches headless Godot into ~/$DEST,
+# imports the game this script sits in and (re)starts the fighter-server systemd service.
+# deploy.sh runs it after copying the game over; or run it by hand from a git clone:
+#   git clone -b fighter https://github.com/ofurtumi/games ~/games
+#   bash ~/games/fighter/tools/server/setup_remote.sh        # after `git pull`, run it again
+# Env: BIND (127.0.0.1, "*" without a reverse proxy), PORT (7350), FILL (4), DEST (fighter-server).
 set -euo pipefail
+GAME="$(cd "$(dirname "$0")/../.." && pwd)"
+DEST="${DEST:-fighter-server}"
+BIND="${BIND:-127.0.0.1}"
+PORT="${PORT:-7350}"
+FILL="${FILL:-4}"
+V="${V:-4.7.2}"
+mkdir -p ~/"$DEST"
 cd ~/"$DEST"
 case "$(uname -m)" in
 	x86_64) ARCH=x86_64 ;;
@@ -16,7 +27,7 @@ if [ ! -x "$BIN" ]; then
 fi
 dpkg -s libfontconfig1 >/dev/null 2>&1 || sudo apt-get install -y libfontconfig1 >/dev/null # silences a startup warning
 echo "importing assets..."
-timeout 300 "./$BIN" --headless --path game --import >/dev/null 2>&1 || true
+timeout 300 "./$BIN" --headless --path "$GAME" --import >/dev/null 2>&1 || true
 
 sudo tee /etc/systemd/system/fighter-server.service >/dev/null <<UNIT
 [Unit]
@@ -26,8 +37,8 @@ Wants=network-online.target
 
 [Service]
 User=$(id -un)
-WorkingDirectory=$HOME/$DEST/game
-ExecStart=$HOME/$DEST/$BIN --headless --path $HOME/$DEST/game -- --server --port $PORT --bind $BIND --fill $FILL
+WorkingDirectory=$GAME
+ExecStart=$HOME/$DEST/$BIN --headless --path $GAME -- --server --port $PORT --bind $BIND --fill $FILL
 Restart=always
 RestartSec=3
 Nice=5

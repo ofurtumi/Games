@@ -67,7 +67,8 @@ Caddy handles the certificate and passes WebSockets through as-is. Re-run `deplo
 update. Logs: `ssh <ssh-host> journalctl -u fighter-server -f`. Without a proxy, use
 `deploy.sh <ssh-host> --public` and forward TCP 7350 on the router; players then type `host:7350`.
 `PORT`, `FILL` (fighters incl. bots, default 4) and `DEST` env vars adjust the deploy.
-To run a server by hand: `GODOT=/path/to/godot tools/server/run_server.sh 7350 4`.
+Or on the server itself: `git clone -b fighter https://github.com/ofurtumi/games ~/games`, then
+`bash ~/games/fighter/tools/server/setup_remote.sh` (again after each `git pull`). To run a server by hand: `GODOT=/path/to/godot tools/server/run_server.sh 7350 4`.
 
 Clients and server must have the same items and maps (the server refuses mismatched versions).
 `--server --map NAME` picks the first map; maps rotate after each match. Test locally with
