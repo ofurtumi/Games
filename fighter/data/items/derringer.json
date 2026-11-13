@@ -1,0 +1,19 @@
+{
+  "id": "derringer",
+  "name": "Derringer",
+  "kind": "gun",
+  "color": "#c9a24a",
+  "size": [
+    4,
+    3
+  ],
+  "damage": 48,
+  "fire_rate": 0.45,
+  "ammo": 2,
+  "spread": 2,
+  "bullet_speed": 520,
+  "range": 220,
+  "knockback": 170,
+  "terrain_damage": 10,
+  "spawn_weight": 6
+}

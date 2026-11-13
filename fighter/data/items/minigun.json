@@ -1,0 +1,22 @@
+{
+  "id": "minigun",
+  "name": "Minigun",
+  "kind": "gun",
+  "color": "#3a3f46",
+  "size": [
+    13,
+    4
+  ],
+  "damage": 7,
+  "fire_rate": 0.04,
+  "auto": true,
+  "ammo": 150,
+  "spread": 6,
+  "bullet_speed": 600,
+  "knockback": 35,
+  "terrain_damage": 4,
+  "spin_up": 0.55,
+  "move_mult": 0.55,
+  "recoil": 8,
+  "spawn_weight": 3
+}

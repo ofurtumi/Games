@@ -1,0 +1,24 @@
+{
+  "id": "sling",
+  "name": "Sling",
+  "kind": "gun",
+  "style": "sling",
+  "color": "#8a6236",
+  "size": [
+    4,
+    4
+  ],
+  "damage": 26,
+  "ammo": 99,
+  "charge_time": 0.8,
+  "charge_scales": true,
+  "fire_rate": 0.2,
+  "bullet_speed": 420,
+  "bullet_gravity": 420,
+  "bullet_size": 1.5,
+  "bullet_color": "#9a9a9a",
+  "range": 900,
+  "knockback": 140,
+  "terrain_damage": 14,
+  "spawn_weight": 5
+}

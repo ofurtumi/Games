@@ -1,0 +1,18 @@
+{
+  "id": "pistol",
+  "name": "Pistol",
+  "kind": "gun",
+  "color": "#9aa0a8",
+  "size": [
+    6,
+    3
+  ],
+  "damage": 18,
+  "fire_rate": 0.25,
+  "ammo": 12,
+  "spread": 1.5,
+  "bullet_speed": 560,
+  "knockback": 70,
+  "terrain_damage": 6,
+  "spawn_weight": 12
+}

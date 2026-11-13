@@ -1,0 +1,20 @@
+{
+  "id": "sticky",
+  "name": "Sticky Grenade",
+  "kind": "throwable",
+  "color": "#4ac85a",
+  "size": [
+    3,
+    3
+  ],
+  "count": 2,
+  "fuse": 2.0,
+  "sticky": true,
+  "spawn_weight": 5,
+  "explosion": {
+    "radius": 28,
+    "damage": 80,
+    "terrain_damage": 110,
+    "knockback": 220
+  }
+}

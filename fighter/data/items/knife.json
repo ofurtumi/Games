@@ -1,0 +1,17 @@
+{
+  "id": "knife",
+  "name": "Knife",
+  "kind": "melee",
+  "color": "#d0d4da",
+  "size": [
+    5,
+    1
+  ],
+  "damage": 28,
+  "reach": 11,
+  "swing_time": 0.2,
+  "knockback": 80,
+  "terrain_damage": 3,
+  "move_mult": 1.1,
+  "spawn_weight": 9
+}

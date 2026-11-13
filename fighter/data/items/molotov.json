@@ -1,0 +1,26 @@
+{
+  "id": "molotov",
+  "name": "Molotov",
+  "kind": "throwable",
+  "style": "bottle",
+  "color": "#7fae6a",
+  "size": [
+    3,
+    5
+  ],
+  "count": 2,
+  "impact": true,
+  "fuse": 6.0,
+  "spawn_weight": 5,
+  "explosion": {
+    "radius": 10,
+    "damage": 8,
+    "terrain_damage": 6,
+    "knockback": 40
+  },
+  "fire": {
+    "count": 12,
+    "dps": 28,
+    "duration": 4.5
+  }
+}

@@ -1,0 +1,43 @@
+{
+ "name": "Warehouse",
+ "size": [
+  60,
+  34
+ ],
+ "tiles": [
+  "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+  "MssssssssssssssssssssssssssssssssssssssssssssssssssssssssssM",
+  "MssssssssssssssssssssssssssssssssssssssssssssssssssssssssssM",
+  "MssssssssssssssssssssssssssssssssssssssssssssssssssssssssssM",
+  "MWWWWWWWWWWWWWssssssssssssssssssssssssssssssssWWWWWWWWWWWWWM",
+  "MswwwwwwwwwwwGssssssssssssssssssssssssssssssssGwwwwwwwwwwwsM",
+  "MswwwwwwwwwwwGssssssssssssssssssssssssssssssssGwwwwwwwwwwwsM",
+  "MswwwwwwwwwwwwsssssssssssssssssssssssssssssssswwwwwwwwwwwwsM",
+  "MswwwwwwwwwwwwsssssssssssssssssssssssssssssssswwwwwwwwwwwwsM",
+  "MswwwPwwwXwwwwsssssssssssssssssssssssssssssssswwwwXwwwPwwwsM",
+  "MWWWWWWWWWWWWWW---ssssssssssssssssssssssss---WWWWWWWWWWWWWWM",
+  "MsssssssssssssssHssssssssssssssssssssssssssHsssssssssssssssM",
+  "MsssssssssssssssHssssssssssssssssssssssssssHsssssssssssssssM",
+  "MsssssssssssssssHssssssssssssssssssssssssssHsssssssssssssssM",
+  "MsssssssssssssssHssssssssssssssssssssssssssHsssssssssssssssM",
+  "MsssssssssssssssHssssssssssssssssssssssssssHsssssssssssssssM",
+  "MsssssssssssssssHssssssssPsssXssssPssssssssHsssssssssssssssM",
+  "MsssssssssssssssHssss------------------ssssHsssssssssssssssM",
+  "MsssssssssssssssHsssssHsssssKKKKsssssHsssssHsssssssssssssssM",
+  "MsssssssssssssssHsssssHsssssKKKKsssssHsssssHsssssssssssssssM",
+  "MsssssssssssssssHsssssHsssssKKKKsssssHsssssHsssssssssssssssM",
+  "MsssssssssssssssHsssssHsssssKKKKsssssHsssssHsssssssssssssssM",
+  "MsssssssssssssssHsssssHsssssKKKKsssssHsssssHsssssssssssssssM",
+  "MssssssssssssPXsHsssBsHssssssssssssssHsBsssHsXPssssssssssssM",
+  "Msssss---------------sHssssssssssssssHs---------------sssssM",
+  "MsssssssHsssssssssssssHssssssssssssssHsssssssssssssHsssssssM",
+  "MsssssssHsssssssssssssHssssssssssssssHsssssssssssssHsssssssM",
+  "MsssssssHsssssssssssssHssssssssssssssHsssssssssssssHsssssssM",
+  "MsssssssHsssssssssssssHssssssssssssssHsssssssssssssHsssssssM",
+  "MsCsssssHsssssssssssssHssssssssssssssHsssssssssssssHsssssssM",
+  "MsCCPsssHssssssssssXssHBssssssssssssBHssXssssssssssHsssPCCsM",
+  "MSSSSSSSSSSSSSSSSSSSSSSSSM........MSSSSSSSSSSSSSSSSSSSSSSSSM",
+  "MSSSSSSSSSSSSSSSSSSSSSSSSM........MSSSSSSSSSSSSSSSSSSSSSSSSM",
+  "MMMMMMMMMMMMMMMMMMMMMMMMMM........MMMMMMMMMMMMMMMMMMMMMMMMMM"
+ ]
+}

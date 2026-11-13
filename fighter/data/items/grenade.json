@@ -1,0 +1,19 @@
+{
+  "id": "grenade",
+  "name": "Grenade",
+  "kind": "throwable",
+  "color": "#4f6a3a",
+  "size": [
+    3,
+    3
+  ],
+  "count": 3,
+  "fuse": 2.3,
+  "spawn_weight": 8,
+  "explosion": {
+    "radius": 30,
+    "damage": 75,
+    "terrain_damage": 120,
+    "knockback": 240
+  }
+}

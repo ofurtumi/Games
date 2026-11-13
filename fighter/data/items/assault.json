@@ -1,0 +1,19 @@
+{
+  "id": "assault",
+  "name": "Assault Rifle",
+  "kind": "gun",
+  "color": "#4a5560",
+  "size": [
+    11,
+    3
+  ],
+  "damage": 10,
+  "fire_rate": 0.085,
+  "auto": true,
+  "ammo": 30,
+  "spread": 3,
+  "bullet_speed": 620,
+  "knockback": 40,
+  "terrain_damage": 4,
+  "spawn_weight": 8
+}

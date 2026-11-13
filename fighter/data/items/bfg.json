@@ -1,0 +1,29 @@
+{
+  "id": "bfg",
+  "name": "BFG",
+  "kind": "gun",
+  "color": "#3f8a4a",
+  "size": [
+    13,
+    5
+  ],
+  "damage": 40,
+  "ammo": 3,
+  "charge_time": 1.1,
+  "fire_rate": 0.5,
+  "bullet_speed": 230,
+  "bullet_size": 3,
+  "bullet_color": "#7dff8a",
+  "range": 600,
+  "knockback": 120,
+  "terrain_damage": 0,
+  "recoil": 180,
+  "move_mult": 0.8,
+  "spawn_weight": 2,
+  "explosion": {
+    "radius": 40,
+    "damage": 85,
+    "terrain_damage": 260,
+    "knockback": 300
+  }
+}

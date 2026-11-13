@@ -1,0 +1,16 @@
+{
+  "id": "sword",
+  "name": "Sword",
+  "kind": "melee",
+  "color": "#c7ccd4",
+  "size": [
+    11,
+    2
+  ],
+  "damage": 38,
+  "reach": 17,
+  "swing_time": 0.34,
+  "knockback": 160,
+  "terrain_damage": 10,
+  "spawn_weight": 7
+}

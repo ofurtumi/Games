@@ -1,0 +1,19 @@
+{
+  "id": "bigsword",
+  "name": "Big Sword",
+  "kind": "melee",
+  "style": "bigsword",
+  "color": "#8a9099",
+  "size": [
+    17,
+    5
+  ],
+  "damage": 70,
+  "reach": 22,
+  "swing_time": 0.7,
+  "knockback": 330,
+  "terrain_damage": 70,
+  "move_mult": 0.6,
+  "shield": true,
+  "spawn_weight": 3
+}

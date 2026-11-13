@@ -1,0 +1,21 @@
+{
+  "id": "shotgun",
+  "name": "Shotgun",
+  "kind": "gun",
+  "color": "#7a5a3a",
+  "size": [
+    11,
+    3
+  ],
+  "damage": 11,
+  "pellets": 7,
+  "spread": 13,
+  "fire_rate": 0.8,
+  "ammo": 6,
+  "bullet_speed": 480,
+  "range": 150,
+  "knockback": 55,
+  "terrain_damage": 7,
+  "recoil": 140,
+  "spawn_weight": 9
+}

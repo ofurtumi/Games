@@ -1,0 +1,21 @@
+{
+  "id": "blunderbuss",
+  "name": "Blunderbuss",
+  "kind": "gun",
+  "color": "#8a6a2a",
+  "size": [
+    12,
+    4
+  ],
+  "damage": 9,
+  "pellets": 14,
+  "spread": 24,
+  "fire_rate": 1.4,
+  "ammo": 2,
+  "bullet_speed": 420,
+  "range": 110,
+  "knockback": 70,
+  "terrain_damage": 9,
+  "recoil": 260,
+  "spawn_weight": 4
+}

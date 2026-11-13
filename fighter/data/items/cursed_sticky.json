@@ -1,0 +1,21 @@
+{
+  "id": "cursed_sticky",
+  "name": "Sticky Grenade?",
+  "kind": "throwable",
+  "color": "#4ac85a",
+  "size": [
+    3,
+    3
+  ],
+  "count": 1,
+  "fuse": 2.0,
+  "cursed": true,
+  "spawn_weight": 2,
+  "explosion": {
+    "radius": 30,
+    "damage": 90,
+    "terrain_damage": 110,
+    "knockback": 240
+  },
+  "sprite": "sticky"
+}

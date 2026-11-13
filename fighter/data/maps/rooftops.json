@@ -1,0 +1,43 @@
+{
+ "name": "Rooftops",
+ "size": [
+  60,
+  34
+ ],
+ "tiles": [
+  "............................................................",
+  "............................................................",
+  "..............................X.............................",
+  "...........................WWWWWW...........................",
+  "...........................WWWWWW...........................",
+  "...........................WWWWWW...........................",
+  ".........................PC.H..H.BPC........................",
+  "......................SS-SSSSSSSSSSSSS......................",
+  "......................SsHssssssssssssS......................",
+  "......................SsHssssssssssssS......................",
+  "......................SsHssssssssssssS......................",
+  "......................SsHssssssssssssS........P..X...P......",
+  "......P..X....P.......GsHssssssssssssG....SS-SSSSSSSSSSSS...",
+  "...SS-SSSSSSSSSSSS....GsHssssssssssssG....SsHsssssssssssS...",
+  "...SsHsssssssssssS....GsHssssXsssssssG....SsHsssssssssssS...",
+  "...SsHsssssssssssS....SWWWWWWWWWWWW-WS....SsHsssssssssssS...",
+  "...SsHsssssssssssS....SssssssssssssHsS....SsHsssssssssssS...",
+  "...SsHsssssssssssS....SssssssssssssHsS....SsHsssssssssssS...",
+  "...SsHsssssssssssS....SssssssssssssHsS....GsHsssssssssssG...",
+  "...GsHsssssssssssG....SssssssssssssHsS----GsHsssssssssssG...",
+  "...GsHsssssssssssG----GssssssssssssHsG....GsHssCssXsssssG...",
+  "...GsHssssPsCssssG....GssssssssssssHsG....SWWWWWWWWWWW-WS...",
+  "...SWWWWWWWWWWW-WS....GssssssPXssssHsG....SsssssssssssHsS...",
+  "...SsssssssssssHsS....SW-WWWWWWWWWWWWS....SsssssssssssHsS...",
+  "...SsssssssssssHsS....SsHssssssssssssS....SsssssssssssHsS...",
+  "...SsssssssssssHsS....SsHssssssssssssS....SsssssssssssHsS...",
+  "...SsssssssssssHsS....SsHssssssssssssS....SsssssssssssHsS...",
+  "...SsssssssssssHsS....SsHssssssssssssS....SsssssssssssHsS...",
+  "....sssssssssssHs......sHssssssssssss......sssssssssssHs....",
+  "....sssssssssssHs......sHssssssssssss......sssssssssssHs....",
+  "....ssssssPssssHs..X...sHsBssssssBsss...X..ssssssPssssHB....",
+  "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+  "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+  "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+ ]
+}

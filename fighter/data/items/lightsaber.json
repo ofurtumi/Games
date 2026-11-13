@@ -1,0 +1,17 @@
+{
+  "id": "lightsaber",
+  "name": "Lightsaber",
+  "kind": "melee",
+  "style": "saber",
+  "color": "#58d0ff",
+  "size": [
+    13,
+    2
+  ],
+  "damage": 55,
+  "reach": 18,
+  "swing_time": 0.24,
+  "knockback": 120,
+  "terrain_damage": 999,
+  "spawn_weight": 2
+}
