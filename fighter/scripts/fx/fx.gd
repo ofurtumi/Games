@@ -15,6 +15,14 @@ var texts: Array = [] # [pos, text, color, life]
 var flames: Array = [] # {pos, vel, owner, dps, life, grounded}
 
 
+## Online server: effects aren't drawn here, they're sent to clients. Returns true if recorded.
+func _rec(kind: String, args: Array) -> bool:
+	if arena and arena.net_mode == Net.SERVER:
+		arena.record(kind, args)
+		return true
+	return false
+
+
 func clear() -> void:
 	parts.clear()
 	flashes.clear()
@@ -25,6 +33,8 @@ func clear() -> void:
 
 func burst(pos: Vector2, color: Color, n: int, speed: float, life := 0.6, grav := 500.0,
 		collide := true, size := 1.0, sticks := false) -> void:
+	if _rec("burst", [pos, color, n, speed, life, grav, collide, size, sticks]):
+		return
 	for i in n:
 		if parts.size() >= MAX_PARTS:
 			parts.pop_front()
@@ -35,18 +45,24 @@ func burst(pos: Vector2, color: Color, n: int, speed: float, life := 0.6, grav :
 
 ## Ejected shell casing: tumbles, bounces a bit, then lies on the floor.
 func shell(pos: Vector2, vel: Vector2, color: Color) -> void:
+	if _rec("shell", [pos, vel, color]):
+		return
 	if parts.size() >= MAX_PARTS:
 		parts.pop_front()
 	parts.append([pos, vel, color, 3.0, 3.0, 1.0, 600.0, true, false])
 
 
 func debris(pos: Vector2, color: Color, n: int) -> void:
+	if _rec("debris", [pos, color, n]):
+		return
 	burst(pos, color, n, 110.0, 1.4, 600.0, true, 1.0)
 	burst(pos, color.darkened(0.3), n / 2, 80.0, 1.4, 600.0, true, 2.0)
 	burst(pos, Color(0.6, 0.6, 0.6, 0.5), 2, 20.0, 0.6, -20.0, false, 2.0)
 
 
 func blood(pos: Vector2, dir: Vector2, n: int) -> void:
+	if _rec("blood", [pos, dir, n]):
+		return
 	for i in n:
 		if parts.size() >= MAX_PARTS:
 			parts.pop_front()
@@ -57,6 +73,8 @@ func blood(pos: Vector2, dir: Vector2, n: int) -> void:
 
 ## Chunky fireball: solid balls that go white -> yellow -> orange -> smoke and shrink.
 func fireball(pos: Vector2, radius: float) -> void:
+	if _rec("fireball", [pos, radius]):
+		return
 	var n := int(clampf(radius / 4.0, 4, 18))
 	for i in n:
 		var a := rng.randf() * TAU
@@ -71,14 +89,19 @@ func fireball(pos: Vector2, radius: float) -> void:
 
 
 func flash(pos: Vector2, radius: float, color: Color, life: float) -> void:
+	if _rec("flash", [pos, radius, color, life]):
+		return
 	flashes.append([pos, radius, color, life, life])
 
 
 func text(pos: Vector2, s: String, color: Color) -> void:
+	if _rec("text", [pos, s, color]):
+		return
 	texts.append([pos, s, color, 0.9])
 
 
 func spawn_flame(pos: Vector2, vel: Vector2, owner: Fighter, dps: float, life: float) -> void:
+	_rec("flame", [pos, vel, life]) # server keeps simulating it (it burns things)
 	flames.append({"pos": pos, "vel": vel, "owner": owner, "dps": dps, "life": life * rng.randf_range(0.8, 1.2), "grounded": false})
 
 
@@ -167,16 +190,17 @@ func _update_flames(dt: float, t: Terrain) -> void:
 			f["vel"] = Vector2.ZERO
 		pos = f["pos"]
 		# Burn tiles beneath
-		var below := pos + Vector2(0, 2)
-		var m := t.mat_at(below)
-		if m.get("flammable", false):
-			t.damage_cell(t.cell_of(below), 6.0 * dt)
-		# Hurt fighters
-		var r := Rect2(pos - Vector2(3, 6), Vector2(6, 7))
-		for fi in arena.fighters:
-			if fi.alive() and r.intersects(fi.hitbox()):
-				fi.apply_hit({"dmg": f["dps"] * dt, "kb": Vector2.ZERO, "src": f["owner"], "kind": "fire"})
-		if rng.randf() < dt * 6.0:
+		if arena.net_mode != Net.CLIENT: # client flames are a cosmetic copy of the server's
+			var below := pos + Vector2(0, 2)
+			var m := t.mat_at(below)
+			if m.get("flammable", false):
+				t.damage_cell(t.cell_of(below), 6.0 * dt)
+			# Hurt fighters
+			var r := Rect2(pos - Vector2(3, 6), Vector2(6, 7))
+			for fi in arena.fighters:
+				if fi.alive() and r.intersects(fi.hitbox()):
+					fi.apply_hit({"dmg": f["dps"] * dt, "kb": Vector2.ZERO, "src": f["owner"], "kind": "fire"})
+		if rng.randf() < dt * 6.0 and arena.net_mode != Net.SERVER:
 			burst(pos + Vector2(rng.randf_range(-2, 2), -3), Color(0.3, 0.3, 0.3, 0.5), 1, 10.0, 0.8, -40.0, false, 2.0)
 		i -= 1
 

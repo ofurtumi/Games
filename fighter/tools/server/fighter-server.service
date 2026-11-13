@@ -1,0 +1,19 @@
+# systemd unit for the fighter server. Edit the paths/user, then:
+#   sudo cp tools/server/fighter-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now fighter-server
+#   journalctl -u fighter-server -f        # logs (joins, leaves)
+[Unit]
+Description=Arena fighter dedicated server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fighter
+WorkingDirectory=/opt/fighter
+Environment=GODOT=/opt/godot/Godot_v4.7.2-stable_linux.x86_64
+ExecStart=/opt/fighter/tools/server/run_server.sh 7350 4
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -39,6 +39,12 @@ var round_t := 0.0
 var match_winner: Fighter = null
 var slowmo_t := 0.0
 var attract := false # running behind the title menu: no HUD, no slow-mo, no input
+var net_mode := Net.OFFLINE # OFFLINE (couch), SERVER (authoritative, headless) or CLIENT (puppets)
+var anet: ArenaNet
+var map_key := "" # map file name, so clients can load the same map
+var ev_mute := 0 # server: >0 while running code whose effects clients recreate themselves
+var next_net_id := 1
+var spawn_points: Array = []
 
 
 func setup(parts: Array, map: Dictionary) -> void:
@@ -48,6 +54,10 @@ func setup(parts: Array, map: Dictionary) -> void:
 
 func _ready() -> void:
 	rng.seed = Time.get_ticks_usec()
+	if net_mode != Net.OFFLINE:
+		anet = ArenaNet.new(self)
+	if net_mode == Net.SERVER:
+		Sfx.recorder = record_sfx
 	bg = Node2D.new()
 	bg.set_script(load("res://scripts/world/background.gd"))
 	add_child(bg)
@@ -86,10 +96,16 @@ func _layer(nm: String, z: int) -> Node2D:
 
 
 func start_round() -> void:
+	var new_match := match_winner != null
 	if match_winner:
 		Game.scores.clear()
 		round_num = 0
 		match_winner = null
+	if net_mode == Net.SERVER and new_match and not Game.maps.is_empty():
+		# New match on the server: rotate to the next map.
+		Game.map_index = (Game.map_index + 1) % Game.maps.size()
+		map_data = Game.maps[Game.map_index]["data"]
+		map_key = Game.maps[Game.map_index]["name"]
 	round_num += 1
 	round_t = 0.0
 	intro_t = 0.0 if Game.args.has("scenario") or Game.args.has("quick") and DisplayServer.get_name() == "headless" else INTRO
@@ -106,8 +122,10 @@ func start_round() -> void:
 	add_child(terrain)
 	var ents := terrain.load_rows(map_data.get("tiles", []))
 	terrain.tile_destroyed.connect(func(_c, _m): Game.stat("tiles_destroyed"))
-	nav = NavGraph.new(terrain)
-	terrain.tile_destroyed.connect(nav.on_tile_changed)
+	terrain.track_changes = net_mode == Net.SERVER
+	if net_mode != Net.CLIENT:
+		nav = NavGraph.new(terrain)
+		terrain.tile_destroyed.connect(nav.on_tile_changed)
 	bg.size = terrain.pixel_size()
 	bg.queue_redraw()
 	kill_y = terrain.pixel_size().y + 48.0
@@ -119,17 +137,15 @@ func start_round() -> void:
 	var spawns: Array = ents["spawns"].duplicate()
 	if spawns.is_empty():
 		spawns.append(terrain.pixel_size() * Vector2(0.5, 0.3))
+	spawn_points = spawns.duplicate()
+	if net_mode == Net.CLIENT:
+		anet.puppets = {"p": {}, "g": {}, "o": {}}
+		camera.snap()
+		return
 	_shuffle(spawns)
 	for i in participants.size():
 		var p: Dictionary = participants[i]
-		var f := Fighter.new()
-		f.setup(i, p["name"], p["color"], p["source"], self)
-		f.position = spawns[i % spawns.size()] + Vector2((i / spawns.size()) * 6, 0)
-		f.facing = 1 if f.position.x < terrain.pixel_size().x / 2.0 else -1
-		f.died.connect(_on_died)
-		fighters_node.add_child(f)
-		f.reset_physics_interpolation()
-		fighters.append(f)
+		_spawn_fighter(p, spawns[i % spawns.size()] + Vector2((i / spawns.size()) * 6, 0))
 	for pos in ents["crates"]:
 		_spawn_prop("crate", pos)
 	for pos in ents["barrels"]:
@@ -143,6 +159,20 @@ func start_round() -> void:
 	camera.snap()
 	if intro_t > 0.0 and not attract:
 		Sfx.play("countdown_beep")
+	if net_mode == Net.SERVER:
+		net_roster_changed()
+
+
+func _spawn_fighter(p: Dictionary, pos: Vector2) -> Fighter:
+	var f := Fighter.new()
+	f.setup(p.get("pid", fighters.size()), p["name"], p["color"], p["source"], self)
+	f.position = pos
+	f.facing = 1 if f.position.x < terrain.pixel_size().x / 2.0 else -1
+	f.died.connect(_on_died)
+	fighters_node.add_child(f)
+	f.reset_physics_interpolation()
+	fighters.append(f)
+	return f
 
 
 func _shuffle(a: Array) -> void:
@@ -156,6 +186,7 @@ func _shuffle(a: Array) -> void:
 func _spawn_prop(kind: String, pos: Vector2) -> void:
 	var p := Prop.new()
 	p.setup(kind, self)
+	p.net_id = _new_id()
 	p.position = pos
 	props_node.add_child(p)
 
@@ -177,9 +208,19 @@ func _process(dt: float) -> void:
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	_exit_tree_net()
 
 
 func _physics_process(dt: float) -> void:
+	if net_mode == Net.CLIENT:
+		time += dt
+		for f in feed:
+			f[2] -= dt
+		feed = feed.filter(func(e): return e[2] > 0.0)
+		anet.client_tick(dt)
+		return
+	if net_mode == Net.SERVER and Net.clients.is_empty():
+		return # nobody connected: don't burn the home server's CPU
 	time += dt
 	round_t += dt
 	if intro_t > 0.0 and intro_t - dt <= 0.0 and not attract:
@@ -229,6 +270,8 @@ func _physics_process(dt: float) -> void:
 	feed = feed.filter(func(e): return e[2] > 0.0)
 
 	_check_round(dt)
+	if net_mode == Net.SERVER:
+		anet.server_tick()
 	if Game.args.has("trace-every"):
 		var f0: Fighter = fighters[0]
 		if Engine.get_physics_frames() % int(Game.args["trace-every"]) == 0:
@@ -309,8 +352,9 @@ func _on_died(victim: Fighter, killer: Fighter, cause: String) -> void:
 	if killer and killer != victim:
 		s = "%s > %s" % [killer.display_name, victim.display_name]
 	else:
-		s = "%s %s" % [victim.display_name, {"fall": "FELL", "explosion": "EXPLODED", "fire": "BURNED"}.get(cause, "DIED")]
+		s = "%s %s" % [victim.display_name, {"fall": "FELL", "explosion": "EXPLODED", "fire": "BURNED", "left": "LEFT"}.get(cause, "DIED")]
 	feed.append([s, killer.color if killer else victim.color, 4.0])
+	record("feed", [s, killer.color if killer else victim.color])
 	shake(3.0)
 
 
@@ -342,6 +386,7 @@ func grenades() -> Array:
 func spawn_pickup(def: WeaponDef, st: WeaponState, pos: Vector2, vel: Vector2, thrown_by: Fighter, cnt := -1) -> Pickup:
 	var p := Pickup.new()
 	p.setup(def, st, self, cnt)
+	p.net_id = _new_id()
 	p.position = pos
 	p.velocity = vel
 	p.thrown_by = thrown_by
@@ -358,6 +403,7 @@ func remove_pickup(p: Node) -> void:
 
 func spawn_grenade(def: WeaponDef, who: Fighter, pos: Vector2, vel: Vector2) -> void:
 	var g := Grenade.new()
+	g.net_id = _new_id()
 	g.position = pos
 	g.setup(def, who, self, vel)
 	grenades_node.add_child(g)
@@ -374,7 +420,10 @@ func explode(pos: Vector2, data: Dictionary, src: Fighter, power := 1.0) -> void
 	var dmg: float = data.get("damage", 60.0) * power
 	var kb: float = data.get("knockback", 200.0) * power
 	terrain.damage_circle(pos, r, float(data.get("terrain_damage", 60.0)) * power)
-	terrain.scorch(pos, r * 0.9)
+	if net_mode == Net.SERVER:
+		record("scorch", [pos, r * 0.9])
+	else:
+		terrain.scorch(pos, r * 0.9)
 	var reach := r * 1.25
 	for f in fighters:
 		var d: float = f.center().distance_to(pos)
@@ -410,4 +459,83 @@ func explode(pos: Vector2, data: Dictionary, src: Fighter, power := 1.0) -> void
 
 
 func shake(amount: float) -> void:
+	record("shake", [amount])
 	camera.add_shake(amount)
+
+
+# ---------------------------------------------------------------- online
+
+func _new_id() -> int:
+	next_net_id += 1
+	return next_net_id
+
+
+func _exit_tree_net() -> void:
+	if Sfx.recorder == Callable(self, "record_sfx"):
+		Sfx.recorder = Callable()
+
+
+## Server: remember something clients must see/hear (they recreate it from the snapshot).
+func record(kind: String, args: Array) -> void:
+	if net_mode == Net.SERVER and ev_mute == 0:
+		anet.events.append([kind, args])
+
+
+func record_sfx(sound: String, pos: Variant, vol_db: float, pitch_var: float) -> void:
+	record("sfx", [sound, pos, vol_db, pitch_var])
+
+
+func source_of(pid: int) -> InputSource:
+	for f in fighters:
+		if f.player_index == pid:
+			return f.source
+	return null
+
+
+## Server: new participants drop straight into the running round.
+func net_join(pids: Array) -> void:
+	for pid in pids:
+		var p := Game.participant(pid)
+		if p.is_empty() or source_of(pid) != null:
+			continue
+		# Spawn as far as possible from everyone else.
+		var best: Vector2 = spawn_points[0] if not spawn_points.is_empty() else terrain.pixel_size() * Vector2(0.5, 0.3)
+		var bd := -1.0
+		for sp in spawn_points:
+			var d := INF
+			for f in fighters:
+				if f.alive():
+					d = minf(d, f.global_position.distance_to(sp))
+			if d > bd:
+				bd = d
+				best = sp
+		var f := _spawn_fighter(p, best)
+		f.invuln_t = 1.5
+		fx.burst(f.center(), Color(1, 1, 1, 0.7), 10, 60.0, 0.4, -20.0, false, 2.0)
+
+
+## Server: these participants are gone (disconnected, or a bot making room).
+func net_leave(pids: Array) -> void:
+	for f in fighters:
+		if f.player_index in pids and not f.left:
+			f.leave()
+	net_roster_changed()
+
+
+func net_roster_changed() -> void:
+	if net_mode == Net.SERVER and anet:
+		Net.broadcast_roster(anet.roster_list())
+
+
+## Client: the server started a new round (or a new map).
+func client_new_round(key: String, num: int) -> void:
+	var m := Game.map_by_name(key)
+	if not m.is_empty():
+		map_data = m
+	map_key = key
+	match_winner = null
+	for f in fighters:
+		f.queue_free()
+	fighters.clear()
+	start_round()
+	round_num = num

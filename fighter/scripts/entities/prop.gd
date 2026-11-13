@@ -8,6 +8,8 @@ var arena: Node
 var size := Vector2(8, 8)
 var flash := 0.0
 var dead := false
+var net_id := 0
+var puppet := false # online client: drawn only (still blocks cosmetic bullets)
 
 
 func setup(k: String, a: Node) -> void:
@@ -27,6 +29,8 @@ func _ready() -> void:
 	c.shape = s
 	c.position = Vector2(0, -size.y / 2.0)
 	add_child(c)
+	if puppet:
+		set_physics_process(false)
 
 
 func rect() -> Rect2:

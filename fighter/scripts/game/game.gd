@@ -26,6 +26,7 @@ var game_time := 0.0
 var current: Node
 var scenario_queue: Array = []
 var stats := {} # debug counters, printed by headless test runs
+var next_pid := 0 # stable participant ids (scores, online identity)
 
 
 func _ready() -> void:
@@ -76,6 +77,17 @@ func boot(main: Node) -> void:
 		var n := String(args["scenario"])
 		scenario_queue = Scenarios.ALL.keys() if n == "all" else n.split(",")
 		scenario_done()
+	elif args.has("server"):
+		Net.fill = clampi(int(args.get("fill", 4)), 2, 8)
+		if Net.host(int(args.get("port", Net.PORT))) != OK:
+			get_tree().quit(1)
+			return
+		participants.clear()
+		fill_bots(Net.fill)
+		goto_match(Net.SERVER)
+	elif args.has("connect"):
+		goto_menu()
+		Net.join(String(args["connect"]), String(args.get("name", "PLAYER")))
 	elif args.has("bots"):
 		var n := int(args["bots"])
 		participants.clear()
@@ -90,7 +102,64 @@ func boot(main: Node) -> void:
 
 func add_human(src: InputSource) -> void:
 	var idx := participants.size()
-	participants.append({"source": src, "name": "P%d" % (idx + 1), "color": _free_color()})
+	participants.append({"source": src, "name": "P%d" % (idx + 1), "color": _free_color(), "pid": _pid()})
+
+
+func _pid() -> int:
+	next_pid += 1
+	return next_pid
+
+
+func participant(pid: int) -> Dictionary:
+	for p in participants:
+		if p["pid"] == pid:
+			return p
+	return {}
+
+
+## Online server: a remote player's fighter. Returns its pid.
+func add_remote(src: InputSource, nm: String) -> int:
+	var pid := _pid()
+	participants.append({"source": src, "name": nm, "color": _free_color(), "pid": pid})
+	return pid
+
+
+func remove_participants(pids: Array) -> void:
+	participants = participants.filter(func(p): return not (p["pid"] in pids))
+	var a := current as Arena
+	if a:
+		a.net_leave(pids)
+
+
+## Online server: drop bots until there are at most `n` participants.
+func trim_bots(n: int) -> void:
+	while participants.size() > n:
+		var bot := -1
+		for i in range(participants.size() - 1, -1, -1):
+			if participants[i]["source"].is_bot:
+				bot = i
+				break
+		if bot < 0:
+			return
+		remove_participants([participants[bot]["pid"]])
+
+
+## Online server: add bots (straight into the round) until there are `n` participants.
+func fill_bots(n: int) -> void:
+	var added := []
+	while participants.size() < n:
+		add_bot()
+		added.append(participants[-1]["pid"])
+	var a := current as Arena
+	if a and not added.is_empty():
+		a.net_join(added)
+
+
+func map_by_name(key: String) -> Dictionary:
+	for m in maps:
+		if m["name"] == key:
+			return m["data"]
+	return {}
 
 
 func add_bot(skill := 0.65) -> void:
@@ -98,7 +167,7 @@ func add_bot(skill := 0.65) -> void:
 	for p in participants:
 		if p["source"].is_bot:
 			n += 1
-	participants.append({"source": BotSource.new(n, skill), "name": "BOT%d" % n, "color": _free_color()})
+	participants.append({"source": BotSource.new(n, skill), "name": "BOT%d" % n, "color": _free_color(), "pid": _pid()})
 
 
 ## You on WASD+HJKL against bots.
@@ -158,6 +227,8 @@ func _swap(n: Node) -> void:
 
 
 func goto_menu() -> void:
+	if Net.is_client() and current is Arena:
+		Net.leave()
 	var m := Node2D.new()
 	m.set_script(load("res://scripts/game/menu.gd"))
 	_swap(m)
@@ -169,12 +240,26 @@ func goto_lobby() -> void:
 	_swap(l)
 
 
-func goto_match() -> void:
+func goto_match(net_mode := Net.OFFLINE) -> void:
 	scores.clear()
-	Sfx.music(not args.has("scenario") and not args.has("mute-music"))
+	Sfx.music(not args.has("scenario") and not args.has("mute-music") and net_mode != Net.SERVER)
 	var a := Arena.new()
+	a.net_mode = net_mode
 	a.setup(participants, maps[map_index]["data"] if not maps.is_empty() else {})
+	a.map_key = maps[map_index]["name"] if not maps.is_empty() else ""
 	_swap(a)
+
+
+## Online client: the server welcomed us; show its match.
+func start_online_client(state: Dictionary) -> void:
+	scores.clear()
+	Sfx.music(not args.has("mute-music"))
+	var a := Arena.new()
+	a.net_mode = Net.CLIENT
+	a.setup([], map_by_name(state["map"]))
+	a.map_key = state["map"]
+	_swap(a)
+	a.anet.apply_full(state)
 
 
 func _physics_process(dt: float) -> void:
@@ -189,7 +274,14 @@ func _finish() -> void:
 		await RenderingServer.frame_post_draw
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(String(args["screenshot"]))
-	if current is Arena:
+	if current is Arena and (current as Arena).net_mode == Net.CLIENT:
+		var c: Arena = current
+		var me: Fighter = c.anet._fighter(Net.my_pids[0]) if not Net.my_pids.is_empty() else null
+		print("[net-client] round=%d fighters=%d pickups=%d props=%d rx=%.1fKB (%.1f KB/s) me=%s hp=%d scores=%s" % [c.round_num,
+			c.fighters.size(), c.pickups().size(), c.props().size(), c.anet.rx_bytes / 1024.0,
+			c.anet.rx_bytes / 1024.0 / maxf(game_time, 1.0), me.global_position if me else "-", me.hp if me else -1, scores])
+		print("[net-client] names=%s" % [c.fighters.map(func(f): return f.display_name)])
+	elif current is Arena:
 		var a: Arena = current
 		print("[test] rounds=%d time=%.1f scores=%s pickups=%d tiles=%d" % [a.round_num, game_time, scores, a.pickups().size(), a.terrain.mats.size()])
 		var keys := stats.keys()

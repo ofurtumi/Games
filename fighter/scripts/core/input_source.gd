@@ -4,6 +4,7 @@ extends RefCounted
 
 var label := "?"
 var is_bot := false
+var remote := false # client side: someone else (or the server) drives this fighter
 
 
 func sample(_fighter: Node, _arena: Node) -> InputFrame:

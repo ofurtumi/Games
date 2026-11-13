@@ -13,9 +13,16 @@ var diff := 1
 var ui: Node2D
 var bg_arena: Arena
 var slide := {} # item index -> animated x offset
+const CFG := "user://online.cfg"
+var addr := "localhost"
+var pname := "PLAYER"
 
 
 func _ready() -> void:
+	_load_online()
+	if Net.status != "":
+		page = "online"
+		sel = 2
 	# Attract mode: a live bot match plays behind the menu.
 	if DisplayServer.get_name() != "headless" and not Game.maps.is_empty():
 		var parts := []
@@ -40,9 +47,48 @@ func _ready() -> void:
 
 func _items() -> Array:
 	if page == "main":
-		return ["SINGLE PLAYER", "LOCAL MULTIPLAYER", "QUIT"]
+		return ["SINGLE PLAYER", "LOCAL MULTIPLAYER", "ONLINE", "QUIT"]
+	if page == "online":
+		var cur := "_" if int(t * 2.0) % 2 == 0 else " "
+		return ["SERVER: %s%s" % [addr, cur if sel == 0 else ""], "NAME: %s%s" % [pname, cur if sel == 1 else ""], "CONNECT"]
 	var mname := "-" if Game.maps.is_empty() else String(Game.maps[Game.map_index]["data"].get("name", Game.maps[Game.map_index]["name"]))
 	return ["BOTS: < %d >" % bots, "DIFFICULTY: < %s >" % DIFFS[diff][0], "MAP: < %s >" % mname, "FIGHT!"]
+
+
+func _load_online() -> void:
+	var cf := ConfigFile.new()
+	if cf.load(CFG) == OK:
+		addr = cf.get_value("online", "address", addr)
+		pname = cf.get_value("online", "name", pname)
+
+
+func _save_online() -> void:
+	var cf := ConfigFile.new()
+	cf.set_value("online", "address", addr)
+	cf.set_value("online", "name", pname)
+	cf.save(CFG)
+
+
+## Typing into the online page's text fields.
+func _unhandled_key_input(e: InputEvent) -> void:
+	if page != "online" or sel > 1 or not (e is InputEventKey) or not e.pressed:
+		return
+	var k := e as InputEventKey
+	if k.keycode == KEY_BACKSPACE:
+		if sel == 0:
+			addr = addr.left(-1)
+		else:
+			pname = pname.left(-1)
+		get_viewport().set_input_as_handled()
+		return
+	if k.unicode < 32 or k.ctrl_pressed or k.meta_pressed:
+		return
+	var ch := char(k.unicode)
+	if sel == 0 and addr.length() < 40 and (ch.is_valid_identifier() or ch in "0123456789.:-_/"):
+		addr += ch.to_lower()
+	elif sel == 1 and pname.length() < 10 and (ch.to_upper() in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"):
+		pname += ch.to_upper()
+	get_viewport().set_input_as_handled()
 
 
 func _pressed(k: String, now: bool) -> bool:
@@ -67,12 +113,13 @@ func _pad(b: JoyButton) -> bool:
 
 func _process(dt: float) -> void:
 	t += dt
-	var up := _pressed("up", _key([KEY_W, KEY_UP]) or _pad(JOY_BUTTON_DPAD_UP))
-	var down := _pressed("down", _key([KEY_S, KEY_DOWN]) or _pad(JOY_BUTTON_DPAD_DOWN))
-	var left := _pressed("left", _key([KEY_A, KEY_LEFT]) or _pad(JOY_BUTTON_DPAD_LEFT))
-	var right := _pressed("right", _key([KEY_D, KEY_RIGHT]) or _pad(JOY_BUTTON_DPAD_RIGHT))
-	var ok := _pressed("ok", _key([KEY_J, KEY_K, KEY_ENTER, KEY_SPACE]) or _pad(JOY_BUTTON_A) or _pad(JOY_BUTTON_START))
-	var back := _pressed("back", _key([KEY_H, KEY_ESCAPE]) or _pad(JOY_BUTTON_B))
+	var typing := page == "online"
+	var up := _pressed("up", _key([KEY_UP] if typing else [KEY_W, KEY_UP]) or _pad(JOY_BUTTON_DPAD_UP))
+	var down := _pressed("down", _key([KEY_DOWN, KEY_TAB] if typing else [KEY_S, KEY_DOWN]) or _pad(JOY_BUTTON_DPAD_DOWN))
+	var left := _pressed("left", _key([KEY_LEFT] if typing else [KEY_A, KEY_LEFT]) or _pad(JOY_BUTTON_DPAD_LEFT))
+	var right := _pressed("right", _key([KEY_RIGHT] if typing else [KEY_D, KEY_RIGHT]) or _pad(JOY_BUTTON_DPAD_RIGHT))
+	var ok := _pressed("ok", _key([KEY_ENTER, KEY_KP_ENTER] if typing else [KEY_J, KEY_K, KEY_ENTER, KEY_SPACE]) or _pad(JOY_BUTTON_A) or _pad(JOY_BUTTON_START))
+	var back := _pressed("back", _key([KEY_ESCAPE] if typing else [KEY_H, KEY_ESCAPE]) or _pad(JOY_BUTTON_B))
 	var n := _items().size()
 	if up:
 		sel = posmod(sel - 1, n)
@@ -92,7 +139,24 @@ func _process(dt: float) -> void:
 					page = "single"
 					sel = 3
 				1: Game.goto_lobby()
-				2: get_tree().quit()
+				2:
+					page = "online"
+					sel = 2
+				3: get_tree().quit()
+	elif page == "online":
+		if ok and sel < 2:
+			sel += 1
+		elif ok and sel == 2 and not Net.is_client():
+			_save_online()
+			Net.join(addr, pname)
+		if back:
+			if Net.is_client():
+				Net.leave()
+				Net.status = "CANCELLED"
+			else:
+				page = "main"
+				sel = 2
+				Net.status = ""
 	else:
 		if dx != 0:
 			match sel:
@@ -126,6 +190,10 @@ func _draw_ui() -> void:
 	Txt.draw(ui, Vector2(x0 + 2, 58), "WORKING TITLE  -  A COUCH BRAWLER", Color(1, 1, 1, 0.35), 1, false)
 	if page == "single":
 		Txt.draw(ui, Vector2(x0, 86), "SINGLE PLAYER", Color(1, 1, 1, 0.55), 1)
+	elif page == "online":
+		Txt.draw(ui, Vector2(x0, 86), "ONLINE  -  TYPE THE SERVER ADDRESS, ENTER TO CONFIRM", Color(1, 1, 1, 0.55), 1)
+		if Net.status != "":
+			Txt.draw(ui, Vector2(x0, 166), Net.status, Color(1, 0.85, 0.4), 1)
 	var items := _items()
 	for i in items.size():
 		var y := 104.0 + i * 18.0

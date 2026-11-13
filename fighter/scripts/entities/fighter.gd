@@ -100,6 +100,10 @@ var ledge_to := Vector2.ZERO
 var vault_t := 0.0
 var arm_kick := 0.0
 var hitstop_t := 0.0 # brief freeze when a melee hit lands (both fighters)
+var puppet := false # online client: the server simulates this fighter, we only draw it
+var net_floor := false
+var left := false # online: player disconnected / bot made room
+var _prev_vy := 0.0
 
 
 func setup(idx: int, nm: String, c: Color, src: InputSource, a: Node) -> void:
@@ -144,6 +148,10 @@ func hitbox() -> Rect2:
 
 func weapon_kind() -> String:
 	return weapon.def.kind if weapon else ""
+
+
+func _floor() -> bool:
+	return net_floor if puppet else is_on_floor()
 
 
 func _jp() -> bool: return inp.jump and not prev.jump
@@ -954,6 +962,80 @@ func die(killer: Fighter, cause := "", h := {}) -> void:
 	died.emit(self, killer, cause)
 
 
+## Online: vanish (disconnected player, or a bot making room for someone joining).
+func leave() -> void:
+	left = true
+	if state != S.DEAD:
+		arena.fx.burst(center(), Color(1, 1, 1, 0.7), 10, 60.0, 0.4, -20.0, false, 2.0)
+		hp = 0.0
+		_set_state(S.DEAD)
+		collision_layer = 0
+		if weapon:
+			_drop_weapon(Vector2(0, -100.0))
+		died.emit(self, null, "left")
+	visible = false
+
+
+## Online client: take the server's state for this fighter (position is interpolated separately).
+func net_apply(r: PackedFloat32Array) -> void:
+	var st := int(r[5])
+	if st != state:
+		state = st as S
+	state_t = r[6]
+	facing = int(r[7])
+	aim_ang = r[8]
+	var flags := int(r[9])
+	aiming = flags & 1 != 0
+	blocking = flags & 2 != 0
+	crouching = flags & 4 != 0
+	net_floor = flags & 8 != 0
+	gibbed = flags & 16 != 0
+	jumping = flags & 32 != 0
+	left = flags & 64 != 0
+	hp = r[10]
+	var wd := Net.item_def(int(r[11]))
+	if wd == null:
+		weapon = null
+	elif weapon == null or weapon.def != wd:
+		weapon = WeaponState.new(wd)
+	if weapon:
+		weapon.ammo = int(r[12])
+		weapon.charge = r[13]
+		weapon.spin = r[14]
+	throwable = Net.item_def(int(r[15]))
+	throw_count = int(r[16])
+	var mv: String = ArenaNet.MOVES[clampi(int(r[17]), 0, ArenaNet.MOVES.size() - 1)]
+	cur_move_name = mv
+	if mv == "swing" and weapon:
+		cur_move = {"a0": weapon.def.swing_time * 0.3}
+	elif MOVES.has(mv):
+		cur_move = MOVES[mv]
+	hurt_flash = r[18]
+	invuln_t = r[19]
+	arm_kick = r[20]
+	vault_t = r[21]
+	max_hp = r[22]
+	state_len = r[23]
+	velocity = Vector2(r[3], r[4])
+	var a := aim_ang if aiming else 0.0
+	aim_dir = Vector2(cos(a) * facing, sin(a))
+	collision_layer = 0 if state == S.DEAD else Layers.FIGHTERS
+
+
+## Online client: per-tick visuals for a puppet (no simulation).
+func puppet_visual(dt: float) -> void:
+	if net_floor and not was_on_floor and _prev_vy > 120.0 and state != S.DEAD:
+		sq = Vector2(1.0 + _prev_vy / 900.0, 1.0 - _prev_vy / 1400.0)
+	if net_floor:
+		walk_phase += absf(velocity.x) * dt * 0.12
+	was_on_floor = net_floor
+	_prev_vy = velocity.y
+	_update_shape()
+	_update_visual(dt)
+	if left:
+		visible = false
+
+
 func _gib() -> void:
 	gibbed = true
 	Sfx.play("gib", center())
@@ -1020,7 +1102,7 @@ func _anim_name() -> String:
 		return "guard" if weapon == null else "aim"
 	if crouching:
 		return "crouch"
-	if not is_on_floor():
+	if not _floor():
 		if vault_t > 0.1:
 			return "vault"
 		return "jump" if velocity.y < 0.0 else "fall"
@@ -1032,7 +1114,7 @@ func _anim_name() -> String:
 
 
 func _update_visual(dt: float) -> void:
-	visible = not gibbed
+	visible = not gibbed and not left
 	sq = sq.lerp(Vector2.ONE, 1.0 - exp(-dt * 14.0))
 	visual.scale = Vector2(facing * sq.x, sq.y)
 	var fname := _anim_name()
@@ -1048,7 +1130,7 @@ func _update_visual(dt: float) -> void:
 		var ang := 0.0
 		if d.kind == "gun":
 			ang = Vector2(aim_dir.x * facing, aim_dir.y).angle() - arm_kick
-			if not aiming and absf(velocity.x) > 8.0 and is_on_floor():
+			if not aiming and absf(velocity.x) > 8.0 and _floor():
 				ang += sin(walk_phase * PI / 2.0) * 0.06
 		elif state == S.ATTACK:
 			var p := clampf(state_t / maxf(state_len * 0.6, 0.01), 0.0, 1.0)

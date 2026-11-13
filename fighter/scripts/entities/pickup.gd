@@ -14,6 +14,9 @@ var spin := 0.0
 var empty_t := 0.0
 var clatter_t := 0.0
 var chute := false # supply drop: floats down under a parachute
+var net_id := 0
+var puppet := false # online client: position/state come from the server
+var net_empty := false
 var chute_t := 0.0
 
 
@@ -33,11 +36,17 @@ func _ready() -> void:
 	c.shape = s
 	c.position = Vector2(0, -1.5)
 	add_child(c)
+	if puppet:
+		set_physics_process(false)
+		collision_layer = 0
+		return
 	if thrown_by:
 		spin = signf(velocity.x) * 18.0
 
 
 func is_empty_gun() -> bool:
+	if puppet:
+		return net_empty
 	return def.kind == "gun" and state != null and state.ammo <= 0
 
 

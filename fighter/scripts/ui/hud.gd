@@ -10,12 +10,13 @@ func _process(_dt: float) -> void:
 
 func _draw() -> void:
 	var view := get_viewport_rect().size
-	var n: int = arena.fighters.size()
+	var shown: Array = arena.fighters.filter(func(f): return not f.left)
+	var n: int = shown.size()
 	if n == 0:
 		return
 	var w := minf(96.0, (view.x - 8.0) / n)
 	for i in n:
-		var f: Fighter = arena.fighters[i]
+		var f: Fighter = shown[i]
 		var x := 4.0 + i * w
 		var y := 3.0
 		var dead := not f.alive()
@@ -54,7 +55,7 @@ func _draw() -> void:
 		draw_rect(Rect2(head.x - bw / 2 - 0.5, head.y + 0.5, bw + 1, 2.5), Color(0, 0, 0, 0.6))
 		draw_rect(Rect2(head.x - bw / 2, head.y + 1, bw * hp_pct, 1.5), Color(0.35, 0.9, 0.35) if hp_pct > 0.35 else Color(0.95, 0.3, 0.2))
 	# Red edge flash when the followed player gets hurt / is nearly dead.
-	var humans: Array = arena.fighters.filter(func(f): return not f.source.is_bot and not (f.source is ScriptedSource))
+	var humans: Array = arena.fighters.filter(func(f): return not f.source.is_bot and not f.source.remote and not (f.source is ScriptedSource))
 	if humans.size() == 1 and humans[0].alive():
 		var me: Fighter = humans[0]
 		var a: float = me.hurt_flash * 4.0 + (0.25 + 0.15 * sin(arena.time * 6.0) if me.hp < 30.0 else 0.0)

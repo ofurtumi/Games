@@ -14,6 +14,8 @@ var stuck_cell := Vector2i(-9999, -9999)
 var resting := false
 var done := false
 var bounce_snd_t := 0.0
+var net_id := 0
+var puppet := false # online client: drawn only
 
 
 func setup(d: WeaponDef, who: Fighter, a: Node, v: Vector2) -> void:
@@ -27,6 +29,9 @@ func setup(d: WeaponDef, who: Fighter, a: Node, v: Vector2) -> void:
 
 
 func _ready() -> void:
+	if puppet:
+		set_physics_process(false)
+		return
 	if not def.cursed:
 		Sfx.play("throw", global_position, -4.0)
 	if not def.impact:

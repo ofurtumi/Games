@@ -8,12 +8,16 @@ var bullets: Array = []
 
 ## `origin` is the shooter's hand: the bullet first travels origin -> pos instantly,
 ## so point-blank shots hit someone standing inside the barrel.
-func spawn(owner: Fighter, pos: Vector2, vel: Vector2, def: WeaponDef, power := 1.0, origin = null) -> void:
+## `cosmetic` (online clients): draws and hits walls/bodies visually, but never deals damage.
+func spawn(owner: Fighter, pos: Vector2, vel: Vector2, def: WeaponDef, power := 1.0, origin = null, cosmetic := false) -> void:
+	if not cosmetic:
+		arena.record("shot", [owner.player_index if owner else -1, pos, vel, Net.item_index(def.id), power,
+			origin if origin is Vector2 else pos])
 	var ignore := []
 	if owner:
 		ignore.append(owner.get_rid())
 	var b := {"pos": pos, "prev": pos, "vel": vel, "owner": owner, "def": def, "dist": 0.0,
-		"power": power, "pierce": def.pierce, "ignore": ignore}
+		"power": power, "pierce": def.pierce, "ignore": ignore, "cosmetic": cosmetic}
 	if origin is Vector2:
 		b["pos"] = origin
 		var space := get_world_2d().direct_space_state
@@ -64,6 +68,11 @@ func _step(b: Dictionary, dt: float, space: PhysicsDirectSpaceState2D, first := 
 	var col = hit["collider"]
 	var power: float = b["power"]
 	var vel: Vector2 = b["vel"]
+	if b["cosmetic"]:
+		if not (col is Fighter or col is Prop):
+			Sfx.play("bullet_hit_wall", pos, -5.0, 0.15)
+			arena.fx.burst(pos, Color(1, 0.85, 0.5), 3, 70.0, 0.15, 200.0, false)
+		return false
 	if col is Fighter:
 		var f := col as Fighter
 		var connected := f.apply_hit({"dmg": def.damage * power, "kb": vel.normalized() * def.knockback * power,
@@ -80,9 +89,11 @@ func _step(b: Dictionary, dt: float, space: PhysicsDirectSpaceState2D, first := 
 		var n: Vector2 = hit["normal"]
 		var cell: Vector2i = arena.terrain.cell_of(pos - n * 0.5)
 		var indestructible: bool = arena.terrain.mats.has(cell) and float(TileMats.LIST[arena.terrain.mats[cell]]["hp"]) < 0.0
+		arena.ev_mute += 1 # clients draw their own impact for their cosmetic bullet
 		Sfx.play("bullet_hit_metal" if indestructible else "bullet_hit_wall", pos, -5.0, 0.15)
-		arena.terrain.damage_cell(cell, def.terrain_damage * power)
 		arena.fx.burst(pos, Color(1, 0.85, 0.5), 3, 70.0, 0.15, 200.0, false)
+		arena.ev_mute -= 1
+		arena.terrain.damage_cell(cell, def.terrain_damage * power)
 	if not def.explosion.is_empty():
 		arena.explode(pos, def.explosion, b["owner"], power)
 	return false

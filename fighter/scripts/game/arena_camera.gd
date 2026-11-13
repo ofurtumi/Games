@@ -31,7 +31,7 @@ func snap() -> void:
 
 
 func _humans() -> Array:
-	return arena.fighters.filter(func(f): return not f.source.is_bot and not (f.source is ScriptedSource))
+	return arena.fighters.filter(func(f): return not f.source.is_bot and not f.source.remote and not (f.source is ScriptedSource))
 
 
 func _compute() -> void:

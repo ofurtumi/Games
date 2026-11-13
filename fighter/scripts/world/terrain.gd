@@ -29,6 +29,9 @@ var _stain_view: Sprite2D
 var _dirty := {}
 var _stain_dirty := false
 var _stain_t := 0.0
+var track_changes := false # online server: remember changed cells for snapshots
+var net_changes := {} # cell -> hp (-1 = destroyed) since the last snapshot
+var round_changes := {} # same, since the round started (for players joining mid-round)
 var _break_sounds := {} # sound name -> [pos sum, count]; flushed once per frame (explosions break dozens)
 
 static var _tileset: TileSet
@@ -164,6 +167,9 @@ func damage_cell(c: Vector2i, amount: float) -> bool:
 		return true
 	if _stage(c) != before:
 		_mark(c)
+		if track_changes:
+			net_changes[c] = int(hp[c])
+			round_changes[c] = int(hp[c])
 	return false
 
 
@@ -197,7 +203,10 @@ func destroy_cell(c: Vector2i) -> void:
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
 			_mark(c + Vector2i(dx, dy))
-	if arena:
+	if track_changes:
+		net_changes[c] = -1
+		round_changes[c] = -1
+	if arena and arena.net_mode != Net.SERVER:
 		var col: Color = m["color"]
 		if m.get("shatter", false):
 			arena.fx.burst(cell_center(c), Color(0.8, 0.95, 1.0), 10, 90.0, 0.7, 500.0)
@@ -205,6 +214,19 @@ func destroy_cell(c: Vector2i) -> void:
 			arena.fx.debris(cell_center(c), Color(col, 1.0), 6)
 		_queue_break_sound(c, m)
 	tile_destroyed.emit(c, m)
+
+
+## Online client: the server says this cell now has `cell_hp` (-1 = destroyed).
+func apply_net_cell(c: Vector2i, cell_hp: int) -> void:
+	if not mats.has(c):
+		return
+	if cell_hp < 0:
+		destroy_cell(c)
+		return
+	var before := _stage(c)
+	hp[c] = float(cell_hp)
+	if _stage(c) != before:
+		_mark(c)
 
 
 func _queue_break_sound(c: Vector2i, m: Dictionary) -> void:
